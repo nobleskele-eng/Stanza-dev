@@ -1,50 +1,79 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import "./App.css";
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+interface Caps {
+  play_pause: boolean;
+  next: boolean;
+  previous: boolean;
+  seek: boolean;
+  shuffle: boolean | null;
+  repeat: string | null;
+}
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+interface NowPlayingSnapshot {
+  found: boolean;
+  aumid: string;
+  status: string;
+  title: string;
+  artist: string;
+  album: string;
+  thumbnail: string | null;
+  position_ms: number;
+  duration_ms: number;
+  updated_at_ms: number;
+  caps: Caps;
+}
+
+function App() {
+  const [snap, setSnap] = useState<NowPlayingSnapshot | null>(null);
+  const [changeCount, setChangeCount] = useState(0);
+  const lastTrackKey = useRef<string | null>(null);
+
+  useEffect(() => {
+    invoke<NowPlayingSnapshot>("gsmtc_snapshot").then(setSnap).catch(console.error);
+    const unlisten = listen<NowPlayingSnapshot>("gsmtc:now-playing", (event) => {
+      const s = event.payload;
+      setSnap(s);
+      const key = `${s.title}::${s.artist}`;
+      if (s.title && key !== lastTrackKey.current) {
+        lastTrackKey.current = key;
+        setChangeCount((c) => c + 1);
+      }
+    });
+    return () => {
+      unlisten.then((f) => f());
+    };
+  }, []);
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+    <div className="mp-root">
+      <div className="mp-window mp-window--spike">
+        <div className="mp-meta">
+          <div className="mp-title">S2 GSMTC spike — track changes: {changeCount}</div>
+          <div className="mp-artist">
+            {snap?.found ? `${snap.title} — ${snap.artist}` : "no Spotify session found"}
+          </div>
+          <pre data-no-drag className="mp-debug">
+            {JSON.stringify(snap, null, 2)}
+          </pre>
+          <div className="mp-controls" data-no-drag>
+            <button onClick={() => invoke("gsmtc_previous")}>⏮</button>
+            <button onClick={() => invoke("gsmtc_play_pause")}>⏵/⏸</button>
+            <button onClick={() => invoke("gsmtc_next")}>⏭</button>
+            <button
+              onClick={() =>
+                snap && invoke("gsmtc_seek", { positionMs: snap.position_ms + 10000 })
+              }
+            >
+              +10s
+            </button>
+            <button onClick={() => invoke("gsmtc_toggle_shuffle")}>shuffle</button>
+          </div>
+        </div>
       </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+    </div>
   );
 }
 

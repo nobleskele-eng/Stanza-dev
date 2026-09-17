@@ -12,9 +12,9 @@
   "app": {
     "windows": [
       {
-        "title": "tauri-app",
-        "width": 800,
-        "height": 600
+        "title": "Stanza — S2 GSMTC spike",
+        "width": 600,
+        "height": 520
       }
     ],
     "security": {
