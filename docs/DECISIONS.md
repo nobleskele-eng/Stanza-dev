@@ -53,3 +53,47 @@ Decision or resolution.
 - Spike lives on branch `spike/s1-window`; not yet merged to `main` pending
   the rest of Phase 1 per PLAN.md §5 ("Spikes stay on throwaway branches...
   Merge the learnings into DECISIONS.md, not the code").
+
+## 2026-09-16 — Phase 1 / S2 GSMTC spike (passed)
+
+- Read Spotify's now-playing session via the `windows` crate
+  (`Windows.Media.Control` WinRT namespace): title, artist, album, thumbnail
+  (as a base64 data URL, sniffed PNG vs JPEG from magic bytes), interpolatable
+  timeline (position/end in 100ns units, converted to ms), playback status,
+  and — resolving two `?` cells in PLAN.md's capability matrix — shuffle
+  (`PlaybackInfo.IsShuffleActive`) and seek (`Controls.IsPlaybackPositionEnabled`,
+  and `TryChangePlaybackPositionAsync` actually works) are both available on
+  Windows GSMTC. Repeat mode read via `PlaybackInfo.AutoRepeatMode`.
+- Per D5: never hardcode the Spotify AUMID. Logged every session's
+  `SourceAppUserModelId` on discovery (`eprintln!`) and filtered
+  case-insensitively for `"spotify"` in the string. On this machine (installer
+  build, not Store) the AUMID is literally `Spotify.exe` — simpler than
+  expected, but per PLAN.md don't assume this matches the Microsoft Store
+  build; that needs its own check if/when that build is tested.
+- WinRT session/manager objects needed `RoInitialize(RO_INIT_MULTITHREADED)`
+  on the background thread before calling `SessionManager::RequestAsync()` —
+  omitting it either panics or silently fails depending on timing. Ran the
+  whole GSMTC listener on a dedicated `std::thread` that blocks forever
+  (`loop { sleep }`) to keep the WinRT event-handler registrations alive;
+  Tauri's async runtime wasn't involved at all since `windows`-crate
+  `IAsyncOperation::get()` blocks synchronously.
+- Custom Tauri commands (`gsmtc_snapshot`, `gsmtc_play_pause`, etc.) needed
+  **no** capability/ACL entry to be invokable — unlike core/plugin
+  permissions (S1's `core:window:allow-start-dragging`), app-defined
+  `#[tauri::command]` functions registered via `generate_handler!` are
+  reachable by default. Worth remembering: don't assume every `invoke()` needs
+  a capabilities.json entry.
+- **UI bug, not a GSMTC issue:** a flex child (`.mp-debug`, showing the raw
+  JSON snapshot) with `flex: 1` grew past its flex basis instead of shrinking
+  to fit, pushing the control buttons below the window's visible bounds with
+  no scrollbar — the classic flexbox "min-height: auto" trap (a flex item's
+  default min-size is its content size, not 0). `min-height: 0` on the flex
+  child is the usual fix, but here we just switched the debug panel to a
+  fixed `max-height` + `overflow: auto` instead of relying on flex-shrink
+  math, which is more robust for a panel showing dynamically-sized content
+  (a base64 thumbnail can be tens of KB as one unbroken line).
+- **Gate result: PASS.** 20 consecutive track changes in real Spotify, all
+  metadata correct (title/artist/album/thumbnail), confirmed by the user.
+  Prev/play-pause/next/seek(+10s)/shuffle buttons in the spike UI all
+  control the real Spotify session.
+- Spike lives on branch `spike/s2-gsmtc`; not merged to `main`, same as S1.
