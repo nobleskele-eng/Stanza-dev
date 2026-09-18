@@ -38,9 +38,14 @@ to target.
 ## Parts
 `.mp-window`, `.mp-artwork`, `.mp-meta`, `.mp-title`, `.mp-artist`, `.mp-album`,
 `.mp-progress`, `.mp-progress-fill`, `.mp-time-current`, `.mp-time-total`,
-`.mp-controls`, `.mp-btn-prev`, `.mp-btn-play`, `.mp-btn-next`, `.mp-volume`,
-`.mp-source-badge` (required, must stay visible), `.mp-link-out`, `.mp-empty`,
-`.mp-error`
+`.mp-controls`, `.mp-btn-prev`, `.mp-btn-play`, `.mp-btn-next`,
+`.mp-volume-wrap`, `.mp-volume`, `.mp-source-badge` (required, must stay
+visible), `.mp-link-out`, `.mp-empty`, `.mp-error`
+
+`.mp-volume-wrap` exists only because a rotated `<input type="range">` needs a
+non-rotated ancestor to reserve its final on-screen footprint in the grid
+(`transform` doesn't affect layout size) — grid placement and `data-hide-volume`
+target the wrapper; `.mp-volume` itself is theme-styled freely inside it.
 
 - `data-hide-<part>` on `.mp-root` hides the named part. `.mp-source-badge` is never hideable. Artwork radius/appearance is never exposed to any customization layer.
 - Parts are direct children of the layout grid, so themes can rearrange them with `grid-template-areas`.

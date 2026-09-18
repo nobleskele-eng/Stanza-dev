@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { MockAdapter } from "../adapters/mockAdapter";
+import { Player, type Layout } from "../player/Player";
 import { PlayerStore, interpolatePositionMs } from "../store/playerStore";
 import type { NowPlaying } from "../types/player";
 
@@ -17,6 +18,7 @@ export function DevHarness() {
   const [adapter] = useState(() => new MockAdapter("spotify", { source: "spotify", status: "idle", positionMs: 0, positionUpdatedAt: Date.now(), caps: { seek: false, volume: false, shuffle: false, repeat: false, album: false } }));
   const [snapshot, setSnapshot] = useState<NowPlaying>(store.getSnapshot());
   const [now, setNow] = useState(Date.now());
+  const [layout, setLayout] = useState<Layout>("strip");
 
   useEffect(() => {
     import("../../dev/fixtures/nowPlaying").then((mod) => setFixtures(mod.fixtures));
@@ -56,7 +58,21 @@ export function DevHarness() {
         ))}
       </fieldset>
 
+      <fieldset>
+        <legend>layout</legend>
+        {(["strip", "pill", "card"] as const).map((l) => (
+          <label key={l} style={{ marginRight: 12 }}>
+            <input type="radio" name="layout" checked={layout === l} onChange={() => setLayout(l)} />
+            {l}
+          </label>
+        ))}
+      </fieldset>
+
       <button onClick={() => store.playPause()}>play/pause</button>
+
+      <div style={{ margin: "20px 0" }}>
+        <Player nowPlaying={snapshot} positionMs={positionMs} layout={layout} platform="windows" />
+      </div>
 
       <pre>{JSON.stringify({ ...snapshot, interpolatedPositionMs: positionMs }, null, 2)}</pre>
     </main>

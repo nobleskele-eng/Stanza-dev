@@ -1,0 +1,87 @@
+/* Structural contract layer (docs/THEME_CONTRACT.md) — always loaded, independent
+   of which theme is active. Defines default grid placement per data-layout (themes
+   may override with their own grid-template-areas per the "grid-child rule") and
+   the data-hide-<part> mechanism. Colors/fonts/motion are theme-authored, not here. */
+
+.mp-root {
+  display: inline-block;
+}
+
+.mp-window {
+  display: grid;
+  align-items: center;
+}
+
+/* --- strip layout (T1) --- */
+.mp-root[data-layout="strip"] .mp-window {
+  grid-template-columns: auto 1fr auto;
+  grid-template-rows: auto auto auto auto;
+  grid-template-areas:
+    "artwork meta badge"
+    "progress progress progress"
+    "time time time"
+    ". controls volume";
+  column-gap: 14px;
+  row-gap: 6px;
+}
+.mp-root[data-layout="strip"] .mp-artwork { grid-area: artwork; }
+.mp-root[data-layout="strip"] .mp-meta { grid-area: meta; min-width: 0; }
+.mp-root[data-layout="strip"] .mp-source-badge { grid-area: badge; align-self: start; }
+.mp-root[data-layout="strip"] .mp-progress { grid-area: progress; }
+.mp-root[data-layout="strip"] .mp-time-current { grid-area: time; justify-self: start; }
+.mp-root[data-layout="strip"] .mp-time-total { grid-area: time; justify-self: end; }
+.mp-root[data-layout="strip"] .mp-controls { grid-area: controls; justify-self: center; }
+.mp-root[data-layout="strip"] .mp-volume-wrap { grid-area: volume; justify-self: center; align-self: center; }
+
+/* --- pill layout (T3, minimal placeholder — full design work is Phase 4) --- */
+.mp-root[data-layout="pill"] .mp-window {
+  grid-template-columns: auto 1fr auto auto;
+  grid-template-areas: "artwork meta controls badge";
+  column-gap: 10px;
+}
+.mp-root[data-layout="pill"] .mp-artwork { grid-area: artwork; }
+.mp-root[data-layout="pill"] .mp-meta { grid-area: meta; min-width: 0; }
+.mp-root[data-layout="pill"] .mp-controls { grid-area: controls; }
+.mp-root[data-layout="pill"] .mp-source-badge { grid-area: badge; }
+
+/* --- card layout (T2, minimal placeholder — full design work is Phase 4) --- */
+.mp-root[data-layout="card"] .mp-window {
+  grid-template-columns: 1fr;
+  grid-template-areas: "artwork" "meta" "progress" "controls" "badge";
+  row-gap: 10px;
+  justify-items: center;
+}
+.mp-root[data-layout="card"] .mp-artwork { grid-area: artwork; }
+.mp-root[data-layout="card"] .mp-meta { grid-area: meta; }
+.mp-root[data-layout="card"] .mp-progress { grid-area: progress; }
+.mp-root[data-layout="card"] .mp-controls { grid-area: controls; }
+.mp-root[data-layout="card"] .mp-source-badge { grid-area: badge; }
+
+/* --- data-hide-<part>: customizer support (D14), never for .mp-source-badge or artwork --- */
+.mp-root[data-hide-title] .mp-title,
+.mp-root[data-hide-artist] .mp-artist,
+.mp-root[data-hide-album] .mp-album,
+.mp-root[data-hide-progress] .mp-progress,
+.mp-root[data-hide-time] .mp-time-current,
+.mp-root[data-hide-time] .mp-time-total,
+.mp-root[data-hide-controls] .mp-controls,
+.mp-root[data-hide-volume] .mp-volume-wrap,
+.mp-root[data-hide-link-out] .mp-link-out {
+  display: none;
+}
+
+/* Baseline visible keyboard focus (Phase 3 gate) — themes may restyle, not remove. */
+.mp-root button:focus-visible,
+.mp-root a:focus-visible,
+.mp-root input:focus-visible {
+  outline: 2px solid Highlight;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mp-root * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

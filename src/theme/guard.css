@@ -1,0 +1,15 @@
+/* Guard layer (docs/THEME_CONTRACT.md, D10/C3) — wins over theme and user layers
+   for these specific properties regardless of layer declaration order, per the
+   `!important`-reverses-layer-order cascade rule confirmed in the S4 spike. */
+
+.mp-source-badge {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.mp-artwork {
+  filter: none !important;
+  animation: none !important;
+  border-radius: 4px !important;
+}

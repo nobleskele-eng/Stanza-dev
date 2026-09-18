@@ -219,3 +219,98 @@ Decision or resolution.
   only needed locally to see the swap happen.
 - **Checkpoint per PLAN.md §5: S1, S2 and S4 have all passed** (S3 SoundCloud
   remains deferred per D15). Phase 2 (Core) can start next.
+
+## 2026-09-17 — Phase 2 / Core
+
+- Built `NowPlaying`/`Capabilities`/`SourceId` types, the `PlayerAdapter`
+  interface, and `PlayerStore` (src/store/playerStore.ts) with a pure
+  `interpolatePositionMs()` (C10) and `switchSource()` that enforces D9 —
+  disconnects the previous adapter before connecting the next, and drops any
+  update from a non-active adapter even if it fires late. 10 Vitest unit tests
+  cover interpolation edge cases and the switching guarantees; nothing existed
+  yet, so Vitest itself was added this phase.
+- Mock adapter + a synthetic fixture matrix subset in `/dev/fixtures`
+  (CLAUDE.md: obviously synthetic, excluded from production builds). Actually
+  verified the exclusion empirically rather than assuming it —
+  `scripts/check-fixtures-excluded.mjs` greps `dist/` for a fixture marker
+  string and fails the build if found; confirmed clean on a real
+  `npm run build`. The mechanism is a plain `if (import.meta.env.DEV)` branch
+  in App.tsx around a static import — esbuild inlines the env check and
+  Rollup tree-shakes the dead branch (including the DevHarness/fixtures
+  import) in production builds.
+- `tauri-plugin-window-state` added for remembered window position. Deferred:
+  persisting "last source" and "theme" — v1 is Spotify-only (D15) so source
+  is currently constant, and there's no theme system yet; persisting state
+  that can't vary yet would be speculative.
+- Deferred: the "switch sources 10×, never hear both at once" manual gate.
+  Only one real source category (Spotify) exists so far — no live second
+  source to switch to yet. Covered instead by the unit tests, which simulate
+  two adapters. Needs a real manual pass once GSMTC and/or SoundCloud land.
+
+## 2026-09-17/18 — Phase 3 / Design system + default theme (in progress)
+
+- T1 direction approved before any code, per PLAN.md's own per-theme process
+  (4–6 hex values, type roles, one memorable thing, checked against generic
+  defaults): near-black bg (`#0b0b0d`) + off-white fg (`#f2f0ea`) + one
+  ink-red accent (`#c1432e`), slab-serif title over monospace metadata/time,
+  artwork reduced to a small square accent (never the focal point, per T1's
+  spec). Memorable thing: title/artist reflow in on track change instead of
+  crossfading. Visual/typographic polish explicitly deferred — this is a
+  first real pass, expected to iterate, not the final word.
+- Built ONE contract-compliant DOM (`src/player/Player.tsx`) shared by all
+  three layouts — `data-layout` picks pill/card/strip via CSS
+  `grid-template-areas` in `src/theme/structure.css`, not three separate
+  component trees. Structural concerns (grid placement, `data-hide-<part>`,
+  focus-visible baseline, `prefers-reduced-motion`) live in structure.css;
+  colors/fonts/motion are theme-authored (`themes/t1-default/theme.css`).
+  `src/theme/guard.css` holds the D10/C3 protections (badge always visible,
+  artwork never blurred/animated/radius-changed).
+- Scope trim from the S4-spike theme-loading machinery: T1 loads as a normal
+  bundled stylesheet (static `import` in App.tsx), not through the dynamic
+  runtime `@layer`+blob-URL hot-swap system built during S4. That system is
+  explicitly Phase 4's job (theme picker, hot swap between multiple themes,
+  user theme folder). Phase 3 only needs T1 to render; the cascade-layer
+  ordering itself (`@layer guard, theme;`) is still exercised via two plain
+  `<link>`/`import` statements in the right order.
+- Added `.mp-volume-wrap` as a new contract part, not originally in the Parts
+  list. A rotated `<input type="range">` needs a non-rotated ancestor to
+  reserve its final on-screen grid footprint, since `transform` doesn't
+  affect layout size. Grid placement and `data-hide-volume` target the
+  wrapper now, not `.mp-volume` directly. Documented in THEME_CONTRACT.md.
+- **Volume slider took three real dead ends before landing on a working
+  approach** — worth remembering for any other rotated/custom range input:
+  1. `<input>` styled with `writing-mode: vertical-lr` + `-webkit-appearance:
+     slider-vertical` together — these don't compose. `slider-vertical`
+     forces native OS vertical-slider chrome, which rendered underneath the
+     custom `::-webkit-slider-thumb` override, producing a broken double
+     appearance (visible in-app, not caught by any automated check since
+     this is pure rendering).
+  2. `writing-mode: vertical-lr` alone with `appearance: none` — the
+     declared `width`/`height` didn't take effect as expected (rendered as
+     a wide box, not the declared thin track); root cause not conclusively
+     identified (no devtools access to the native Tauri webview).
+  3. **Working approach:** style as an ordinary *horizontal* slider (full,
+     unambiguous control over track/thumb — no orientation-specific
+     quirks), then `transform: rotate(-90deg)` the whole element inside a
+     non-rotated `.mp-volume-wrap` that reserves the final footprint. This
+     is the standard cross-engine technique for vertical range inputs and
+     is what should be reached for first next time, not last.
+  - Thumb/track cross-axis centering needed the standard WebKit formula
+    `margin-top: calc((track-height - thumb-height) / 2)`. Removed it once
+    on weak evidence (a screenshot where an unrelated input-height mismatch
+    was the more likely cause), which made things worse; restored after
+    confirming via an isolated repro (in a real browser tab, not the Tauri
+    window) that the `::-webkit-slider-thumb` selector does apply — an
+    oversized/bright test thumb rendered visibly, proving the pseudo-element
+    styling itself works and isn't the source of any remaining misalignment.
+  - **Known open rough edge:** sub-pixel thumb/track visual alignment on the
+    volume slider may still be slightly off. Explicitly parked per the
+    user's own guidance that typographic/visual polish is a later pass, not
+    a Phase 3 blocker. Revisit with real devtools access to the rendered
+    control (native Tauri window has none available to this session) before
+    the Phase 3 gate's final sign-off.
+- **Not yet done, remaining for Phase 3 to actually pass its gate:**
+  Playwright setup + fixture-matrix screenshots (Chromium + WebKit), WCAG AA
+  contrast check on `--mp-art-fg`, variant data model + validation unit
+  tests, T2/T3/T4 stay placeholder-only (correctly, per PLAN.md — only T1 is
+  required this phase). THEME_CONTRACT.md TODOs are still open.

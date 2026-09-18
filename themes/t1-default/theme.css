@@ -1,0 +1,190 @@
+/* T1 — flagship theme (docs/PLAN.md §4). Type/motion-led; artwork reduced to a
+   small accent, never the focal point. Direction approved 2026-09-17: near-black +
+   off-white, one ink-red accent, slab serif title over monospace metadata/time.
+   Visual polish (type pairing, spacing rhythm) is expected to iterate later —
+   this is the first real pass, not the final word. */
+
+.mp-root[data-layout="strip"] {
+  --mp-bg: #0b0b0d;
+  --mp-fg: #f2f0ea;
+  --mp-muted: #9a968d;
+  --mp-accent: #c1432e;
+  --mp-radius-window: 16px;
+  --mp-radius-control: 4px;
+  --mp-font-display: Georgia, "Times New Roman", serif;
+  --mp-font-body: "Courier New", monospace;
+  --mp-shadow: none;
+  --mp-motion-fast: 150ms;
+  --mp-motion-slow: 400ms;
+}
+
+.mp-root[data-layout="strip"] .mp-window {
+  background: var(--mp-bg);
+  color: var(--mp-fg);
+  border-radius: var(--mp-radius-window);
+  padding: 18px 20px;
+  width: 360px;
+  font-family: var(--mp-font-body);
+}
+
+.mp-root[data-layout="strip"] .mp-artwork {
+  width: 44px;
+  height: 44px;
+  background: linear-gradient(145deg, #3a2a26, #1c1614);
+  object-fit: cover;
+}
+
+.mp-root[data-layout="strip"] .mp-title {
+  font-family: var(--mp-font-display);
+  font-weight: 700;
+  font-size: 19px;
+  color: var(--mp-fg);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: opacity var(--mp-motion-fast) ease;
+}
+
+.mp-root[data-layout="strip"] .mp-artist,
+.mp-root[data-layout="strip"] .mp-album {
+  font-size: 12px;
+  color: var(--mp-muted);
+  margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mp-root[data-layout="strip"] .mp-source-badge {
+  font-size: 10px;
+  color: var(--mp-accent);
+  letter-spacing: 0.08em;
+  border: 0.5px solid color-mix(in srgb, var(--mp-accent) 35%, transparent);
+  border-radius: var(--mp-radius-control);
+  padding: 3px 6px;
+  align-self: start;
+}
+
+.mp-root[data-layout="strip"] .mp-progress {
+  height: 2px;
+  background: #26221f;
+  border-radius: 2px;
+  position: relative;
+  overflow: hidden;
+}
+.mp-root[data-layout="strip"] .mp-progress-fill {
+  position: absolute;
+  inset: 0;
+  width: calc(var(--mp-progress) * 100%);
+  background: var(--mp-accent);
+  border-radius: 2px;
+  transition: width var(--mp-motion-fast) linear;
+}
+
+.mp-root[data-layout="strip"] .mp-time-current,
+.mp-root[data-layout="strip"] .mp-time-total {
+  font-size: 10px;
+  color: #6f6b64;
+}
+
+.mp-root[data-layout="strip"] .mp-controls {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.mp-root[data-layout="strip"] .mp-btn-prev,
+.mp-root[data-layout="strip"] .mp-btn-next {
+  background: none;
+  border: none;
+  color: var(--mp-muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--mp-radius-control);
+}
+
+.mp-root[data-layout="strip"] .mp-btn-play {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--mp-fg);
+  color: var(--mp-bg);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 1;
+}
+
+/* Vertical, not horizontal — a horizontal native range collided with the
+   transport controls when both shared the row. Two writing-mode/-webkit-
+   appearance-based attempts both rendered wrong in this WebView2 build (native
+   chrome bleeding through, then declared width not taking effect) — switched to
+   the standard, engine-agnostic technique instead: style as an ordinary
+   horizontal slider (full control, no orientation quirks), then rotate 90°. The
+   wrapper reserves the final (rotated) footprint since `transform` doesn't
+   affect layout size. */
+.mp-root[data-layout="strip"] .mp-volume-wrap {
+  width: 14px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mp-root[data-layout="strip"] .mp-volume {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 44px;
+  height: 10px;
+  background: transparent;
+  cursor: pointer;
+  transform: rotate(-90deg);
+}
+.mp-root[data-layout="strip"] .mp-volume::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 3px;
+  background: var(--mp-accent);
+  border-radius: 2px;
+}
+.mp-root[data-layout="strip"] .mp-volume::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--mp-fg);
+  /* Standard WebKit range-thumb centering formula: (track-height - thumb-height) / 2.
+     Confirmed via an isolated repro (magenta 30px thumb test) that the pseudo-element
+     styling itself applies correctly — this was a real missing offset, not another
+     dead end. */
+  margin-top: calc((3px - 10px) / 2);
+}
+
+.mp-root[data-layout="strip"] .mp-empty,
+.mp-root[data-layout="strip"] .mp-error {
+  color: var(--mp-muted);
+  padding: 20px 0;
+}
+
+/* Track-change moment: title/artist reflow rather than crossfade (T1's "memorable
+   thing"). Position/time text is excluded — see the JS-driven key-change remount
+   in src/player/Player.tsx, which is what actually retriggers this per track. */
+@keyframes mp-line-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.mp-root[data-layout="strip"] .mp-title,
+.mp-root[data-layout="strip"] .mp-artist {
+  animation: mp-line-in var(--mp-motion-slow) ease-out;
+}
