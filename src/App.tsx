@@ -1,51 +1,26 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
+import { DevHarness } from "./dev/DevHarness";
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
-
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
-
+function ProductionPlaceholder() {
+  // Real Spotify/GSMTC adapter wiring and the theme system are later phases
+  // (docs/PLAN.md Phase 3/4). Phase 2 only needs PlayerStore + the mock adapter
+  // to exist and be tested — see src/dev/DevHarness.tsx for the browser dev loop.
   return (
     <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
+      <p>Stanza — no adapter wired yet (Phase 2 scope).</p>
     </main>
   );
+}
+
+function App() {
+  if (import.meta.env.DEV) {
+    // esbuild inlines import.meta.env.DEV to `false` in production builds, which
+    // makes this whole branch dead code — Rollup's tree-shaking then drops the
+    // DevHarness import (and its /dev/fixtures dependency) from the bundle
+    // entirely. Verified by scripts/check-fixtures-excluded.mjs, not just assumed.
+    return <DevHarness />;
+  }
+  return <ProductionPlaceholder />;
 }
 
 export default App;
