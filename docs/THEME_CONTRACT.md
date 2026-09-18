@@ -31,12 +31,35 @@ to target.
 `--mp-radius-control`, `--mp-font-display`, `--mp-font-body`, `--mp-shadow`,
 `--mp-motion-fast`, `--mp-motion-slow`
 
+## Layouts and controls (customizer, D14)
+- `theme.json` gains `"layouts": [...]` and `"controls": { "<token>": { "type": "color|length|number|font", "min"?, "max"? } }`.
+- Only tokens listed in `controls` are editable by the in-app customizer. App-provided variables (`--mp-progress`, `--mp-art-*`) are never editable, in any layer.
+
 ## Parts
 `.mp-window`, `.mp-artwork`, `.mp-meta`, `.mp-title`, `.mp-artist`, `.mp-album`,
 `.mp-progress`, `.mp-progress-fill`, `.mp-time-current`, `.mp-time-total`,
 `.mp-controls`, `.mp-btn-prev`, `.mp-btn-play`, `.mp-btn-next`, `.mp-volume`,
 `.mp-source-badge` (required, must stay visible), `.mp-link-out`, `.mp-empty`,
 `.mp-error`
+
+- `data-hide-<part>` on `.mp-root` hides the named part. `.mp-source-badge` is never hideable. Artwork radius/appearance is never exposed to any customization layer.
+- Parts are direct children of the layout grid, so themes can rearrange them with `grid-template-areas`.
+
+## Snippets
+User CSS snippets may target any contract class, data attribute, or CSS custom
+property listed in this document, and are subject to the same rules as themes
+(see Rules, below) — including the guard-layer protections on `.mp-source-badge`
+and artwork.
+
+## Layer order (customization, D14)
+```
+@layer guard, theme, user;
+```
+Theme CSS loads with `layer(theme)`; user snippets load with `layer(user)`.
+The `guard` layer holds `!important` rules that keep `.mp-source-badge`
+displayed, visible and opaque, and keep artwork unmodified — it wins over
+both `theme` and `user` regardless of cascade layer declaration order for
+those specific properties.
 
 ## Rules
 - CSS only, no JS.

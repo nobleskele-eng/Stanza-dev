@@ -97,3 +97,34 @@ Decision or resolution.
   Prev/play-pause/next/seek(+10s)/shuffle buttons in the spike UI all
   control the real Spotify session.
 - Spike lives on branch `spike/s2-gsmtc`; not merged to `main`, same as S1.
+
+## 2026-09-17 — D14: customization as three layers
+
+- Confirmed customization is the core purpose of the project, not a bolt-on
+  feature. Recorded as **D14** in PLAN.md §1: three layers — (a) an in-app
+  customizer that edits theme tokens and saves the result as a variant,
+  (b) user CSS snippets layered on top of the active theme, (c) importable
+  theme packages (`.zip`). Full spec lives in PLAN.md §4 "Customization
+  layers" and the corresponding additions to `docs/THEME_CONTRACT.md`
+  (layouts/controls schema, `data-hide-*`, the grid-child rule, the
+  `@layer guard, theme, user` cascade, and a Snippets section).
+- Safety model spans all three layers: Tauri CSP restricts style/font/image
+  loading to the app and the asset protocol (plus `data:` for artwork) — no
+  remote `url()` or `@import` anywhere, including in user snippets. The
+  `guard` CSS layer holds `!important` rules that keep `.mp-source-badge`
+  visible/opaque and artwork unmodified no matter what a theme or snippet
+  does. User CSS, snippets and variants apply only to the player window,
+  never settings. Tray item "Reset appearance" disables all snippets/variants
+  and restores the default theme. No in-app code editor in v1 (parking lot).
+- Added a "Definition of done (before any promotion)" section to PLAN.md
+  (now §6): T1–T4 pass the fixture matrix, all three customization layers
+  complete per §4, Phase 5/6 gates passed, README + theme authoring guide,
+  a 3–5 tester private beta (Win10/Win11, display scaling, Spotify installer
+  vs Store build), macOS marked untested post-launch. This is the gate for
+  calling v1 "done," separate from each phase's own gate.
+- Bumped Phase 3 (+3–5 h) and Phase 4 (+11–23 h) estimates in PLAN.md §5 to
+  cover the new contract surface and the customizer/snippet/package UI; total
+  moved from ~60–94 h to ~74–122 h, still a rough estimate.
+- Recorded as D14 in PLAN.md; not yet implemented — no code exists for any of
+  the three layers yet. This entry exists so Phase 3/4 work has a fixed
+  target instead of being designed ad hoc when we get there.

@@ -4,7 +4,7 @@
 *Repo description:* Themeable Spotify/SoundCloud mini player for Windows (and macOS) built with Tauri — the UI is carried by typography and motion, not album art.
 
 Version 1 · 2026-09-11 · Status: planning, nothing built yet
-Drop this in the repo as `docs/PLAN.md`. Section 7 is the seed for `CLAUDE.md`.
+Drop this in the repo as `docs/PLAN.md`. Section 8 is the seed for `CLAUDE.md`.
 
 ---
 
@@ -34,6 +34,7 @@ Drop this in the repo as `docs/PLAN.md`. Section 7 is the seed for `CLAUDE.md`.
 | D11 | No native blur/Mica/Acrylic in default themes | **New** | Your Win10 machine: Mica is Win11-only, Acrylic lags while dragging (C9). A mini player gets dragged constantly. |
 | D12 | Frontend: React + TypeScript + Vite, plain CSS with custom properties, **no Tailwind** | **New** | User themes need stable semantic hooks. Utility-class soup makes a theme contract impossible. React chosen over Svelte for your and Claude Code's familiarity; bundle size is dominated by the native shell anyway. |
 | D13 | Windows-first; macOS merged only after testing on a real Mac | **New** | You can't meaningfully build or test macOS from Windows. CI can compile it, but AppleScript permissions and window transparency only verify on a Mac. |
+| D14 | Customization = three layers: (a) in-app customizer editing theme tokens, saved as variants; (b) user CSS snippets layered on top of the active theme; (c) importable theme packages | Confirmed | Customization is the core purpose of the project. |
 
 ---
 
@@ -231,6 +232,35 @@ Locations: bundled (read-only, app resources) and user (`<app data dir>/themes`)
 - Rust file watcher → event → swap `href` with a cache-busting query → instant reload while you design.
 - `theme.json` validated in Rust. Broken theme → fall back to default, show the error in settings.
 
+### Customization layers
+
+**Customizer (a)**
+- Overrides applied with `style.setProperty` on `.mp-root`; reset removes them.
+- `theme.json` gains `"layouts": [...]` and `"controls": { "<token>": { "type": "color|length|number|font", "min"?, "max"? } }`. Only listed tokens are editable. App-provided variables (`--mp-progress`, `--mp-art-*`) are never editable.
+- Variant file: `{ "theme", "contract", "layout", "overrides", "hidden" }` in `<app data dir>/variants/`. Export/import as JSON.
+- Values validated against control type; reject anything containing `url(`, `;`, `{`, `}`. Unknown keys dropped on import.
+- Hidden parts via `data-hide-<part>` on `.mp-root`. `.mp-source-badge` is never hideable. Artwork radius/appearance never exposed.
+- Warn when `--mp-fg` on `--mp-bg` is below WCAG AA 4.5:1.
+- Switching theme clears the previous theme's overrides.
+- Parts are direct children of the layout grid so themes can rearrange them with `grid-template-areas`.
+
+**CSS snippets (b)**
+- Import a single `.css` file via a settings button; copied to `<app data dir>/snippets/`. Each snippet can be toggled on/off. "Open in editor" launches the file in the system editor; file watcher hot-reloads on save.
+- Load order via cascade layers:
+  ```
+  @layer guard, theme, user;
+  ```
+  Theme CSS imported with `layer(theme)`, snippets with `layer(user)`. Guard layer holds `!important` rules keeping `.mp-source-badge` displayed, visible and opaque, and keeping artwork unmodified. Implementation detail (how the layered imports are loaded under the CSP) is decided in the S4 spike.
+
+**Theme packages (c)**
+- Import a `.zip` containing `theme.json` + `theme.css` (+ `fonts/`, `preview.svg`). Validated in Rust before copying to `<app data dir>/themes/`. Invalid package → rejected with error.
+
+**Safety (all layers)**
+- Tauri CSP restricts style, font and image loading to the app and the asset protocol (plus `data:` for artwork). No remote `url()` or `@import`. Artwork for every source is supplied by Rust as data, never loaded by URL in the webview.
+- User CSS, snippets and variants apply to the player window only, never the settings window.
+- Tray menu item "Reset appearance" disables all snippets and variants and restores the default theme.
+- No in-app code editor in v1 (parking lot: CodeMirror panel).
+
 ### First-party themes (each stress-tests a different part of the contract)
 
 **Design rationale for the ordering below:** artwork and track/artist text are the only things Spotify/SoundCloud restrict — unmodified image, unaltered strings. Everything else (layout, shape, motion, type, color, iconography, control affordances) is fully yours. An artwork-forward theme is bounded by definition: however good the layout, it reads as "unmodified square image + reformatted text," and it sits in the same genre as every other now-playing view, official or fan-made. A typography/motion-forward theme has no such ceiling and isn't a reskin of anything that already exists. So the type-led theme is the flagship, not the fallback.
@@ -283,7 +313,7 @@ Prove the risky assumptions before building anything real.
   Gate: 20 consecutive track changes, all metadata correct (count them).
 - **S3 SoundCloud widget:** CSP allows the widget, hidden iframe, `allow="autoplay"`, `play()` from your own button, events fire, current-sound artwork returned. Test track, playlist, profile and `/likes` URLs. Test whether playback and progress events continue while the window is hidden to tray.
   Gate: 10 minutes of continuous playlist playback while hidden.
-- **S4 Themes:** asset protocol scoped; theme CSS + local font load via `<link>`; editing the file updates the UI; malformed CSS doesn't crash.
+- **S4 Themes:** asset protocol scoped; theme CSS + local font load via `<link>`; editing the file updates the UI; malformed CSS doesn't crash. CSP blocks a remote `url()` in a test snippet; layered `@import` loading works under the CSP; guard layer beats a snippet that sets `.mp-source-badge {display:none !important}`; inline overrides survive hot swap; system font enumeration from Rust (untested).
   Gate: edit → visible change feels instant; broken file → default theme + error shown.
 - **Checkpoint:** update the capability matrix and `DECISIONS.md` with what actually happened. Only then Phase 2.
 
@@ -292,15 +322,17 @@ Prove the risky assumptions before building anything real.
 - Mock adapter + fixtures for browser dev.
 - **Gate:** unit tests for interpolation and source switching; typecheck clean; `cargo clippy` clean; manual: switch sources 10× and never hear both at once.
 
-### Phase 3 — Design system + default theme · ~10–15 h
+### Phase 3 — Design system + default theme · ~13–20 h
 - Write `THEME_CONTRACT.md` v1.
 - Build the three layout DOMs and T1.
 - States: idle, loading, error, missing-capability.
 - Motion: one orchestrated moment (track change), hover-reveal controls, reduced-motion path.
+- Contract v1 includes controls, layouts, `data-hide-*`, guard layer, grid-child rule; variant data model + validation with unit tests (+3–5 h, rough estimate).
 - **Gate:** Playwright screenshots of T1 × full fixture matrix (Chromium + WebKit); your visual sign-off; visible keyboard focus; text on `--mp-art-fg` meets WCAG AA 4.5:1.
 
-### Phase 4 — Themes + switching · ~10–15 h
+### Phase 4 — Themes + switching · ~21–38 h
 - T2–T4, theme picker with previews, hot swap, user theme folder with "open folder" action, per-theme window resize, validation errors surfaced.
+- Customizer UI with live preview; variant export/import; snippet import/toggle/open-in-editor; theme `.zip` import; contrast warning; Reset appearance (+11–23 h, rough estimate).
 - **Gate:** every theme passes the matrix; swap themes 20× with no flicker; memory in Task Manager roughly flat before vs after.
 
 ### Phase 5 — App shell · ~6–10 h
@@ -324,11 +356,22 @@ Prove the risky assumptions before building anything real.
 - Theme authoring guide, per-theme screenshots, demo video cut in After Effects.
 - **Gate:** someone else installs and switches themes from the README alone.
 
-**Total: ~60–94 h (rough estimate).** At 5 h/week ≈ 12–19 weeks; at 8 h/week ≈ 8–12 weeks. Natural stop points after Phase 3 (design showcase works in a browser) and Phase 6 (shipped on Windows).
+**Total: ~74–122 h (rough estimate).** At 5 h/week ≈ 15–24 weeks; at 8 h/week ≈ 9–15 weeks. Natural stop points after Phase 3 (design showcase works in a browser) and Phase 6 (shipped on Windows).
 
 ---
 
-## 6. Risk register
+## 6. Definition of done (before any promotion)
+
+- T1–T4 pass the fixture matrix
+- All three customization layers complete per §4
+- Phase 5 and 6 gates passed
+- README + theme authoring guide (covering themes, snippets, variants)
+- Private beta: 3–5 testers (Win10/Win11, different display scaling, Spotify installer vs Store build)
+- macOS: post-launch, marked untested in README
+
+---
+
+## 7. Risk register
 Likelihoods are qualitative — there's no reliable base rate for any of these.
 
 | Risk | Likelihood | Impact | Mitigation |
@@ -338,12 +381,12 @@ Likelihoods are qualitative — there's no reliable base rate for any of these.
 | Widget stops or throttles when window hidden | Unknown → S3 | High for SoundCloud mode | Keep window alive minimised/off-screen instead of hidden |
 | SoundCloud terms ambiguity | — | Med | D9, attribution, non-commercial |
 | No Mac access | Depends on you | High for the cross-platform claim | Windows-first; label macOS untested |
-| Scope creep (lyrics, visualiser, likes) | High | Med | Section 8 parking lot |
+| Scope creep (lyrics, visualiser, likes) | High | Med | Section 9 parking lot |
 | School workload stalls a half-built phase | — | Med | Every phase ends in a working state; two stop points |
 
 ---
 
-## 7. Claude Code workflow
+## 8. Claude Code workflow
 
 Targets the "confirmed it understood, then failed repeatedly" problem.
 
@@ -395,7 +438,7 @@ Targets the "confirmed it understood, then failed repeatedly" problem.
 
 ---
 
-## 8. Parking lot (not v1)
+## 9. Parking lot (not v1)
 
 - Apple Music, YouTube Music, local files, Linux
 - Spotify Web API features (like/save, queue, search) — only with Premium and the 5-user dev cap
@@ -404,19 +447,22 @@ Targets the "confirmed it understood, then failed repeatedly" problem.
 - Lyrics
 - Theme sharing / marketplace
 - Notarised or store distribution
+- In-app CSS editor (CodeMirror panel)
 
 ---
 
-## 9. Open questions (answer before Phase 1)
+## 10. Open questions (answer before Phase 1)
 
 1. Do you have regular access to a Mac? Determines whether Phase 7 exists.
 2. Fixture policy: synthetic strings (recommended) or real metadata you supply?
 3. Tagline — draft above, yours to finalize.
 4. Spotify Premium — only matters if Web API features ever come back.
+5. Windows any-app mode (show any media session, not only Spotify)?
+6. SoundCloud in the finished scope? Test first: does SoundCloud in Chrome appear in the S2 GSMTC spike with title + artwork?
 
 ---
 
-## 10. Sources
+## 11. Sources
 
 - Spotify quota update, July 23 2026 — developer.spotify.com/blog/2026-07-23-web-api-quota-updates
 - Spotify Web API changelog, July 2026 — developer.spotify.com/documentation/web-api/references/changes/july-2026

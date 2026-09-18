@@ -25,6 +25,12 @@ file tracks.
 - **Tray menu items:** [NEEDS COPY]
 - **Source badge wording:** [NEEDS COPY] — must satisfy each service's attribution
   requirements (see PLAN.md C3, C13).
+- **Customizer labels:** [NEEDS COPY]
+- **Contrast warning:** [NEEDS COPY]
+- **Variant import error:** [NEEDS COPY]
+- **Snippet import error:** [NEEDS COPY]
+- **Theme package import error:** [NEEDS COPY]
+- **"Reset appearance" tray item:** [NEEDS COPY]
 
 ## Rules
 - Never generate displayed text procedurally at runtime.
