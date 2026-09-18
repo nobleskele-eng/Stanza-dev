@@ -128,3 +128,33 @@ Decision or resolution.
 - Recorded as D14 in PLAN.md; not yet implemented — no code exists for any of
   the three layers yet. This entry exists so Phase 3/4 work has a fixed
   target instead of being designed ad hoc when we get there.
+
+## 2026-09-17 — D15: v1 scope narrowed to Spotify-only; open questions answered
+
+- Went through PLAN.md §10's open questions:
+  1. Mac access — it's a **school-regulated MacBook**, not a personal machine.
+     Take Phase 7 (macOS) as lower-confidence until actually tested: school
+     device management may restrict code signing, dev tool installation, or
+     the automation permissions AppleScript needs (C5).
+  2. Fixture policy — still open, no decision made.
+  3. Tagline — still open, yours to finalize.
+  4. Spotify Premium — confirmed, you have it. Relevant only if Web API
+     features (D7) ever come back into scope.
+  5. Windows any-app mode (show any active media session, not only Spotify)
+     — confirmed you want this.
+  6. SoundCloud in the finished scope — you asked to put it on the backseat
+     until Spotify-only v1 ships.
+- Decisions 5 and 6 together produced **D15** in PLAN.md §1: v1 ships
+  Spotify-only on Windows; SoundCloud support and Windows any-app mode are
+  grouped into a "Post-v1 expansion" note at the end of PLAN.md §5, with no
+  ordering between them decided yet.
+- Changed as a result: PLAN.md §0 scope line now states v1 is Spotify-only;
+  Phase 1's **S3 SoundCloud widget spike is marked deferred/optional** — it's
+  no longer required to unblock Phase 2, since D9's source-switching
+  architecture and D6's Widget API choice don't need validating until the
+  post-v1 expansion phase actually starts.
+- Explicitly *not* changed: hour estimates and phase numbering in §5 (kept
+  as a light-touch update — full phase restructuring for SoundCloud can wait
+  until it's actually being scheduled). D6 (SoundCloud via Widget API) and
+  D9 (one playback source at a time) remain valid technical decisions for
+  whenever that phase starts; only the timing moved.

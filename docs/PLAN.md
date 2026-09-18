@@ -13,7 +13,7 @@ Drop this in the repo as `docs/PLAN.md`. Section 8 is the seed for `CLAUDE.md`.
 - "Web-based design only" = every pixel of UI is HTML/CSS/SVG rendered in the Tauri webview. No raster assets from Nano Banana Pro. App icon, control icons and theme art are SVG/CSS.
 - Displayed information comes only from the music services (track metadata, artwork) or from copy you write. Nothing generated.
 - Platforms: Windows first (your machine), macOS second and gated on real-Mac testing.
-- Sources: Spotify + SoundCloud. Apple Music stays dropped.
+- Sources: **v1 ships Spotify-only** (D15). SoundCloud remains the long-term second source but is deferred to a post-v1 expansion phase, grouped with Windows any-app mode — see §5 "Post-v1 expansion" and §10 open questions #5–6. Apple Music stays dropped.
 
 ---
 
@@ -35,6 +35,7 @@ Drop this in the repo as `docs/PLAN.md`. Section 8 is the seed for `CLAUDE.md`.
 | D12 | Frontend: React + TypeScript + Vite, plain CSS with custom properties, **no Tailwind** | **New** | User themes need stable semantic hooks. Utility-class soup makes a theme contract impossible. React chosen over Svelte for your and Claude Code's familiarity; bundle size is dominated by the native shell anyway. |
 | D13 | Windows-first; macOS merged only after testing on a real Mac | **New** | You can't meaningfully build or test macOS from Windows. CI can compile it, but AppleScript permissions and window transparency only verify on a Mac. |
 | D14 | Customization = three layers: (a) in-app customizer editing theme tokens, saved as variants; (b) user CSS snippets layered on top of the active theme; (c) importable theme packages | Confirmed | Customization is the core purpose of the project. |
+| D15 | v1 ships Spotify-only on Windows; SoundCloud support and Windows any-app mode are grouped into a post-v1 expansion phase, order TBD | Confirmed | You want v1 launched with Spotify first rather than carrying SoundCloud's spike/API-terms risk (D6, D9, C13) into the critical path. |
 
 ---
 
@@ -311,7 +312,7 @@ Prove the risky assumptions before building anything real.
   Gate: passes in `tauri dev` **and** in the installed NSIS build; no white flash on show; drag is smooth. Fail → opaque-rectangle fallback becomes the default.
 - **S2 GSMTC:** Rust reads Spotify's session — title, artist, album, thumbnail, timeline, status; events fire; controls work. Test seek and shuffle to fill the `?` cells. Log the Spotify session ID. Ignore all other sessions.
   Gate: 20 consecutive track changes, all metadata correct (count them).
-- **S3 SoundCloud widget:** CSP allows the widget, hidden iframe, `allow="autoplay"`, `play()` from your own button, events fire, current-sound artwork returned. Test track, playlist, profile and `/likes` URLs. Test whether playback and progress events continue while the window is hidden to tray.
+- **S3 SoundCloud widget — deferred, optional for now (D15):** CSP allows the widget, hidden iframe, `allow="autoplay"`, `play()` from your own button, events fire, current-sound artwork returned. Test track, playlist, profile and `/likes` URLs. Test whether playback and progress events continue while the window is hidden to tray. Not required to unblock Phase 2 — SoundCloud moved to the post-v1 expansion phase; run this spike whenever you pick that work back up.
   Gate: 10 minutes of continuous playlist playback while hidden.
 - **S4 Themes:** asset protocol scoped; theme CSS + local font load via `<link>`; editing the file updates the UI; malformed CSS doesn't crash. CSP blocks a remote `url()` in a test snippet; layered `@import` loading works under the CSP; guard layer beats a snippet that sets `.mp-source-badge {display:none !important}`; inline overrides survive hot swap; system font enumeration from Rust (untested).
   Gate: edit → visible change feels instant; broken file → default theme + error shown.
@@ -357,6 +358,14 @@ Prove the risky assumptions before building anything real.
 - **Gate:** someone else installs and switches themes from the README alone.
 
 **Total: ~74–122 h (rough estimate).** At 5 h/week ≈ 15–24 weeks; at 8 h/week ≈ 9–15 weeks. Natural stop points after Phase 3 (design showcase works in a browser) and Phase 6 (shipped on Windows).
+
+### Post-v1 expansion (not yet phased)
+
+Per D15, these two are grouped together as the next body of work after Phase 6 ships, with no ordering between them decided yet:
+- **SoundCloud support** — run the deferred S3 spike, build `SoundCloudAdapter`, source-switching UI (D9), attribution/link-out (C13).
+- **Windows any-app mode** — broaden the GSMTC adapter (S2, already passed) beyond the Spotify-only AUMID filter to show any active media session.
+
+Not estimated in hours yet; scope and order to be planned when you pick this up.
 
 ---
 
@@ -453,12 +462,12 @@ Targets the "confirmed it understood, then failed repeatedly" problem.
 
 ## 10. Open questions (answer before Phase 1)
 
-1. Do you have regular access to a Mac? Determines whether Phase 7 exists.
-2. Fixture policy: synthetic strings (recommended) or real metadata you supply?
-3. Tagline — draft above, yours to finalize.
-4. Spotify Premium — only matters if Web API features ever come back.
-5. Windows any-app mode (show any media session, not only Spotify)?
-6. SoundCloud in the finished scope? Test first: does SoundCloud in Chrome appear in the S2 GSMTC spike with title + artwork?
+1. Do you have regular access to a Mac? Determines whether Phase 7 exists. **Answered:** it's a school-regulated MacBook — take Phase 7 access as uncertain/lower-confidence until actually tested; school device management may restrict signing, dev tools, or permissions.
+2. Fixture policy: synthetic strings (recommended) or real metadata you supply? **Still open** — no decision yet.
+3. Tagline — draft above, yours to finalize. **Still open.**
+4. Spotify Premium — only matters if Web API features ever come back. **Answered:** confirmed, you have Premium.
+5. Windows any-app mode (show any media session, not only Spotify)? **Answered:** confirmed desired — grouped into the "Post-v1 expansion" note in §5, order relative to SoundCloud TBD (D15).
+6. SoundCloud in the finished scope? Test first: does SoundCloud in Chrome appear in the S2 GSMTC spike with title + artwork? **Answered:** deferred — v1 ships Spotify-only (D15); this test and the S3 spike wait until the post-v1 expansion phase.
 
 ---
 
