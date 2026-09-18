@@ -158,3 +158,64 @@ Decision or resolution.
   until it's actually being scheduled). D6 (SoundCloud via Widget API) and
   D9 (one playback source at a time) remain valid technical decisions for
   whenever that phase starts; only the timing moved.
+
+## 2026-09-17 — Phase 1 / S4 themes spike (passed, after two implementation bugs)
+
+- **Asset protocol + CSP:** `tauri.conf.json`'s `app.security.assetProtocol.scope`
+  needs an absolute path with no `..` components and no Windows `\\?\`
+  extended-length prefix — a Rust `spike_theme_dir` command that built the path via
+  `.join("..")` (literal `..` in the string) or `.canonicalize()` (adds `\\?\` on
+  Windows) both silently failed to match the scope glob, so the `<link>` never
+  loaded and nothing crashed or errored — just no visible effect. Fixed with
+  `Path::parent()` instead of `.join("..")`, and no canonicalize. Also needed the
+  `protocol-asset` Cargo feature on the `tauri` dependency (`cargo check` fails
+  with a clear message pointing at this if it's missing — the assetProtocol config
+  alone isn't enough).
+- **CSP restricting style/font/img to `self`/`asset:`/`data:`** works, confirmed by
+  a blocked-image console error and zero network attempts for a remote `url()` —
+  but **only in a release build** (`npm run tauri build`, or the plain release exe
+  at `target/release/tauri-app.exe`). In `tauri dev` with an external `devUrl`
+  (Vite), Tauri does not inject CSP into the dev server's response at all, so
+  nothing is blocked and no `securitypolicyviolation` event fires. This is the
+  same shape as S1's dev-vs-bundle gap for window transparency — **any CSP-related
+  gate must be verified in a release/bundled build, never `tauri dev` alone.**
+- **Cascade layers (`@layer guard, theme, user;`) — first implementation attempt
+  was wrong and is a trap worth flagging for Phase 3/4.** Loading guard/theme/user
+  each as its own `<link rel="stylesheet" href="..." layer="name">` tag worked
+  correctly on a page's *first* load (guard's `!important` beat a hostile
+  snippet's `!important`, per spec — earlier-declared layers win ties on
+  `!important`), but **flipped to "last layer wins" once any layer got registered
+  dynamically after initial page load** — reproduced in a plain, Tauri-free HTML
+  page in this WebView2/Chromium build (153.0.4234.32), so it's a browser/engine
+  quirk, not an app bug. **Fix:** build one shell stylesheet with
+  `@layer guard, theme, user; @import url(...) layer(guard); @import url(...) layer(theme); @import url(...) layer(user);`
+  as a single `blob:` URL and swap that one `<link>`, instead of three separate
+  layered links. This is what PLAN.md §4 already specified ("Load order via
+  cascade layers... Implementation detail... decided in the S4 spike") — the
+  spike now confirms the single-shell form is the one that's actually reliable,
+  not an equally-valid alternative. Needed `blob:` added to CSP `style-src`.
+  Cost: swapping the single shell link causes a brief unstyled flash between
+  unload and reload, worse than the (broken) three-link version's flicker-free
+  swap — Phase 4 should keep both old and new shell links live and remove the
+  old one only after the new one's `onload` fires, to get reliability without
+  the flash.
+- **Hot swap:** editing a theme file on disk while `tauri dev` runs reliably
+  fires the Rust `notify`-based file watcher and reaches the frontend via a
+  Tauri event; cache-busting the shell link's blob content (not just a query
+  string, since blob URLs are content-addressed) picks up changes in the
+  `@import`-ed files too, not just the top-level shell.
+- **Malformed CSS:** confirmed — a broken `theme.css` (missing colons/semicolons)
+  doesn't crash the app or the webview; the browser just drops the unparseable
+  declarations, per normal CSS error recovery. No special handling needed beyond
+  what CSS already does, though Phase 3/4 should still surface a "theme failed to
+  validate" state at the `theme.json`-schema level (separate from raw CSS parse
+  errors, which are silent by design).
+- **System font enumeration from Rust — resolves PLAN.md's "untested" flag:**
+  `font-kit = "0.14"`, `SystemSource::new().all_families()`, works from a Tauri
+  command with no special permissions; returned 183 families on this machine.
+- Spike lives on branch `spike/s4-themes`, not merged to `main`, same as S1/S2.
+  The font file used to verify local `@font-face` loading (a copy of Windows'
+  `consola.ttf`) was deliberately *not* committed — proprietary system font,
+  only needed locally to see the swap happen.
+- **Checkpoint per PLAN.md §5: S1, S2 and S4 have all passed** (S3 SoundCloud
+  remains deferred per D15). Phase 2 (Core) can start next.
