@@ -58,7 +58,8 @@
 
 .mp-root[data-layout="strip"] .mp-source-badge {
   font-size: 10px;
-  color: var(--mp-accent);
+  /* Raw --mp-accent text on --mp-bg is 3.85:1 (fails AA); 80/20 mix with fg is 5.21:1. */
+  color: color-mix(in srgb, var(--mp-accent) 80%, var(--mp-fg));
   letter-spacing: 0.08em;
   border: 0.5px solid color-mix(in srgb, var(--mp-accent) 35%, transparent);
   border-radius: var(--mp-radius-control);
@@ -85,7 +86,7 @@
 .mp-root[data-layout="strip"] .mp-time-current,
 .mp-root[data-layout="strip"] .mp-time-total {
   font-size: 10px;
-  color: #6f6b64;
+  color: var(--mp-muted); /* was #6f6b64 = 3.71:1 on --mp-bg, fails AA */
 }
 
 .mp-root[data-layout="strip"] .mp-controls {
@@ -98,6 +99,8 @@
 .mp-root[data-layout="strip"] .mp-btn-next {
   background: none;
   border: none;
+  display: flex;
+  align-items: center;
   color: var(--mp-muted);
   font-size: 14px;
   line-height: 1;
@@ -163,6 +166,17 @@
      styling itself applies correctly — this was a real missing offset, not another
      dead end. */
   margin-top: calc((3px - 10px) / 2);
+}
+
+.mp-root[data-layout="strip"] .mp-link-out {
+  font-size: 10px;
+  color: var(--mp-muted);
+  text-decoration: none;
+  letter-spacing: 0.04em;
+}
+.mp-root[data-layout="strip"] .mp-link-out:hover {
+  color: var(--mp-fg);
+  text-decoration: underline;
 }
 
 .mp-root[data-layout="strip"] .mp-empty,

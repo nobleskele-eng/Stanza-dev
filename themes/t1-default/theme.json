@@ -5,7 +5,7 @@
   "version": "1.0.0",
   "contract": 1,
   "layout": "strip",
-  "window": { "width": 400, "height": 160 },
+  "window": { "width": 400, "height": 202 },
   "colorMode": "static",
   "nativeEffect": "none",
   "controls": {

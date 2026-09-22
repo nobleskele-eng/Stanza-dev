@@ -12,7 +12,42 @@ import type { NowPlaying } from "../types/player";
 
 type FixtureMap = Record<string, NowPlaying>;
 
+const LAYOUTS: readonly Layout[] = ["strip", "pill", "card"];
+
+/**
+ * `?fixture=<name>&layout=<layout>` renders exactly one fixture state with a static
+ * position, for the Playwright fixture matrix (e2e/matrix.spec.ts). No store, no
+ * interpolation — deterministic output is what screenshots need.
+ */
+function MatrixCell({ fixtureName, layout }: { fixtureName: string; layout: Layout }) {
+  const [fixtures, setFixtures] = useState<FixtureMap | null>(null);
+
+  useEffect(() => {
+    import("../../dev/fixtures/nowPlaying").then((mod) => setFixtures(mod.fixtures));
+  }, []);
+
+  if (!fixtures) return null;
+  const fixture = fixtures[fixtureName];
+  if (!fixture) return <p data-testid="matrix-missing">unknown fixture</p>;
+
+  return (
+    <div data-testid="matrix-cell" style={{ display: "inline-block", padding: 16, background: "#f6f6f6" }}>
+      <Player nowPlaying={fixture} positionMs={fixture.positionMs} layout={layout} platform="windows" />
+    </div>
+  );
+}
+
 export function DevHarness() {
+  const params = new URLSearchParams(window.location.search);
+  const fixtureName = params.get("fixture");
+  const layoutParam = params.get("layout") as Layout | null;
+  if (fixtureName) {
+    return <MatrixCell fixtureName={fixtureName} layout={layoutParam && LAYOUTS.includes(layoutParam) ? layoutParam : "strip"} />;
+  }
+  return <FullHarness />;
+}
+
+function FullHarness() {
   const [fixtures, setFixtures] = useState<FixtureMap | null>(null);
   const [store] = useState(() => new PlayerStore());
   const [adapter] = useState(() => new MockAdapter("spotify", { source: "spotify", status: "idle", positionMs: 0, positionUpdatedAt: Date.now(), caps: { seek: false, volume: false, shuffle: false, repeat: false, album: false } }));
@@ -40,7 +75,7 @@ export function DevHarness() {
   const positionMs = interpolatePositionMs(snapshot, now);
 
   return (
-    <main style={{ padding: 24, fontFamily: "monospace" }}>
+    <main style={{ padding: 24, fontFamily: "monospace", background: "#f6f6f6", color: "#0f0f0f", minHeight: "100vh", boxSizing: "border-box" }}>
       <h1>PlayerStore dev harness</h1>
       <p>Mock adapter + fixtures only — real Spotify/GSMTC wiring isn't part of Phase 2.</p>
 

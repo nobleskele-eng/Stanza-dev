@@ -20,7 +20,7 @@
     "artwork meta badge"
     "progress progress progress"
     "time time time"
-    ". controls volume";
+    "link controls volume";
   column-gap: 14px;
   row-gap: 6px;
 }
@@ -32,6 +32,12 @@
 .mp-root[data-layout="strip"] .mp-time-total { grid-area: time; justify-self: end; }
 .mp-root[data-layout="strip"] .mp-controls { grid-area: controls; justify-self: center; }
 .mp-root[data-layout="strip"] .mp-volume-wrap { grid-area: volume; justify-self: center; align-self: center; }
+/* width:0 + min-width:100% = the link contributes nothing to the (auto) artwork column's width, then fills
+   it; longer text is truncated rather than pushing the title sideways. */
+.mp-root[data-layout="strip"] .mp-link-out { grid-area: link; width: 0; min-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* Idle / error replace the track block: they take the artwork+meta cells (row 1, cols 1–2). */
+.mp-root[data-layout="strip"] .mp-empty,
+.mp-root[data-layout="strip"] .mp-error { grid-area: 1 / 1 / 2 / 3; min-width: 0; }
 
 /* --- pill layout (T3, minimal placeholder — full design work is Phase 4) --- */
 .mp-root[data-layout="pill"] .mp-window {

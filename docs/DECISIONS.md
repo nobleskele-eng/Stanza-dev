@@ -314,3 +314,229 @@ Decision or resolution.
   contrast check on `--mp-art-fg`, variant data model + validation unit
   tests, T2/T3/T4 stay placeholder-only (correctly, per PLAN.md — only T1 is
   required this phase). THEME_CONTRACT.md TODOs are still open.
+
+## 2026-09-20 — Phase 3 / fixture matrix + contrast check
+
+- Added Playwright (`@playwright/test`, Chromium + WebKit) and `e2e/matrix.spec.ts`:
+  every fixture rendered through a URL-driven `?fixture=&layout=` mode in
+  `src/dev/DevHarness.tsx` (static position, no store, so output is
+  deterministic), screenshotted to gitignored `e2e/screenshots/<browser>/`, with
+  a WCAG AA (4.5:1) check on every text part's computed color vs `.mp-window`'s
+  background, plus a no-console-error check and a "source badge visible" check
+  (D10). Runs against the Vite dev server — fixtures only exist in DEV builds.
+  Only the **strip** layout is exercised: T1 styles strip only, pill/card are
+  structure-only placeholders until Phase 4.
+- Fixture matrix gained the rows PLAN.md §4 listed but were missing: each
+  capability off individually (seek/volume/shuffle/repeat/album) and very
+  light / very dark artwork (flat-colour synthetic SVG data URLs, carrying the
+  FIXTURE-ONLY marker in an SVG comment).
+- **The contrast check found two real T1 failures on its first run (32/32
+  tests failing):** `.mp-source-badge` text (`--mp-accent` #c1432e on #0b0b0d)
+  was 3.85:1, and `.mp-time-current/-total` (#6f6b64) was 3.71:1. Fixed inside
+  the already-approved palette: time text now uses `--mp-muted` (6.67:1);
+  badge text is `color-mix(accent 80%, fg)` (5.21:1); the raw accent is
+  unchanged on the progress fill and badge border. **Visual change — ready for
+  review, not signed off.**
+- Second failure mode, not a theme bug: browsers report `color-mix()` results
+  in computed style as `color(srgb r g b)` (channels 0–1), which my first
+  `parseColor` rejected. Extended `src/theme/contrast.ts` + a test.
+- **Result (ran):** `npx tsc --noEmit` clean; `npx vitest run` 23 passed;
+  `npx playwright test` 32 passed (16 fixtures × Chromium/WebKit);
+  `npm run build` OK incl. `check-fixtures-excluded: OK`.
+- **Surprises found by looking at the screenshots (not fixed, need a decision):**
+  1. **CLAUDE.md violation from the earlier Phase 3 pass:** `Player.tsx`
+     hardcodes displayed strings — "Nothing playing", "Something went wrong",
+     "Open", the button aria-labels, and the source badge is generated via
+     `source.toUpperCase()`. docs/COPY.md has all of these as `[NEEDS COPY]`, so
+     per the rules they should render `[NEEDS COPY]`. Not changed here because
+     it alters everything displayed (including the badge wording, which has
+     attribution implications, PLAN.md C3/C13).
+  2. **Control glyphs render as colour emoji in WebKit** (⏮ ⏸ ⏭ become blue
+     emoji tiles) and with a tint in Chromium — the buttons use Unicode
+     characters. PLAN.md §0 says control icons are SVG/CSS; T1 should use inline
+     SVG icons. Cross-engine difference caught only because of the WebKit run.
+  3. **Volume slider:** a faint lighter rectangle is visible beside/below the
+     rotated slider in WebKit (and faintly in Chromium) — probably the rotated
+     input's unrotated box or default range-input chrome. This is the known
+     open rough edge from the Phase 3 volume-slider entry; now reproducible
+     without the native window.
+- **Still open for the Phase 3 gate:** variant data model + validation unit
+  tests; `--mp-art-*` palette extraction doesn't exist yet, so "text on
+  `--mp-art-fg` meets AA" can't be tested (only static theme colors are);
+  THEME_CONTRACT.md TODOs; keyboard-focus check; visual sign-off.
+
+## 2026-09-20 — Phase 3 / scaffold CSS leak, SVG icons (root cause of the volume-slider dead ends)
+
+- **Root cause found for the volume-slider rough edge — and for "dead end #2"
+  in the 2026-09-17/18 entry ("declared width/height didn't take effect").**
+  `src/App.css` still held the Tauri scaffold's global rules
+  `input, button { padding: 0.6em 1.2em; border; border-radius: 8px;
+  box-shadow: 0 2px 2px rgba(0,0,0,.2); background; }` (+ `button:hover`,
+  `:active`, `outline: none`, a dark-mode variant, and global `a`/`h1`). They
+  applied to every control in the player: `padding` on a `content-box` range
+  input turned the declared 44×10 into 82×29 (measured with
+  `getBoundingClientRect`: rotated box 31×84 → 10×44 after the fix), and the
+  `box-shadow` was the "faint rectangle" beside the slider and the dark blobs
+  behind the transport glyphs. Devtools weren't needed — a Playwright probe
+  reading computed styles found it in one call. **Lesson: when a declared size
+  "doesn't apply", read `getComputedStyle` before theorising about the engine.**
+- Fix: `App.css` reduced to the `:root` page defaults; all scaffold
+  `a/input/button/h1/.logo/.container/.row/#greet-input` rules deleted (nothing
+  referenced them).
+- Transport icons are now inline SVG (`src/player/icons.tsx`), `currentColor`,
+  1em — identical in Chromium and WebKit (previously colour emoji in WebKit).
+  aria-labels untouched (copy question is still open, see previous entry).
+  Documented in THEME_CONTRACT.md; not a version bump.
+- Added `e2e/focus.spec.ts`: Tab order prev → play → next → volume, each with a
+  non-`none` computed outline. Closes the "visible keyboard focus" gate item.
+- **Result (ran):** `npx tsc --noEmit` clean; `npx vitest run` 23 passed;
+  `npx playwright test` 34 passed (32 matrix + 2 focus, Chromium + WebKit).
+  Visual result: **ready for review**, not signed off.
+- **New surprise, not fixed (needs your call):** nothing in the current code
+  sets `html/body` background to transparent (the S1 spike did). `App.css`'s
+  `:root { background-color: #f6f6f6 }` would paint an opaque light-grey
+  rectangle behind the rounded player in the real transparent Tauri window.
+  I can't see the native window from this session, so this is unverified —
+  check it in `tauri dev`; if the corners show grey, the fix is
+  `html, body, #root { background: transparent }` for the production path.
+
+## 2026-09-20 — Phase 3 / variant data model + validation
+
+- `src/theme/variant.ts` (+ 31 tests in `variant.test.ts`): `Variant`,
+  `ThemeManifest`, `validateValue`, `validateVariant`, `emptyVariant`,
+  `variantToDom`, `checkVariantContrast`. Rules are exactly PLAN.md §4 / D14,
+  written up in THEME_CONTRACT.md "Variants" (not a version bump).
+- **Failures are machine codes + a path, never prose.** COPY.md's "Variant
+  import error" is `[NEEDS COPY]` and CLAUDE.md forbids generated displayed
+  text, so a validator that produced messages would have broken the rule. The
+  UI maps codes to copy once it exists.
+- Hardened beyond the plan's `url( ; { }` list: backslash (CSS escape can spell
+  `u\72l(`), `@`, `/*`, `<`, `>`, `image-set`, `expression(`, control chars.
+  Colours are hex/`rgb()` only (no named colours, no `var()`, no `hsl()`), so
+  every accepted colour is also parseable by the contrast check.
+- Two design calls worth knowing: (1) control characters are checked on the
+  *untrimmed* value — my first version trimmed first, and a test caught a
+  trailing newline being silently normalized away; (2) partial import: bad
+  entries are dropped and reported while good ones apply, but a wrong
+  theme/contract/layout rejects the whole file.
+- **Tooling surprises:** (a) Vitest returns an empty string for `?raw` CSS
+  imports unless `test.css.include` matches the file — set for
+  `structure.css` in `vitest.config.ts`; the first run of the sync test "passed
+  the wrong way" by comparing against `[]`, so check such tests fail when the
+  input is broken. (b) `@types/node` isn't installed and `npm run build`
+  typechecks test files, so tests use Vite `?raw`/JSON imports, not `node:fs`.
+  (c) My own file-writing path converted `\u0000` escapes into raw control
+  bytes in two source files (grep then called them binary). Fixed with
+  explicit code-point checks; both files verified free of control bytes.
+- Verified the tests bite: temporarily removing `;` from the forbidden set made
+  the injection test fail; restored.
+- `HIDEABLE_PARTS` is tested against the `data-hide-<part>` selectors in
+  `structure.css`, so the two can't drift apart silently.
+- Not done: nothing applies a variant to the DOM yet (`variantToDom` is the pure
+  mapping; wiring, the customizer UI and file storage are Phase 4). Player
+  doesn't take a variant.
+
+## 2026-09-20 — Phase 3 / strings from COPY.md; page background; `main` window is still the scaffold
+
+- **CLAUDE.md violation fixed.** `Player.tsx` no longer contains any display
+  string. `src/copy.ts` parses `docs/COPY.md` (`- **Label:** value`); a value
+  that is empty or still starts with `[NEEDS COPY]` is treated as missing —
+  including entries that carry a *draft* after it, because a draft is not
+  approved copy. Missing → literal `[NEEDS COPY]`. Covers the idle text,
+  generic-error fallback, source badge, prev/play/pause/next/volume labels
+  (aria-labels count as UI strings) and the link-out label. `source.toUpperCase()`
+  was generated text and is gone. New labels were added to COPY.md as
+  `[NEEDS COPY]` under "Player UI" — no wording was written by me.
+  **Visible consequence:** until you write the copy, the idle state and the
+  source badge read "[NEEDS COPY]", and the wider badge squeezes the title
+  column in the strip layout (checked in screenshots; goes away with real copy).
+  **Open for you:** the badge wording has attribution requirements (C3/C13).
+- Tests: `copy.test.ts` (parser; missing/draft → `[NEEDS COPY]`; every label the
+  code asks for exists in COPY.md — a typo would otherwise show `[NEEDS COPY]`
+  forever; `copy()` only ever returns approved text or the placeholder) and
+  `e2e/copy.spec.ts` (the rendered DOM says `[NEEDS COPY]`).
+- **Grey-corner question settled by test, not by eye.** Wrote
+  `e2e/production.spec.ts` first (production bundle via `vite preview`,
+  screenshot with `omitBackground`, read the alpha of the pixel outside the
+  rounded arc) and ran it against the old code: **red** — corner alpha 255 and
+  `html` painting `rgb(246, 246, 246)`. So the concern was a real bug, not
+  hypothetical. Fix: `App.css` no longer paints any page background
+  (`html, body, #root { margin: 0; background: transparent }`); the dev harness
+  and matrix cell set their own `#f6f6f6`. Now **green** in Chromium and WebKit.
+  Second tooling note: WebKit here has no `OffscreenCanvas`; the test uses a
+  normal canvas.
+- **Surprise: `src-tauri/tauri.conf.json` on `main` is still the unmodified
+  scaffold** — 800×600, decorated, no transparency, no always-on-top, `csp: null`.
+  The frameless/transparent/always-on-top settings and the CSP/asset-protocol
+  config only exist on the spike branches (by design: "merge learnings, not
+  code"). So nothing has yet put the player in a transparent native window on
+  `main`; and `tauri dev` renders the DEV harness, not the production player,
+  so it was never a valid place to check corners. What is verified: the page
+  paints nothing behind the player. What is **not** verified: the native
+  transparent window itself — that needs the S1 window config applied (Phase 5
+  app shell) and a look in the installed build (S1 showed dev and bundle can
+  differ). Also unchanged and needing re-verification then: CSP must be set in
+  `tauri.conf.json` (S4: only enforced in release builds).
+- **Result (ran):** `npx tsc --noEmit` clean; `npx vitest run` 60 passed;
+  `npx playwright test` 44 passed (32 matrix + 2 focus + 6 copy + 4 production,
+  Chromium + WebKit); `npm run build` OK incl. `check-fixtures-excluded: OK`.
+
+## 2026-09-20 — Phase 3 / THEME_CONTRACT finalized (v1), audited against the real DOM
+
+- Rewrote `docs/THEME_CONTRACT.md` as a complete v1 spec: Root attributes and Parts as
+  one-per-line lists, per-state part table, `theme.json` field table (with what is
+  *enforced* vs *planned*), shared DOM + one annotated example per layout, a "Not in v1"
+  list, and honest status notes. **Not frozen** — it freezes at your Phase 3 sign-off;
+  corrections that make it match the code are allowed until then (no version bump).
+- `e2e/contract.spec.ts` parses the doc and compares it with the rendered DOM: Parts ==
+  every `mp-*` class across the whole fixture matrix; Root list == every `data-*`
+  attribute set (including hover); boolean `data-cap-*` are present-or-absent; theme.json
+  `window` fits every state and is filled by the largest; strip has no auto-placed part;
+  guard resists ordinary-declaration attacks. **Mutation-checked**: deleting a doc bullet,
+  the strip placement rule, one guard property, or shrinking `window.height` each makes
+  exactly the matching test fail (files restored afterwards).
+- **What the audit found (all fixed unless noted):**
+  1. `data-hover` was in the contract but nothing set it → implemented on `.mp-root`
+     (pointer only; keyboard users need `:focus-within`, stated in the contract).
+     T1 does not use it yet.
+  2. **`theme.json` `window` was wrong**: 400×160 vs a rendered 400×202 in the tallest
+     state (118–202 across states). Corrected to 400×202; now tested against every fixture.
+  3. **`.mp-empty` / `.mp-error` / `.mp-link-out` had no grid placement even in `strip`**
+     (auto-placed by accident). Now explicit; a test guards it.
+  4. **`guard.css` didn't cover what the contract claimed**: only filter/animation/radius.
+     Added opacity, transform, clip-path, mask, mix-blend-mode. **Still not a real
+     guarantee:** guard is not yet inside `@layer guard`, so a later stylesheet's own
+     `!important` on the same property can win. Contract says so; the layered loader is
+     Phase 4 (S4 spike). Tested only against ordinary declarations.
+  5. **`--mp-art-1..3` / `--mp-art-fg` are declared but nothing supplies them.** Contract
+     now says so and requires fallbacks in themes.
+  6. **Link-out was visibly broken (found from the screenshots, not by any assertion):** default
+     blue underlined link on the dark card, not in the contrast check, and its text widened the
+     auto artwork column, shoving the title right. Fixed: T1 styling, added to the AA check,
+     and `width:0; min-width:100%` + ellipsis so it can never widen the column (its copy must
+     be short — recorded in the contract).
+- **Known gaps, deliberately not fixed:** `pill` and `card` are structural placeholders that
+  place only some parts (contract lists exactly which); the rule "a theme must place every
+  part it shows" is stated and is Phase 4 (T2/T3) work. No shuffle/repeat/seek controls
+  exist in v1 even though `data-cap-shuffle/repeat/seek` are emitted — **open question for
+  you**: freeze v1 without them, or add parts before freezing?
+- PRIORITIZATION_PLAN.md's lyrics button and genre-based fonts are recorded under "Not in v1";
+  `data-genre` / `--mp-font-genre` is only a candidate until spikes S6/S7 land.
+- New: `npm run review` renders 2× images of every T1 state, the three layouts, hover and
+  keyboard focus in Chromium and WebKit and builds labelled contact sheets in
+  `e2e/review/` (gitignored). Visual result: **ready for review**.
+- **Result (ran):** `npx tsc --noEmit` clean; `npx vitest run` 60 passed; `npx playwright test`
+  98 passed (Chromium + WebKit); `npm run build` OK incl. `check-fixtures-excluded: OK`.
+
+## 2026-09-22 — Answer to the open shuffle/repeat/seek question
+
+Resolved the open question from the entry above: **freeze v1 without shuffle/repeat/seek
+controls.** `data-cap-shuffle/repeat/seek` keep being emitted (a theme can still react to
+them); adding the corresponding buttons/interactive progress bar is a contract version
+bump, done later alongside whichever phase actually builds those controls. `docs/THEME_CONTRACT.md`
+already stated this correctly under "Not in v1" — no doc change needed, just recording
+the sign-off. The contract is not yet fully frozen: palette extraction (`--mp-art-1..3`/
+`--mp-art-fg`), T2/T3 placing every part in `card`/`pill`, and visual sign-off on T1 are
+still open per its own "Remaining before this contract can be frozen" checklist.
+- **Result:** doc-only change, re-ran nothing new (see the entry above for the last full
+  verification, still current).

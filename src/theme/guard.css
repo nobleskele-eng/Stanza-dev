@@ -1,6 +1,11 @@
 /* Guard layer (docs/THEME_CONTRACT.md, D10/C3) — wins over theme and user layers
    for these specific properties regardless of layer declaration order, per the
-   `!important`-reverses-layer-order cascade rule confirmed in the S4 spike. */
+   `!important`-reverses-layer-order cascade rule confirmed in the S4 spike.
+
+   STATUS: until the Phase 4 loader puts this in `@layer guard`, it reliably beats
+   ordinary declarations only; a later stylesheet using its own `!important` on the
+   same property can still win. Tested in e2e/contract.spec.ts (ordinary-declaration
+   attacks only). */
 
 .mp-source-badge {
   display: block !important;
@@ -8,8 +13,15 @@
   opacity: 1 !important;
 }
 
+/* Artwork is shown unmodified (D10/C3): no filter/blur, animation, transparency,
+   transform, cropping shapes, masks or blending. Radius is 4px (small player). */
 .mp-artwork {
   filter: none !important;
   animation: none !important;
   border-radius: 4px !important;
+  opacity: 1 !important;
+  transform: none !important;
+  clip-path: none !important;
+  mask: none !important;
+  mix-blend-mode: normal !important;
 }

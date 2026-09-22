@@ -1,6 +1,8 @@
-import type { CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
+import { copy } from "../copy";
 import type { NowPlaying } from "../types/player";
 import { formatMs, progressFraction } from "./format";
+import { NextIcon, PauseIcon, PlayIcon, PrevIcon } from "./icons";
 
 export type Layout = "pill" | "card" | "strip";
 export type Platform = "windows" | "macos";
@@ -31,6 +33,9 @@ export function Player({
   onPrevious,
 }: PlayerProps) {
   const { source, status, track, caps, error } = nowPlaying;
+  // data-hover = pointer is over the player (contract). Keyboard users get no data-hover, so a
+  // theme that reveals controls on hover must also reveal them on :focus-within.
+  const [hover, setHover] = useState(false);
   const progress = progressFraction(positionMs, track?.durationMs);
   const hasTrack = (status === "playing" || status === "paused" || status === "unavailable") && track;
 
@@ -50,13 +55,16 @@ export function Player({
       data-cap-shuffle={caps.shuffle || undefined}
       data-cap-repeat={caps.repeat || undefined}
       data-cap-album={caps.album || undefined}
+      data-hover={hover || undefined}
+      onPointerEnter={() => setHover(true)}
+      onPointerLeave={() => setHover(false)}
       style={rootStyle}
     >
       <div className="mp-window">
-        {status === "idle" && <div className="mp-empty">Nothing playing</div>}
+        {status === "idle" && <div className="mp-empty">{copy("idle")}</div>}
 
         {status === "error" && (
-          <div className="mp-error">{error?.detail ?? "Something went wrong"}</div>
+          <div className="mp-error">{error?.detail ?? copy("errorFallback")}</div>
         )}
 
         {hasTrack && track && (
@@ -83,37 +91,37 @@ export function Player({
             <div className="mp-time-total">{formatMs(track.durationMs ?? 0)}</div>
 
             <div className="mp-controls">
-              <button className="mp-btn-prev" type="button" aria-label="Previous" onClick={onPrevious}>
-                ⏮
+              <button className="mp-btn-prev" type="button" aria-label={copy("previous")} onClick={onPrevious}>
+                <PrevIcon />
               </button>
               <button
                 className="mp-btn-play"
                 type="button"
-                aria-label={status === "playing" ? "Pause" : "Play"}
+                aria-label={status === "playing" ? copy("pause") : copy("play")}
                 onClick={onPlayPause}
               >
-                {status === "playing" ? "⏸" : "⏵"}
+                {status === "playing" ? <PauseIcon /> : <PlayIcon />}
               </button>
-              <button className="mp-btn-next" type="button" aria-label="Next" onClick={onNext}>
-                ⏭
+              <button className="mp-btn-next" type="button" aria-label={copy("next")} onClick={onNext}>
+                <NextIcon />
               </button>
             </div>
 
             {caps.volume && (
               <div className="mp-volume-wrap">
-                <input className="mp-volume" type="range" min={0} max={1} step={0.01} aria-label="Volume" />
+                <input className="mp-volume" type="range" min={0} max={1} step={0.01} aria-label={copy("volume")} />
               </div>
             )}
 
             {track.permalink && (
               <a className="mp-link-out" href={track.permalink} target="_blank" rel="noreferrer">
-                Open
+                {copy("linkOut")}
               </a>
             )}
           </>
         )}
 
-        <div className="mp-source-badge">{source.toUpperCase()}</div>
+        <div className="mp-source-badge">{copy("sourceBadge")}</div>
       </div>
     </div>
   );

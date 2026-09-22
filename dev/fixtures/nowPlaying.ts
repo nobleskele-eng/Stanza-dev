@@ -10,6 +10,12 @@ const MARK = "FIXTURE-ONLY-DEV-BUILD";
 const FULL_CAPS = { seek: true, volume: true, shuffle: true, repeat: true, album: true };
 const NO_CAPS = { seek: false, volume: false, shuffle: false, repeat: false, album: false };
 
+// Flat-colour synthetic artwork for the very-light / very-dark rows of the matrix.
+function flatArtwork(color: string): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><!-- ${MARK} --><rect width="64" height="64" fill="${color}"/></svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
 function base(overrides: Partial<NowPlaying>): NowPlaying {
   return {
     source: "spotify",
@@ -78,4 +84,17 @@ export const fixtures: Record<string, NowPlaying> = {
   "no capabilities (GSMTC-style: no volume)": base({ caps: NO_CAPS }),
 
   "seek only": base({ caps: { ...NO_CAPS, seek: true } }),
+
+  "no seek": base({ caps: { ...FULL_CAPS, seek: false } }),
+  "no volume": base({ caps: { ...FULL_CAPS, volume: false } }),
+  "no shuffle": base({ caps: { ...FULL_CAPS, shuffle: false } }),
+  "no repeat": base({ caps: { ...FULL_CAPS, repeat: false } }),
+  "with link-out (permalink)": base({
+    track: { ...base({}).track!, permalink: `https://example.invalid/${MARK}` },
+  }),
+
+  "no album cap": base({ caps: { ...FULL_CAPS, album: false } }),
+
+  "very light artwork": base({ track: { ...base({}).track!, artwork: flatArtwork("#fafafa") } }),
+  "very dark artwork": base({ track: { ...base({}).track!, artwork: flatArtwork("#050505") } }),
 };

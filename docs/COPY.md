@@ -32,6 +32,15 @@ file tracks.
 - **Theme package import error:** [NEEDS COPY]
 - **"Reset appearance" tray item:** [NEEDS COPY]
 
+## Player UI
+- **Generic error (no detail available):** [NEEDS COPY]
+- **Previous button label:** [NEEDS COPY]
+- **Play button label:** [NEEDS COPY]
+- **Pause button label:** [NEEDS COPY]
+- **Next button label:** [NEEDS COPY]
+- **Volume slider label:** [NEEDS COPY]
+- **Link-out label:** [NEEDS COPY]
+
 ## Rules
 - Never generate displayed text procedurally at runtime.
 - Styling/layout changes must never edit this file's content.
