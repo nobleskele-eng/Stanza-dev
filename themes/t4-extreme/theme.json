@@ -1,0 +1,18 @@
+{
+  "id": "t4-extreme",
+  "name": "[NEEDS COPY]",
+  "author": "[NEEDS COPY]",
+  "version": "1.0.0",
+  "contract": 2,
+  "layout": "card",
+  "window": { "width": 282, "height": 529 },
+  "colorMode": "static",
+  "nativeEffect": "none",
+  "controls": {
+    "--mp-bg": { "type": "color" },
+    "--mp-fg": { "type": "color" },
+    "--mp-muted": { "type": "color" },
+    "--mp-accent": { "type": "color" },
+    "--mp-radius-window": { "type": "length", "min": 0, "max": 32 }
+  }
+}

@@ -7,6 +7,7 @@ const THEMES = [
   { id: "T1", themeId: "t1-default", layout: "strip" },
   { id: "T2", themeId: "t2-artwork", layout: "card" },
   { id: "T3", themeId: "t3-pill", layout: "pill" },
+  { id: "T4", themeId: "t4-extreme", layout: "card" },
 ];
 
 const TEXT_PARTS = [

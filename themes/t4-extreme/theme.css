@@ -1,0 +1,246 @@
+/* T4 — "Extreme" (docs/PLAN.md §4). Deliberately maximal; proves the contract doesn't
+   cap expression. Reuses the `card` layout's structural grid as-is (same areas T2
+   uses, from structure.css) — no need to redefine it, only to paint it loud. This is
+   also why contract v2 exists: T2 and T4 both target [data-layout="card"], and only
+   [data-theme] tells their rules apart now that both load together (DECISIONS.md
+   2026-09-22).
+
+   Direction, picked with the user (mixed from two pitched concepts): near-black card,
+   a rotated two-color block frame stacked behind the (untouched) artwork like layered
+   stickers, and a continuously scrolling marquee title instead of quiet truncation.
+   Palette: bg #0a0a0a, fg #ffffff, muted #9a8fa3, magenta #ff2e88, yellow #ffe100,
+   cyan #00e0c6 — loud on purpose, and deliberately not a variation on T1 (warm
+   near-black + one ink-red accent) or T2 (cool near-black + periwinkle glow): this is
+   near-black + three saturated primaries at once.
+
+   AA-safety rule (same discipline as T2/T3): the three accent colors are used only
+   decoratively — the rotated frame (behind the artwork, never touching it, D10), the
+   progress fill, and the badge border. Never as text on --mp-bg. Text is always
+   --mp-fg/--mp-muted, both checked against --mp-bg by hand below. The play button
+   reuses the fg/bg pair (same technique as T1/T3), not an accent. */
+
+.mp-root[data-layout="card"][data-theme="t4-extreme"] {
+  --mp-bg: #0a0a0a;
+  --mp-fg: #ffffff;
+  --mp-muted: #9a8fa3; /* 6.4:1 on --mp-bg */
+  --mp-accent: #ff2e88; /* decorative only — see AA note above */
+  --mp-radius-window: 12px;
+  --mp-radius-control: 6px;
+  --mp-font-display: "Arial Black", "Arial Bold", "Helvetica Neue", sans-serif;
+  --mp-font-body: "Courier New", monospace;
+  --mp-shadow: none;
+  --mp-motion-fast: 150ms;
+  --mp-motion-slow: 400ms;
+}
+
+.mp-root[data-layout="card"][data-theme="t4-extreme"] .mp-window {
+  position: relative;
+  background: var(--mp-bg);
+  color: var(--mp-fg);
+  border: 3px solid var(--mp-fg);
+  border-radius: var(--mp-radius-window);
+  padding: 26px 22px 20px;
+  width: 232px;
+  font-family: var(--mp-font-body);
+}
+
+/* The "memorable thing" (1 of 2): a rotated two-color block frame stacked behind the
+   artwork, like layered stickers — decorative pseudo-elements on the WINDOW (never on
+   .mp-artwork itself: pseudo-elements don't render on <img>, and D10 forbids touching
+   the artwork anyway). Deliberately allowed to peek past .mp-window's own edges — the
+   native window is transparent (PLAN.md D11), so the overhang reads as a physical
+   sticker against it, not a bug. z-index: -1 keeps both layers behind every normal
+   child of .mp-window without needing to touch the artwork's own stacking. */
+.mp-root[data-layout="card"][data-theme="t4-extreme"] .mp-window::before,
+.mp-root[data-layout="card"][data-theme="t4-extreme"] .mp-window::after {
+  content: "";
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  width: 190px;
+  height: 190px;
+  z-index: -1;
+  border-radius: 4px;
+}
+.mp-root[data-layout="card"][data-theme="t4-extreme"] .mp-window::before {
+  background: #ff2e88;
+  transform: translateX(-50%) rotate(-7deg);
+}
+.mp-root[data-layout="card"][data-theme="t4-extreme"] .mp-window::after {
+  background: #ffe100;
+  transform: translateX(-50%) rotate(6deg);
+}
+
+.mp-root[data-layout="card"][data-theme="t4-extreme"] .mp-artwork {
+  position: relative;
+  width: 180px;
+  height: 180px;
+  background: linear-gradient(145deg, #2a2a2a, #141414);
+  object-fit: cover;
+}
+
+.mp-root[data-layout="card"][data-theme="t4-extreme"] .mp-meta {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-align: center;
+}
+
+/* The "memorable thing" (2 of 2): a continuous scrolling marquee, not one-shot like
+   T1's line-in or T2's fade — every title sweeps right-to-left in a loop, short titles
+   included (deliberate: this is the maximal theme, not a conditional one). Reduced
+   motion gets a real static fallback below, not just the app-wide 0.001ms clamp
+   (structure.css), which would otherwise leave the title snapped mid-sweep. */
+.mp-root[data-layout="card"][data-theme="t4-extreme"] .mp-title {
+  display: inline-block;
+  font-family: var(--mp-font-display);
+  font-weight: 900;
+  font-size: 22px;
+  letter-spacing: -0.01em;
+  color: var(--mp-fg);
+  white-space: nowrap;
+  animation: mp-t4-marquee 9s linear infinite;
+}
+@keyframes mp-t4-marquee {
+  from { transform: translateX(100%); }
+  to { transform: translateX(-100%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mp-root[data-layout="card"][data-theme="t4-extreme"] .mp-title {
+    display: block;
+    animation: none;
+    transform: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+.mp-root[data-layout="card"][data-theme="t4-extreme"] .mp-artist,
+.mp-root[data-layout="card"][data-theme="t4-extreme"] .mp-album {
+  font-size: 11px;
+  color: var(--mp-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-top: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mp-root[data-layout="card"][data-theme="t4-extreme"] .mp-progress {
+  height: 4px;
+  background: #262626;
+  border-radius: 2px;
+  position: relative;
+  overflow: hidden;
+}
+.mp-root[data-layout="card"][data-theme="t4-extreme"] .mp-progress-fill {
+  position: absolute;
+  inset: 0;
+  width: calc(var(--mp-progress) * 100%);
+  background: #00e0c6; /* decorative fill — not text, no AA requirement */
+  border-radius: 2px;
+}
+
+.mp-root[data-layout="card"][data-theme="t4-extreme"] .mp-time-current,
+.mp-root[data-layout="card"][data-theme="t4-extreme"] .mp-time-total {
+  font-size: 10px;
+  color: var(--mp-muted);
+  width: 100%;
+}
+
+.mp-root[data-layout="card"][data-theme="t4-extreme"] .mp-controls {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.mp-root[data-layout="card"][data-theme="t4-extreme"] .mp-btn-prev,
+.mp-root[data-layout="card"][data-theme="t4-extreme"] .mp-btn-next {
+  background: none;
+  border: none;
+  display: flex;
+  align-items: center;
+  color: var(--mp-muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.mp-root[data-layout="card"][data-theme="t4-extreme"] .mp-btn-play {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  line-height: 1;
+  /* Reuses the theme's own fg/bg pair (T1/T3's technique) rather than an accent —
+     see the AA note at the top of this file. */
+  background: var(--mp-fg);
+  color: var(--mp-bg);
+}
+
+.mp-root[data-layout="card"][data-theme="t4-extreme"] .mp-volume-wrap {
+  width: 140px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mp-root[data-layout="card"][data-theme="t4-extreme"] .mp-volume {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 10px;
+  background: transparent;
+  cursor: pointer;
+}
+.mp-root[data-layout="card"][data-theme="t4-extreme"] .mp-volume::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 4px;
+  background: #00e0c6;
+  border-radius: 2px;
+}
+.mp-root[data-layout="card"][data-theme="t4-extreme"] .mp-volume::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--mp-fg);
+  margin-top: calc((4px - 12px) / 2);
+}
+
+.mp-root[data-layout="card"][data-theme="t4-extreme"] .mp-link-out {
+  font-size: 11px;
+  color: var(--mp-muted);
+  text-decoration: none;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.mp-root[data-layout="card"][data-theme="t4-extreme"] .mp-link-out:hover {
+  color: var(--mp-fg);
+  text-decoration: underline;
+}
+
+.mp-root[data-layout="card"][data-theme="t4-extreme"] .mp-source-badge {
+  font-size: 10px;
+  color: var(--mp-muted);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border: 1px solid #00e0c6; /* decorative — not text, AA-exempt */
+  border-radius: var(--mp-radius-control);
+  padding: 3px 8px;
+}
+
+.mp-root[data-layout="card"][data-theme="t4-extreme"] .mp-empty,
+.mp-root[data-layout="card"][data-theme="t4-extreme"] .mp-error {
+  color: var(--mp-muted);
+  padding: 50px 0;
+  text-align: center;
+}

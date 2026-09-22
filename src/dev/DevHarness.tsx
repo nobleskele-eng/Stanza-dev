@@ -20,6 +20,7 @@ const THEMES = [
   { id: "t1-default", layout: "strip" as Layout },
   { id: "t2-artwork", layout: "card" as Layout },
   { id: "t3-pill", layout: "pill" as Layout },
+  { id: "t4-extreme", layout: "card" as Layout },
 ];
 const DEFAULT_THEME = "t1-default";
 

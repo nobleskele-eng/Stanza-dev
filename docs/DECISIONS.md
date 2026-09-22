@@ -740,3 +740,57 @@ creative one, so made and logged rather than asked.
   `npx playwright test` 248 passed (unchanged count — this step only rescopes existing
   themes' CSS, adds no new themes or test cases yet); `npm run build` OK incl.
   `check-fixtures-excluded: OK`.
+
+## 2026-09-22 — Phase 4 / T4 "Extreme" — full theme roster (T1–T4) complete
+
+Fourth and last first-party theme. Direction narrowed with you across two rounds: first
+three pitched concepts (brutalist strip / maximal collage card / kinetic marquee strip),
+then you asked to mix two of them — settled on card layout (T2's), the collage's rotated
+color-block frame, and the marquee's continuous scroll, dropping the diagonal stripe and
+gradient text options. Palette: near-black #0a0a0a, white #ffffff, muted #9a8fa3, three
+saturated accents (magenta #ff2e88, yellow #ffe100, cyan #00e0c6) — loud on purpose, and
+deliberately a different combination from T1 (warm near-black + one red accent) and T2
+(cool near-black + one blue accent): near-black + three primaries at once, not a fourth
+variation on "dark card, one accent."
+
+- **The two "memorable things":** (1) a rotated two-color block frame (magenta,
+  yellow) stacked behind the artwork via `.mp-window::before`/`::after` at `z-index:
+  -1`, allowed to peek past `.mp-window`'s own edges — deliberate, not a bug, since the
+  native window is transparent (PLAN.md D11) so the overhang reads as a physical
+  sticker against it. Pseudo-elements went on `.mp-window`, not `.mp-artwork`, because
+  `::before`/`::after` don't render on `<img>` in any browser, and D10 forbids touching
+  the artwork anyway. (2) a continuously looping marquee title (`translateX(100%)` →
+  `translateX(-100%)`, `9s linear infinite`) instead of every other theme's quiet
+  ellipsis truncation — plays even for short titles that already fit, deliberately,
+  since this is the maximal theme, not a conditional one.
+- **Reduced motion needed a real override, not just the app-wide clamp:** `structure.css`'s
+  global `prefers-reduced-motion` rule sets `animation-duration: 0.001ms` on everything,
+  which would leave a looping marquee snapped mid-sweep rather than legibly static.
+  `t4-extreme/theme.css` adds its own `@media (prefers-reduced-motion: reduce)` block
+  that cancels the animation/transform outright and falls back to the same static
+  ellipsis truncation every other theme uses.
+- Same AA-safety discipline as T2/T3: all three accents are used only decoratively (the
+  frame, the progress fill, the badge border) or not at all as text-on-`--mp-bg` color;
+  the play button reuses the theme's own fg/bg pair. Fixture-matrix AA check passed on
+  the first run, same as T2 and T3 — three for three now.
+- **Found and fixed a pre-existing, unrelated flaky margin while re-running the full
+  suite:** T3's window height (80px, set 2026-09-22) failed once under WebKit on the
+  CJK fixture — 81.45px measured against an 81px ceiling. Not caused by anything in
+  this change; a second, independent source of variance (run-to-run font-metric
+  jitter, on top of the already-documented engine-to-engine variance) that the
+  previous `FILL_TOLERANCE = 8` hadn't accounted for. Raised T3's height to 84px and
+  `FILL_TOLERANCE` to 12; reran `contract.spec.ts` with `--repeat-each=2` on both
+  engines (56/56) to confirm the fix rather than trusting one clean run.
+- **Visual result: ready for review** — sent as `sheet-5-t4-extreme.png` (all fixtures,
+  static — the rotated frame shows, the marquee scroll and any motion don't, stills
+  can't capture animation) and the updated `sheet-6-layouts-interaction.png`.
+- **Definition of Done (PLAN.md §6) status:** "T1–T4 pass the fixture matrix" is now
+  true — all four themes, all AA checks, all window-fit and grid-placement checks
+  green. Everything else on that list (customization layers, Phase 5/6 gates, README,
+  beta) is still open, and the real Spotify adapter still doesn't exist — this is not a
+  release-ready v1, just the theme roster itself finished.
+- **Result (ran):** `npx tsc --noEmit` clean; `npx vitest run` 67 passed (unchanged);
+  `npx playwright test` 320 passed (248 + 72 new: 34 T4 matrix/AA, T4 window-fits +
+  grid-placement, 34 T4 review-image captures, 2 new interaction captures, Chromium +
+  WebKit) — full suite, plus a `--repeat-each=2` pass on `contract.spec.ts` for the T3
+  fix; `npm run build` OK incl. `check-fixtures-excluded: OK`.

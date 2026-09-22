@@ -15,6 +15,7 @@ const THEMES = [
   { id: "strip", themeId: "t1-default", layout: "strip" },
   { id: "card", themeId: "t2-artwork", layout: "card" },
   { id: "pill", themeId: "t3-pill", layout: "pill" },
+  { id: "card-extreme", themeId: "t4-extreme", layout: "card" },
 ];
 
 for (const { id, themeId, layout } of THEMES) {
@@ -33,9 +34,9 @@ for (const { id, themeId, layout } of THEMES) {
 
 test("review images: layouts, hover, keyboard focus", async ({ page }, testInfo) => {
   const out = (n: string) => `e2e/review/${testInfo.project.name}/${n}.png`;
-  for (const { layout, themeId } of THEMES) {
+  for (const { id, layout, themeId } of THEMES) {
     await page.goto(url("typical / all caps", layout, themeId));
-    await page.getByTestId("matrix-cell").screenshot({ path: out(`layout--${layout}`), animations: "disabled" });
+    await page.getByTestId("matrix-cell").screenshot({ path: out(`layout--${id}`), animations: "disabled" });
   }
   await page.goto(url("typical / all caps"));
   await page.locator(".mp-window").hover();

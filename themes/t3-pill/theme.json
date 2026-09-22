@@ -5,7 +5,7 @@
   "version": "1.0.0",
   "contract": 2,
   "layout": "pill",
-  "window": { "width": 248, "height": 80 },
+  "window": { "width": 248, "height": 84 },
   "colorMode": "static",
   "nativeEffect": "none",
   "controls": {

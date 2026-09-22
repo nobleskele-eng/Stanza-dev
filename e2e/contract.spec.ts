@@ -15,7 +15,7 @@ interface ThemeJson {
 }
 
 // Every theme built so far, each styling exactly one layout (docs/PLAN.md §4 theme roster).
-const THEMES = ["t1-default", "t2-artwork", "t3-pill"].map((id) => ({
+const THEMES = ["t1-default", "t2-artwork", "t3-pill", "t4-extreme"].map((id) => ({
   id,
   json: JSON.parse(readFileSync(`themes/${id}/theme.json`, "utf8")) as ThemeJson,
 }));
@@ -122,7 +122,10 @@ for (const { id, json } of THEMES) {
     // here as "not identical to WKWebView, still needs the real-Mac pass"). The ceiling
     // check must stay tight (content overflowing the native window is a real bug on
     // either engine); "how snugly the largest state fills it" tolerates more slack.
-    const FILL_TOLERANCE = 8;
+    // 12, not 8: a later run measured WebKit's CJK fixture at 81.5px against T3's
+    // then-height of 80 (font-metric variance run-to-run, not just engine-to-engine) —
+    // 8px wasn't enough headroom once both sources of variance are accounted for.
+    const FILL_TOLERANCE = 12;
     expect(maxW, "widest state fills window.width").toBeGreaterThanOrEqual(json.window.width - FILL_TOLERANCE);
     expect(maxH, "tallest state fills window.height").toBeGreaterThanOrEqual(json.window.height - FILL_TOLERANCE);
   });
