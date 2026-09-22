@@ -39,9 +39,17 @@ never sets those.
 ## App-provided variables (never theme-authored, never editable)
 - `--mp-progress` — 0–1, set inline on `.mp-root` by the player. **Supplied today.**
 - `--mp-art-1`, `--mp-art-2`, `--mp-art-3`, `--mp-art-fg` — colors derived from the artwork
-  (never its pixels). **Declared but not yet supplied**: the palette extraction (ArtworkService)
-  is not built. Until it is, themes must give every use a fallback, e.g.
-  `var(--mp-art-1, var(--mp-accent))`. T1 is `colorMode: static` and does not use them.
+  (never its pixels), set inline on `.mp-root` alongside `--mp-progress`. **Supplied today**
+  by `src/theme/palette.ts`: client-side (canvas), not the Rust `ArtworkService` PLAN.md
+  describes — no real Spotify adapter exists yet to feed one (DECISIONS.md 2026-09-22).
+  `art1/2/3` are the 3 most common colors in the artwork, most common first; `art-fg` is
+  chosen from pure white/black against `art1` and is mathematically guaranteed to meet
+  WCAG AA 4.5:1 against it (proof-by-sweep in `src/theme/palette.test.ts`).
+  **These vars can still be absent** — no artwork this track, the image hasn't finished
+  loading yet, or the canvas got tainted (a cross-origin artwork URL with no CORS headers,
+  the exact case PLAN.md flags for a future macOS/AppleScript adapter) — so every theme must
+  still give every use a fallback, e.g. `var(--mp-art-1, var(--mp-accent))`. T1 is
+  `colorMode: static` and does not use them.
 
 ## Theme tokens (theme-authored)
 `--mp-bg`, `--mp-fg`, `--mp-muted`, `--mp-accent`, `--mp-radius-window`, `--mp-radius-control`,
@@ -295,6 +303,6 @@ is below WCAG AA 4.5:1 (`checkVariantContrast`). It warns; it does not block sav
 - [x] Confirm the part list against the real DOM (`e2e/contract.spec.ts`).
 - [x] Document `theme.json` fields.
 - [x] One annotated example per layout.
-- [ ] Palette extraction that actually supplies `--mp-art-1..3` / `--mp-art-fg` (then test AA on `--mp-art-fg`).
+- [x] Palette extraction that actually supplies `--mp-art-1..3` / `--mp-art-fg` (2026-09-22, `src/theme/palette.ts`; AA on `--mp-art-fg` tested in `src/theme/palette.test.ts` and `e2e/palette.spec.ts`).
 - [ ] T2/T3 place all parts in `card` / `pill` (Phase 4) — the contract already states the rule.
 - [x] Your visual sign-off on T1 (2026-09-22, from the `npm run review` contact sheets).

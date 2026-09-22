@@ -1,5 +1,6 @@
-import { useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { copy } from "../copy";
+import { extractPaletteFromUrl, type ArtPalette } from "../theme/palette";
 import type { NowPlaying } from "../types/player";
 import { formatMs, progressFraction } from "./format";
 import { NextIcon, PauseIcon, PlayIcon, PrevIcon } from "./icons";
@@ -39,8 +40,36 @@ export function Player({
   const progress = progressFraction(positionMs, track?.durationMs);
   const hasTrack = (status === "playing" || status === "paused" || status === "unavailable") && track;
 
+  // Client-side palette extraction (THEME_CONTRACT.md `--mp-art-*`; DECISIONS.md
+  // 2026-09-22). Re-runs only when the artwork URL itself changes, not on every
+  // position tick. `extractPaletteFromUrl` resolves to null on load failure or a
+  // tainted (cross-origin, no CORS) canvas — themes already require a fallback for
+  // when these vars are absent.
+  const artworkUrl = track?.artwork;
+  const [artPalette, setArtPalette] = useState<ArtPalette | null>(null);
+  useEffect(() => {
+    if (!artworkUrl) {
+      setArtPalette(null);
+      return;
+    }
+    let cancelled = false;
+    setArtPalette(null); // clear the previous track's colors rather than flash them on the new one
+    extractPaletteFromUrl(artworkUrl).then((p) => {
+      if (!cancelled) setArtPalette(p);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [artworkUrl]);
+
   const rootStyle = {
     "--mp-progress": progress,
+    ...(artPalette && {
+      "--mp-art-1": artPalette.art1,
+      "--mp-art-2": artPalette.art2,
+      "--mp-art-3": artPalette.art3,
+      "--mp-art-fg": artPalette.artFg,
+    }),
   } as CSSProperties;
 
   return (

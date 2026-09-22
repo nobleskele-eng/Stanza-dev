@@ -553,3 +553,44 @@ PLAN.md. So Phase 3 isn't fully gated closed until palette extraction lands or i
 consciously deferred; Phase 4 (themes, switching, customizer UI) is the next body of work
 either way.
 - **Result:** doc-only change, no re-verification needed.
+
+## 2026-09-22 — Phase 3 / palette extraction, client-side (JS/canvas, not Rust)
+
+Closes the last open Phase 3 gate item: PLAN.md's "text on `--mp-art-fg` meets WCAG AA
+4.5:1" is now testable and green.
+
+**Deviation from PLAN.md, decided with you first:** PLAN.md's architecture section puts
+palette extraction in a Rust `ArtworkService` ("no canvas CORS problems", since macOS
+gives artwork as a remote URL). Built it in TypeScript instead: no real Spotify adapter
+exists yet (`src-tauri` is still the scaffold `greet` command — GSMTC/AppleScript aren't
+built), and the Phase 3 gate is tested via Playwright against the Vite dev server, not a
+Tauri runtime. Windows GSMTC also hands Rust raw image bytes (not a URL), which can reach
+the webview as a `data:` URL — no CORS issue for canvas on that path. Revisit Rust only if
+a real macOS/AppleScript adapter's remote-URL artwork actually taints the canvas.
+
+- `src/theme/palette.ts`: `extractPalette(imageData)` is a pure function (bucket pixels
+  into a coarse 4-bit/channel color space, return the 3 most populous buckets' centroids
+  as `art1/2/3`, most-common first; skip near-transparent pixels) so it's unit-testable
+  without a real canvas. `extractPaletteFromImage`/`extractPaletteFromUrl` are the thin
+  canvas/Image wrappers, browser-only, exercised by Playwright not vitest.
+- **`art-fg` is provably always AA-compliant, not just usually:** chosen as whichever of
+  pure white/black has higher contrast against `art1`. The worst-case background luminance
+  (≈0.179, where white and black nearly tie) still yields ~4.58:1 — above the 4.5 floor.
+  `palette.test.ts` proves this by sweeping the full lightness range plus several saturated
+  colors, rather than trusting the one-line math.
+- Wired into `Player.tsx`: a `useEffect` keyed on `track.artwork` calls
+  `extractPaletteFromUrl` and sets `--mp-art-1..3`/`--mp-art-fg` on `.mp-root` inline
+  (same mechanism as the existing `--mp-progress`). Clears to `null` immediately on track
+  change so a new track never briefly shows the previous track's colors while its own
+  artwork is still decoding. Resolves to `null` (vars left unset) on missing artwork, a
+  failed image load, or a tainted canvas — themes already require a fallback for that case.
+- `e2e/palette.spec.ts`: reads the computed `--mp-art-1`/`--mp-art-fg` off `.mp-root` for
+  the two artwork-bearing fixtures (very light / very dark) after the async extraction
+  settles, asserts AA, and asserts the vars are absent for a no-artwork fixture.
+- `docs/THEME_CONTRACT.md`: marked `--mp-art-*` supplied (with the algorithm and the
+  degrade-gracefully cases spelled out); checked off the freeze-checklist item.
+- **No visible change to T1** — it's `colorMode: static` and doesn't reference `--mp-art-*`,
+  so this is invisible until a future theme uses it. Not a "ready for review" item.
+- **Result (ran):** `npx tsc --noEmit` clean; `npx vitest run` 67 passed (60 + 7 new
+  `palette.test.ts`); `npx playwright test` 104 passed (98 + 6 new `palette.spec.ts`,
+  Chromium + WebKit); `npm run build` OK incl. `check-fixtures-excluded: OK`.
