@@ -9,13 +9,24 @@ test.use({ deviceScaleFactor: 2 });
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 const url = (fixture: string, layout = "strip") => `/?fixture=${encodeURIComponent(fixture)}&layout=${layout}`;
 
-for (const name of Object.keys(fixtures)) {
-  test(`review image: ${name}`, async ({ page }, testInfo) => {
-    await page.goto(url(name));
-    const cell = page.getByTestId("matrix-cell");
-    await expect(cell).toBeVisible();
-    await cell.screenshot({ path: `e2e/review/${testInfo.project.name}/state--${slug(name)}.png`, animations: "disabled" });
-  });
+// One entry per theme built so far (docs/PLAN.md §4 theme roster).
+const THEMES = [
+  { id: "strip", layout: "strip" },
+  { id: "card", layout: "card" },
+];
+
+for (const { id, layout } of THEMES) {
+  for (const name of Object.keys(fixtures)) {
+    test(`review image: ${id} — ${name}`, async ({ page }, testInfo) => {
+      await page.goto(url(name, layout));
+      const cell = page.getByTestId("matrix-cell");
+      await expect(cell).toBeVisible();
+      await cell.screenshot({
+        path: `e2e/review/${testInfo.project.name}/state--${id}--${slug(name)}.png`,
+        animations: "disabled",
+      });
+    });
+  }
 }
 
 test("review images: layouts, hover, keyboard focus", async ({ page }, testInfo) => {

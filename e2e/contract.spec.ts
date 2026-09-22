@@ -6,11 +6,19 @@ import { fixtures } from "../dev/fixtures/nowPlaying";
 // what the player really renders, so the doc can't quietly drift from the code.
 
 const contract = readFileSync("docs/THEME_CONTRACT.md", "utf8");
-const themeJson = JSON.parse(readFileSync("themes/t1-default/theme.json", "utf8")) as {
+
+interface ThemeJson {
+  id: string;
   contract: number;
   layout: string;
   window: { width: number; height: number };
-};
+}
+
+// Every theme built so far, each styling exactly one layout (docs/PLAN.md §4 theme roster).
+const THEMES = ["t1-default", "t2-artwork"].map((id) => ({
+  id,
+  json: JSON.parse(readFileSync(`themes/${id}/theme.json`, "utf8")) as ThemeJson,
+}));
 
 /** Bullet items of the form "- `<token>` …" inside one `## ` section. */
 function bulletTokens(section: string, pattern: RegExp): string[] {
@@ -90,33 +98,37 @@ test("boolean data-cap-* attributes are present-or-absent, never data-cap-x=\"fa
   }
 });
 
-test("theme.json `window` fits every state and is filled by the largest one", async ({ page }) => {
-  let maxW = 0;
-  let maxH = 0;
-  for (const name of Object.keys(fixtures)) {
-    await open(page, name, themeJson.layout);
-    const box = (await page.locator(".mp-window").boundingBox())!;
-    expect(box.width, `${name}: width`).toBeLessThanOrEqual(themeJson.window.width + 1);
-    expect(box.height, `${name}: height`).toBeLessThanOrEqual(themeJson.window.height + 1);
-    maxW = Math.max(maxW, box.width);
-    maxH = Math.max(maxH, box.height);
-  }
-  expect(maxW, "widest state fills window.width").toBeGreaterThanOrEqual(themeJson.window.width - 1);
-  expect(maxH, "tallest state fills window.height").toBeGreaterThanOrEqual(themeJson.window.height - 1);
-});
+for (const { id, json } of THEMES) {
+  test(`theme.json \`window\` fits every state and is filled by the largest one — ${id}`, async ({ page }) => {
+    let maxW = 0;
+    let maxH = 0;
+    for (const name of Object.keys(fixtures)) {
+      await open(page, name, json.layout);
+      const box = (await page.locator(".mp-window").boundingBox())!;
+      expect(box.width, `${name}: width`).toBeLessThanOrEqual(json.window.width + 1);
+      expect(box.height, `${name}: height`).toBeLessThanOrEqual(json.window.height + 1);
+      maxW = Math.max(maxW, box.width);
+      maxH = Math.max(maxH, box.height);
+    }
+    expect(maxW, "widest state fills window.width").toBeGreaterThanOrEqual(json.window.width - 1);
+    expect(maxH, "tallest state fills window.height").toBeGreaterThanOrEqual(json.window.height - 1);
+  });
 
-test("strip layout: every rendered part has an explicit grid placement (nothing auto-placed)", async ({ page }) => {
-  for (const name of Object.keys(fixtures)) {
-    await open(page, name, "strip");
-    const auto = await page.evaluate(() =>
-      [...document.querySelector(".mp-window")!.children].flatMap((el) => {
-        const s = getComputedStyle(el);
-        return s.gridColumnStart === "auto" || s.gridRowStart === "auto" ? [el.className] : [];
-      }),
-    );
-    expect(auto, `${name}: auto-placed parts`).toEqual([]);
-  }
-});
+  test(`${json.layout} layout (${id}): every rendered part has an explicit grid placement (nothing auto-placed)`, async ({
+    page,
+  }) => {
+    for (const name of Object.keys(fixtures)) {
+      await open(page, name, json.layout);
+      const auto = await page.evaluate(() =>
+        [...document.querySelector(".mp-window")!.children].flatMap((el) => {
+          const s = getComputedStyle(el);
+          return s.gridColumnStart === "auto" || s.gridRowStart === "auto" ? [el.className] : [];
+        }),
+      );
+      expect(auto, `${name}: auto-placed parts`).toEqual([]);
+    }
+  });
+}
 
 test("guard: a theme/snippet cannot modify artwork or hide the source badge with ordinary declarations", async ({ page }) => {
   await open(page, "very light artwork");

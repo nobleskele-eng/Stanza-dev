@@ -2,6 +2,7 @@ import "./App.css";
 import "./theme/structure.css";
 import "./theme/guard.css";
 import "../themes/t1-default/theme.css";
+import "../themes/t2-artwork/theme.css";
 import { DevHarness } from "./dev/DevHarness";
 import { Player } from "./player/Player";
 import { IDLE_NOW_PLAYING } from "./types/player";

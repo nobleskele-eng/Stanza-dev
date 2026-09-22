@@ -1,0 +1,18 @@
+{
+  "id": "t2-artwork",
+  "name": "[NEEDS COPY]",
+  "author": "[NEEDS COPY]",
+  "version": "1.0.0",
+  "contract": 1,
+  "layout": "card",
+  "window": { "width": 280, "height": 507 },
+  "colorMode": "artwork",
+  "nativeEffect": "none",
+  "controls": {
+    "--mp-bg": { "type": "color" },
+    "--mp-fg": { "type": "color" },
+    "--mp-muted": { "type": "color" },
+    "--mp-accent": { "type": "color" },
+    "--mp-radius-window": { "type": "length", "min": 0, "max": 32 }
+  }
+}

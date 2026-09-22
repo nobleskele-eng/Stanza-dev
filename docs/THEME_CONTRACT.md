@@ -209,17 +209,33 @@ the areas and place the extra parts:
 .mp-root[data-layout="pill"] .mp-time-current, .mp-root[data-layout="pill"] .mp-time-total { display: none; }
 ```
 
-### `card` — artwork-forward (T2) · placeholder until Phase 4
+### `card` — artwork-forward (T2) · complete
 ```
 grid-template-columns:  1fr   (one column, items centered)
 row 1  artwork
 row 2  meta
 row 3  progress
-row 4  controls
-row 5  badge
+row 4  time      ← time-current left, time-total right (same cell, justify-self)
+row 5  controls
+row 6  volume
+row 7  link
+row 8  badge
+idle / error      └ .mp-empty / .mp-error span rows 1–7, column 1 (badge stays visible) ┘
 ```
-Placed: `artwork, meta, progress, controls, badge`. **Not placed:** `time-current, time-total,
-volume-wrap, link-out, empty, error`. Same rule as `pill`.
+Every part is explicitly placed. Annotated theme excerpt (from `themes/t2-artwork/theme.css`,
+the "Glow Card" direction — a soft ambient glow behind the card, built from the track's own
+extracted colors, never the artwork's pixels):
+```css
+.mp-root[data-layout="card"] { --mp-bg: #101014; --mp-fg: #f4f4f2; /* tokens live on the root */ }
+.mp-root[data-layout="card"] .mp-window {
+  background: var(--mp-bg);
+  box-shadow: 0 28px 60px -12px var(--mp-art-1, var(--mp-accent)), 0 8px 28px -6px var(--mp-art-2, var(--mp-accent));
+}
+.mp-root[data-layout="card"] .mp-btn-play {
+  background: var(--mp-art-1, var(--mp-accent));   /* guaranteed-AA pair (palette.test.ts) */
+  color: var(--mp-art-fg, var(--mp-bg));
+}
+```
 
 ---
 
@@ -304,5 +320,6 @@ is below WCAG AA 4.5:1 (`checkVariantContrast`). It warns; it does not block sav
 - [x] Document `theme.json` fields.
 - [x] One annotated example per layout.
 - [x] Palette extraction that actually supplies `--mp-art-1..3` / `--mp-art-fg` (2026-09-22, `src/theme/palette.ts`; AA on `--mp-art-fg` tested in `src/theme/palette.test.ts` and `e2e/palette.spec.ts`).
-- [ ] T2/T3 place all parts in `card` / `pill` (Phase 4) — the contract already states the rule.
+- [x] T2 places all parts in `card` (2026-09-22, `themes/t2-artwork/`).
+- [ ] T3 place all parts in `pill` (Phase 4) — the contract already states the rule.
 - [x] Your visual sign-off on T1 (2026-09-22, from the `npm run review` contact sheets).

@@ -594,3 +594,49 @@ a real macOS/AppleScript adapter's remote-URL artwork actually taints the canvas
 - **Result (ran):** `npx tsc --noEmit` clean; `npx vitest run` 67 passed (60 + 7 new
   `palette.test.ts`); `npx playwright test` 104 passed (98 + 6 new `palette.spec.ts`,
   Chromium + WebKit); `npm run build` OK incl. `check-fixtures-excluded: OK`.
+
+## 2026-09-22 — Phase 4 / T2 "Glow Card" (artwork-forward, card layout)
+
+First Phase 4 theme. Direction picked with you before any code (PLAN.md's own
+pre-code checklist): cool near-black card (#101014/#f4f4f2/#85858c/#7c9eff — a
+different hue family from T1's warm near-black + ink-red, so the two don't read as
+variations on one theme), large square artwork, plain system sans title / uppercase
+mono meta. **Memorable thing:** an ambient glow behind the card built from `box-shadow`
+colored with `--mp-art-1`/`--mp-art-2` — the track's own extracted colors, never the
+artwork's pixels — so each track tints its own card. This is the first real use of the
+palette extraction shipped earlier today.
+
+- **AA-safety design rule, applied throughout:** `--mp-art-1/2/3` are only ever used for
+  *non-text* purposes (the glow, the progress fill, the badge border) or as a *background*
+  paired with `--mp-art-fg` as the text/icon color on top of it (the play button — the one
+  guaranteed-AA pairing). They are never used as arbitrary text color directly against the
+  fixed `--mp-bg`, since only the `art1`/`art-fg` pairing itself is contrast-guaranteed —
+  pairing an extracted color with a *different* fixed background has no such guarantee.
+  This is why the full fixture matrix AA check passed on the first real run with no fixes
+  needed, unlike T1's (DECISIONS.md 2026-09-20), which found two real failures.
+- `src/theme/structure.css`: completed the `card` grid (previously a placeholder missing
+  time/volume/link-out/empty/error) — same "every part gets an explicit grid-area" rule
+  already applied to `strip`. `.mp-time-current`/`.mp-time-total` share one grid area with
+  `justify-self: start`/`end`, same technique as `strip`.
+- `themes/t2-artwork/`: `theme.json` (`window: 280×507`, measured the same way T1's was —
+  guess high, run the fixture matrix, read the real max, lock it in) + `theme.css`.
+- `docs/THEME_CONTRACT.md`: card's layout section rewritten from "placeholder until Phase 4"
+  to a complete annotated example (mirroring `strip`'s); checked off "T2 places all parts in
+  card" in the freeze checklist (T3/`pill` is still open, explicitly Phase 4).
+- **Generalized the e2e suite** from T1-only to loop over both themes — `e2e/contract.spec.ts`'s
+  window-fits and grid-placement tests, and `e2e/matrix.spec.ts`'s full fixture-matrix/AA
+  check, now each run once per theme (`THEMES` array) instead of being hardcoded to
+  `t1-default`/`strip`. `e2e/review.spec.ts`/`scripts/review-sheet.mjs` likewise: state
+  screenshots are now taken per layout (`state--strip--*` / `state--card--*`), with a new
+  "T2 — artwork-forward / card" contact-sheet group.
+- Wired `themes/t2-artwork/theme.css` into `src/App.tsx` alongside T1's — both load
+  unconditionally (same as `structure.css`/`guard.css`); each theme's rules are scoped to
+  its own `[data-layout="…"]` so they can't collide. This is a stand-in for real theme
+  loading/switching (Rust file watcher, asset-protocol `<link>`, hot swap), which is later
+  Phase 4 infrastructure work, not needed just to build and review a theme.
+- **Visual result: ready for review** — sent as `sheet-3-t2-card.png` (all fixtures,
+  Chromium + WebKit) and the updated `sheet-4-layouts-interaction.png`.
+- **Result (ran):** `npx tsc --noEmit` clean; `npx vitest run` 67 passed (unchanged);
+  `npx playwright test` 176 passed (104 + 72 new: 34 T2 matrix/AA × verified, T2
+  window-fits + grid-placement, 34 T2 review-image captures, Chromium + WebKit);
+  `npm run build` OK incl. `check-fixtures-excluded: OK`.

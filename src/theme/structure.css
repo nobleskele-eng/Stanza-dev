@@ -50,18 +50,33 @@
 .mp-root[data-layout="pill"] .mp-controls { grid-area: controls; }
 .mp-root[data-layout="pill"] .mp-source-badge { grid-area: badge; }
 
-/* --- card layout (T2, minimal placeholder — full design work is Phase 4) --- */
+/* --- card layout (T2) --- */
 .mp-root[data-layout="card"] .mp-window {
   grid-template-columns: 1fr;
-  grid-template-areas: "artwork" "meta" "progress" "controls" "badge";
+  grid-template-areas:
+    "artwork"
+    "meta"
+    "progress"
+    "time"
+    "controls"
+    "volume"
+    "link"
+    "badge";
   row-gap: 10px;
   justify-items: center;
 }
 .mp-root[data-layout="card"] .mp-artwork { grid-area: artwork; }
-.mp-root[data-layout="card"] .mp-meta { grid-area: meta; }
-.mp-root[data-layout="card"] .mp-progress { grid-area: progress; }
+.mp-root[data-layout="card"] .mp-meta { grid-area: meta; min-width: 0; }
+.mp-root[data-layout="card"] .mp-progress { grid-area: progress; width: 100%; }
+.mp-root[data-layout="card"] .mp-time-current { grid-area: time; justify-self: start; }
+.mp-root[data-layout="card"] .mp-time-total { grid-area: time; justify-self: end; }
 .mp-root[data-layout="card"] .mp-controls { grid-area: controls; }
+.mp-root[data-layout="card"] .mp-volume-wrap { grid-area: volume; }
+.mp-root[data-layout="card"] .mp-link-out { grid-area: link; max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .mp-root[data-layout="card"] .mp-source-badge { grid-area: badge; }
+/* Idle / error replace the whole content stack but never the badge row. */
+.mp-root[data-layout="card"] .mp-empty,
+.mp-root[data-layout="card"] .mp-error { grid-area: 1 / 1 / 8 / 2; min-width: 0; }
 
 /* --- data-hide-<part>: customizer support (D14), never for .mp-source-badge or artwork --- */
 .mp-root[data-hide-title] .mp-title,

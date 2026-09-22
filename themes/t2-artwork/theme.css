@@ -1,0 +1,209 @@
+/* T2 — Artwork-forward "Glow Card" (docs/PLAN.md §4). Card layout, colorMode: artwork.
+   Positioned as "the expected version," not the centerpiece (T1 is the flagship).
+   Direction: cool near-black card, large square artwork, a soft ambient glow behind
+   the card built from the track's own extracted colors (--mp-art-1/2 as a colored
+   box-shadow — decorative, never touching the artwork element itself). Type: a plain
+   system sans for the title, uppercase mono for meta, quieter than T1 so the artwork
+   stays the focal point. Palette (static fallback, used whenever --mp-art-* is unset):
+   near-black #101014, off-white #f4f4f2, muted #85858c, periwinkle accent #7c9eff —
+   a cooler, calmer family than T1's warm near-black + ink-red, so the two don't read
+   as variations on one theme. */
+
+.mp-root[data-layout="card"] {
+  --mp-bg: #101014;
+  --mp-fg: #f4f4f2;
+  --mp-muted: #85858c;
+  --mp-accent: #7c9eff;
+  --mp-radius-window: 20px;
+  --mp-radius-control: 10px;
+  --mp-font-display: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --mp-font-body: Consolas, "SFMono-Regular", ui-monospace, monospace;
+  --mp-shadow: none;
+  --mp-motion-fast: 150ms;
+  --mp-motion-slow: 400ms;
+}
+
+.mp-root[data-layout="card"] .mp-window {
+  background: var(--mp-bg);
+  color: var(--mp-fg);
+  border-radius: var(--mp-radius-window);
+  padding: 22px 24px 18px;
+  width: 232px;
+  font-family: var(--mp-font-body);
+  /* The "memorable thing": an ambient glow built from THIS track's own extracted
+     colors, not the artwork's pixels. Falls back to the static accent when no
+     palette is available yet (no artwork, still loading, tainted canvas). */
+  box-shadow:
+    0 28px 60px -12px var(--mp-art-1, var(--mp-accent)),
+    0 8px 28px -6px var(--mp-art-2, var(--mp-accent));
+}
+
+.mp-root[data-layout="card"] .mp-artwork {
+  width: 184px;
+  height: 184px;
+  background: linear-gradient(145deg, #26262e, #16161b);
+  object-fit: cover;
+}
+
+.mp-root[data-layout="card"] .mp-meta {
+  min-width: 0;
+  max-width: 100%;
+  text-align: center;
+}
+
+.mp-root[data-layout="card"] .mp-title {
+  font-family: var(--mp-font-display);
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--mp-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: opacity var(--mp-motion-fast) ease;
+}
+
+.mp-root[data-layout="card"] .mp-artist,
+.mp-root[data-layout="card"] .mp-album {
+  font-size: 10px;
+  color: var(--mp-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mp-root[data-layout="card"] .mp-progress {
+  height: 3px;
+  background: #24242b;
+  border-radius: 2px;
+  position: relative;
+  overflow: hidden;
+}
+.mp-root[data-layout="card"] .mp-progress-fill {
+  position: absolute;
+  inset: 0;
+  width: calc(var(--mp-progress) * 100%);
+  /* Decorative fill, not text — free to use the raw extracted color with no AA
+     requirement (unlike the play button below, which pairs a background with text). */
+  background: var(--mp-art-2, var(--mp-accent));
+  border-radius: 2px;
+  transition: width var(--mp-motion-fast) linear;
+}
+
+.mp-root[data-layout="card"] .mp-time-current,
+.mp-root[data-layout="card"] .mp-time-total {
+  font-size: 10px;
+  color: var(--mp-muted);
+  width: 100%;
+}
+
+.mp-root[data-layout="card"] .mp-controls {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.mp-root[data-layout="card"] .mp-btn-prev,
+.mp-root[data-layout="card"] .mp-btn-next {
+  background: none;
+  border: none;
+  display: flex;
+  align-items: center;
+  color: var(--mp-muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--mp-radius-control);
+}
+
+.mp-root[data-layout="card"] .mp-btn-play {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
+  /* --mp-art-1/--mp-art-fg is a guaranteed-AA pair (palette.test.ts proves it against
+     ANY art1) — this is the one place T2 puts real text/an icon directly on an
+     artwork-derived color, rather than a fixed token. Falls back to the static
+     accent/bg pair (also AA-checked) when no palette is available. */
+  background: var(--mp-art-1, var(--mp-accent));
+  color: var(--mp-art-fg, var(--mp-bg));
+}
+
+.mp-root[data-layout="card"] .mp-volume-wrap {
+  width: 120px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mp-root[data-layout="card"] .mp-volume {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 10px;
+  background: transparent;
+  cursor: pointer;
+}
+.mp-root[data-layout="card"] .mp-volume::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 3px;
+  background: var(--mp-accent);
+  border-radius: 2px;
+}
+.mp-root[data-layout="card"] .mp-volume::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--mp-fg);
+  margin-top: calc((3px - 10px) / 2);
+}
+
+.mp-root[data-layout="card"] .mp-link-out {
+  font-size: 10px;
+  color: var(--mp-muted);
+  text-decoration: none;
+  letter-spacing: 0.04em;
+}
+.mp-root[data-layout="card"] .mp-link-out:hover {
+  color: var(--mp-fg);
+  text-decoration: underline;
+}
+
+.mp-root[data-layout="card"] .mp-source-badge {
+  font-size: 9px;
+  color: var(--mp-muted);
+  letter-spacing: 0.1em;
+  /* Border ties back to the extracted palette (decorative, no AA requirement); the
+     text itself stays on the plain static --mp-muted/--mp-bg pair so it's AA-safe
+     no matter what colors a given track's artwork extracts to. */
+  border: 0.5px solid var(--mp-art-3, var(--mp-accent));
+  border-radius: var(--mp-radius-control);
+  padding: 3px 7px;
+}
+
+.mp-root[data-layout="card"] .mp-empty,
+.mp-root[data-layout="card"] .mp-error {
+  color: var(--mp-muted);
+  padding: 40px 0;
+  text-align: center;
+}
+
+@keyframes mp-t2-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.mp-root[data-layout="card"] .mp-title,
+.mp-root[data-layout="card"] .mp-artist {
+  animation: mp-t2-fade-in var(--mp-motion-slow) ease-out;
+}

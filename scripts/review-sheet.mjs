@@ -6,9 +6,10 @@ import { chromium } from "@playwright/test";
 
 const root = "e2e/review";
 const groups = [
-  ["1-states", "T1 — text & state fixtures", (n) => n.startsWith("state--") && /typical|long-title|cjk|no-artwork|paused|idle|error|link-out/.test(n)],
-  ["2-capabilities-artwork", "T1 — capability & artwork fixtures", (n) => n.startsWith("state--") && !/typical|long-title|cjk|no-artwork|paused|idle|error|link-out/.test(n)],
-  ["3-layouts-interaction", "Layouts (pill/card are unstyled placeholders until Phase 4) · hover · keyboard focus", (n) => n.startsWith("layout--") || n.startsWith("interaction--")],
+  ["1-states", "T1 — text & state fixtures", (n) => n.startsWith("state--strip--") && /typical|long-title|cjk|no-artwork|paused|idle|error|link-out/.test(n)],
+  ["2-capabilities-artwork", "T1 — capability & artwork fixtures", (n) => n.startsWith("state--strip--") && !/typical|long-title|cjk|no-artwork|paused|idle|error|link-out/.test(n)],
+  ["3-t2-card", "T2 — artwork-forward / card, all fixtures", (n) => n.startsWith("state--card--")],
+  ["4-layouts-interaction", "Layouts (pill is still an unstyled placeholder — T3 is Phase 4) · hover · keyboard focus", (n) => n.startsWith("layout--") || n.startsWith("interaction--")],
 ];
 const b64 = (f) => (fs.existsSync(f) ? "data:image/png;base64," + fs.readFileSync(f).toString("base64") : "");
 const names = fs.readdirSync(path.join(root, "chromium")).filter((f) => f.endsWith(".png")).map((f) => f.slice(0, -4)).sort();
@@ -16,7 +17,7 @@ const names = fs.readdirSync(path.join(root, "chromium")).filter((f) => f.endsWi
 const browser = await chromium.launch();
 for (const [id, title, pick] of groups) {
   const rows = names.filter(pick).map((n) => `
-    <div class="label">${n.replace(/^[a-z]+--/, "").replace(/-/g, " ")}</div>
+    <div class="label">${n.replace(/^state--(strip|card)--/, "").replace(/^[a-z]+--/, "").replace(/-/g, " ")}</div>
     <div class="cell"><img src="${b64(path.join(root, "chromium", n + ".png"))}"></div>
     <div class="cell"><img src="${b64(path.join(root, "webkit", n + ".png"))}"></div>`).join("");
   const html = `<style>
