@@ -13,6 +13,7 @@ const url = (fixture: string, layout = "strip") => `/?fixture=${encodeURICompone
 const THEMES = [
   { id: "strip", layout: "strip" },
   { id: "card", layout: "card" },
+  { id: "pill", layout: "pill" },
 ];
 
 for (const { id, layout } of THEMES) {
@@ -45,4 +46,11 @@ test("review images: layouts, hover, keyboard focus", async ({ page }, testInfo)
   await page.keyboard.press("Tab"); // → play button
   await expect(page.locator(".mp-btn-play")).toBeFocused();
   await page.getByTestId("matrix-cell").screenshot({ path: out("interaction--keyboard-focus-play"), animations: "disabled" });
+
+  // T3's whole identity is the collapsed/expanded pill — worth its own before/after pair.
+  await page.goto(url("typical / all caps", "pill"));
+  await page.getByTestId("matrix-cell").screenshot({ path: out("interaction--pill-collapsed"), animations: "disabled" });
+  await page.locator(".mp-window").hover();
+  await expect(page.locator(".mp-root")).toHaveAttribute("data-hover", "true");
+  await page.getByTestId("matrix-cell").screenshot({ path: out("interaction--pill-expanded-hover"), animations: "disabled" });
 });

@@ -7,6 +7,7 @@ import { WCAG_AA_NORMAL, contrastRatio, parseColor } from "../src/theme/contrast
 const THEMES = [
   { id: "T1", layout: "strip" },
   { id: "T2", layout: "card" },
+  { id: "T3", layout: "pill" },
 ];
 
 const TEXT_PARTS = [

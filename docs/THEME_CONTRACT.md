@@ -1,10 +1,9 @@
 # Stanza — Theme Contract
 
 **Contract version: 1**
-**Status:** complete for Phase 3 review. It is frozen when Phase 3 is signed off; after that,
-any change to a part, attribute or variable name is a version bump made in the same change
-as the code that needs it. Until then, corrections that make this file match the code are
-allowed without a bump.
+**Status: frozen** (2026-09-22 — every item in "Remaining before this contract can be
+frozen" below is checked off). From here, any change to a part, attribute or variable
+name is a version bump made in the same change as the code that needs it.
 
 This file is the source of truth for the class names, data attributes and CSS custom
 properties a Stanza theme may rely on. Most of it is checked by tests, not by hand:
@@ -191,23 +190,31 @@ Every part is explicitly placed. Annotated theme excerpt (from `themes/t1-defaul
 .mp-root[data-layout="strip"] .mp-meta > * { animation: mp-line-in var(--mp-motion-slow); }   /* replays per track */
 ```
 
-### `pill` — compact (T3) · placeholder until Phase 4
+### `pill` — compact (T3) · complete
 ```
 grid-template-columns:  auto        1fr         auto        auto
 row 1                   artwork     meta        controls    badge
+row 2 (collapsed to 0 unless data-hover / :focus-within)  progress
+row 3 (same)                        time        volume      link
+idle / error      └ .mp-empty / .mp-error span rows 1–3, columns 1–3 (badge stays visible) ┘
 ```
-Placed: `artwork, meta, controls, badge`. **Not placed** (a T3 theme must place or hide them):
-`progress, time-current, time-total, volume-wrap, link-out, empty, error`. No theme styles this
-layout yet; unstyled it looks like a browser default. To give a theme its own arrangement, override
-the areas and place the extra parts:
+Every part is explicitly placed — `themes/t3-pill/theme.css` fully overrides `structure.css`'s
+generic pill placeholder (the documented pattern: a theme may replace the default arrangement
+entirely, as long as every part it shows keeps an explicit `grid-area`). Rows 2–3 are placed but
+sized to `0px` by default via a CSS custom property, revealing on `data-hover`/`:focus-within` —
+the "place or hide" allowance below, done as a hide-until-interaction rather than an outright hide:
 ```css
 .mp-root[data-layout="pill"] .mp-window {
-  grid-template-columns: auto 1fr auto auto;
-  grid-template-areas: "artwork meta controls badge" "progress progress progress progress";
+  grid-template-rows: auto var(--t3-extra, 0px) var(--t3-extra, 0px);
+  grid-template-areas: "artwork meta controls badge" "artwork progress progress progress" "artwork time volume link";
 }
-.mp-root[data-layout="pill"] .mp-progress { grid-area: progress; }
-.mp-root[data-layout="pill"] .mp-time-current, .mp-root[data-layout="pill"] .mp-time-total { display: none; }
+.mp-root[data-layout="pill"][data-hover] .mp-window,
+.mp-root[data-layout="pill"]:focus-within .mp-window { --t3-extra: auto; }
 ```
+`data-hover` never fires for keyboard users (see **Root**), so any hover-reveal theme must also
+key off `:focus-within` — T3 is the first theme to actually exercise this requirement.
+`e2e/contract.spec.ts`'s window-fit check hovers before measuring, since the native window can't
+resize itself on hover and must already fit the expanded state.
 
 ### `card` — artwork-forward (T2) · complete
 ```
@@ -321,5 +328,5 @@ is below WCAG AA 4.5:1 (`checkVariantContrast`). It warns; it does not block sav
 - [x] One annotated example per layout.
 - [x] Palette extraction that actually supplies `--mp-art-1..3` / `--mp-art-fg` (2026-09-22, `src/theme/palette.ts`; AA on `--mp-art-fg` tested in `src/theme/palette.test.ts` and `e2e/palette.spec.ts`).
 - [x] T2 places all parts in `card` (2026-09-22, `themes/t2-artwork/`).
-- [ ] T3 place all parts in `pill` (Phase 4) — the contract already states the rule.
+- [x] T3 places all parts in `pill` (2026-09-22, `themes/t3-pill/`).
 - [x] Your visual sign-off on T1 (2026-09-22, from the `npm run review` contact sheets).

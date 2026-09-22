@@ -640,3 +640,57 @@ palette extraction shipped earlier today.
   `npx playwright test` 176 passed (104 + 72 new: 34 T2 matrix/AA × verified, T2
   window-fits + grid-placement, 34 T2 review-image captures, Chromium + WebKit);
   `npm run build` OK incl. `check-fixtures-excluded: OK`.
+
+## 2026-09-22 — Phase 4 / T3 "Micro Pill" (compact, hover-reveal) — contract frozen
+
+Third theme, and the last item on THEME_CONTRACT.md's own freeze checklist — **the
+contract is now frozen.** Direction picked with you first: light palette (off-white
+#f2f0ec / near-black #1a1a1a / warm accent #b5623a — deliberately not a third dark
+theme). **Memorable thing:** the first theme to actually use `data-hover` — by default
+only artwork, title, transport and the badge render at non-zero size; progress, time,
+volume and link-out are placed (explicit `grid-area`, satisfying the contract) but
+sized to `0px` via a CSS custom property, revealing on hover **or** `:focus-within`
+(`data-hover` never fires for keyboard users — the contract has said so since Phase 3,
+untested until now).
+
+- **AA hazard found and designed around, not just discovered after the fact:** by hand
+  (not by the automated check, ahead of writing any CSS) I confirmed `--mp-accent`
+  (#b5623a) sits at a luminance where *neither* this theme's own near-black nor its own
+  off-white clears WCAG AA against it as a background — only *pure* `#fff`/`#000` has
+  the universal guarantee `palette.ts` relies on (T2's case); a fixed, non-extracted
+  accent has no such guarantee. So `--mp-accent` is used only decoratively here (the
+  progress fill, never text), and the play button reuses the theme's own fg/bg pair
+  instead. The full fixture-matrix AA check passed on the first real run, same as T2.
+- `themes/t3-pill/`: fully overrides `structure.css`'s pill placeholder rather than
+  building on it (the documented pattern) — 3 grid rows, `--t3-extra` custom property
+  toggling `0px` ↔ `auto` on the two collapsible rows.
+- **`e2e/contract.spec.ts`'s window-fit test now hovers before measuring, for every
+  theme** — needed because T3's height genuinely changes on hover and the native window
+  can't resize itself, so the fixed `window` size must already fit the expanded state.
+  A no-op for T1/T2 (they don't change size on hover), confirmed by their tests still
+  passing unchanged.
+- **Real cross-engine variance found while sizing the window, and reasoned through
+  rather than papered over:** Chromium's and WebKit's measured heights differed by
+  several px on T3's tiny (7–9px) hover-revealed text — genuine font-metric variance
+  (PLAN.md already documents WebKit here as "not identical to WKWebView, still needs
+  the real-Mac pass"), not a bug; no single window height could satisfy both engines'
+  own maximum within the previous ±1px "filled by the largest state" tolerance. Split
+  the check: the ceiling ("fits within") stays at ±1px on both engines — overflowing
+  the native window is a real bug regardless of engine — but "how snugly the largest
+  state fills it" now tolerates ±8px (`FILL_TOLERANCE` in `contract.spec.ts`), applied
+  to all themes, not just T3. T1/T2 still pass (loosening a lower bound can't break an
+  already-passing case).
+- `docs/THEME_CONTRACT.md`: `pill`'s layout section rewritten from "placeholder until
+  Phase 4" to a complete annotated example; checked off "T3 places all parts in pill" —
+  **every item on the freeze checklist is now checked**, so the doc's status line is
+  updated to "frozen." Flagging this rather than deciding it silently: T2/T3's own
+  visual sign-off (as opposed to T1's, which the checklist explicitly required) hasn't
+  been asked for separately — worth confirming you're fine with contract-freeze
+  happening on this basis.
+- **Visual result: ready for review** — sent as `sheet-4-t3-pill.png` (all fixtures,
+  collapsed state, Chromium + WebKit) and the updated `sheet-5-layouts-interaction.png`
+  (now includes a collapsed/expanded pill pair).
+- **Result (ran):** `npx tsc --noEmit` clean; `npx vitest run` 67 passed (unchanged);
+  `npx playwright test` 248 passed (176 + 72 new: 34 T3 matrix/AA, T3 window-fits +
+  grid-placement, 34 T3 review-image captures, 2 new interaction captures, Chromium +
+  WebKit); `npm run build` OK incl. `check-fixtures-excluded: OK`.

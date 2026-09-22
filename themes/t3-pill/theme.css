@@ -1,0 +1,229 @@
+/* T3 — "Micro Pill" (docs/PLAN.md §4). Minimal chrome, small footprint. Overrides
+   pill's structural placeholder entirely (the contract's own documented pattern for
+   giving a layout a custom arrangement) rather than building on it.
+
+   Direction: light, not a third dark theme — off-white pill (#f2f0ec), near-black
+   text (#1a1a1a), one warm accent (#b5623a) used only for the progress fill (never
+   as text — see the AA note below). Memorable thing: this is the first theme to use
+   data-hover — by default only artwork, title, transport and the badge show;
+   progress/time/volume/link-out are collapsed to nothing and reveal on hover OR
+   keyboard focus (:focus-within, since data-hover never fires for keyboard users —
+   THEME_CONTRACT.md's own note on that attribute). The native window is sized for
+   the EXPANDED state (contract.spec.ts hovers before measuring), so collapsed is
+   just breathing room, not a resize.
+
+   AA-safety rule (same discipline as T2): --mp-accent (#b5623a) sits at a luminance
+   where NEITHER this theme's own near-black nor its own off-white clears AA against
+   it as a background (checked by hand — only pure #fff/#000 has the universal
+   guarantee palette.ts relies on, and this is a fixed static color, not an extracted
+   one). So it is only ever used decoratively (the progress fill, never text-bearing).
+   The play button instead reuses the theme's own high-contrast fg/bg pair. */
+
+.mp-root[data-layout="pill"] {
+  --mp-bg: #f2f0ec;
+  --mp-fg: #1a1a1a;
+  --mp-muted: #625f59;
+  --mp-accent: #b5623a;
+  --mp-radius-window: 999px;
+  --mp-radius-control: 999px;
+  --mp-font-display: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  --mp-font-body: "Segoe UI", Helvetica, Arial, sans-serif;
+  --mp-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.08);
+  --mp-motion-fast: 150ms;
+  --mp-motion-slow: 220ms;
+}
+
+.mp-root[data-layout="pill"] .mp-window {
+  background: var(--mp-bg);
+  color: var(--mp-fg);
+  border-radius: var(--mp-radius-window);
+  box-shadow: var(--mp-shadow);
+  padding: 8px 14px;
+  width: 220px;
+  font-family: var(--mp-font-body);
+  column-gap: 10px;
+  row-gap: 4px;
+  align-items: center;
+  grid-template-columns: auto 1fr auto auto;
+  grid-template-rows: auto var(--t3-extra, 0px) var(--t3-extra, 0px);
+  grid-template-areas:
+    "artwork meta     controls badge"
+    "artwork progress progress progress"
+    "artwork time     volume   link";
+  transition: border-radius var(--mp-motion-slow) ease;
+}
+.mp-root[data-layout="pill"][data-hover] .mp-window,
+.mp-root[data-layout="pill"]:focus-within .mp-window {
+  --t3-extra: auto;
+  border-radius: calc(var(--mp-radius-window) / 4);
+}
+
+.mp-root[data-layout="pill"] .mp-artwork {
+  grid-area: artwork;
+  width: 26px;
+  height: 26px;
+  align-self: start;
+  background: linear-gradient(145deg, #d8d4cb, #c3beb2);
+  object-fit: cover;
+}
+
+.mp-root[data-layout="pill"] .mp-meta {
+  grid-area: meta;
+  min-width: 0;
+  align-self: start;
+}
+.mp-root[data-layout="pill"] .mp-title {
+  font-family: var(--mp-font-display);
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--mp-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mp-root[data-layout="pill"] .mp-artist {
+  font-size: 9px;
+  color: var(--mp-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-height: 0;
+  opacity: 0;
+  transition: opacity var(--mp-motion-fast) ease, max-height var(--mp-motion-fast) ease;
+}
+.mp-root[data-layout="pill"][data-hover] .mp-artist,
+.mp-root[data-layout="pill"]:focus-within .mp-artist {
+  max-height: 12px;
+  opacity: 1;
+}
+.mp-root[data-layout="pill"] .mp-album {
+  display: none; /* omitted at this size — "place or hide", THEME_CONTRACT.md's pill note */
+}
+
+.mp-root[data-layout="pill"] .mp-progress {
+  grid-area: progress;
+  height: 2px;
+  align-self: center;
+  background: #e2ded5;
+  border-radius: 1px;
+  overflow: hidden;
+  min-height: 0;
+}
+.mp-root[data-layout="pill"] .mp-progress-fill {
+  height: 100%;
+  width: calc(var(--mp-progress) * 100%);
+  background: var(--mp-accent); /* decorative fill — not text, no AA requirement */
+  border-radius: 1px;
+}
+
+.mp-root[data-layout="pill"] .mp-time-current { grid-area: time; justify-self: start; }
+.mp-root[data-layout="pill"] .mp-time-total { grid-area: time; justify-self: end; }
+.mp-root[data-layout="pill"] .mp-time-current,
+.mp-root[data-layout="pill"] .mp-time-total {
+  font-size: 9px;
+  color: var(--mp-muted);
+  overflow: hidden;
+  min-height: 0;
+}
+
+.mp-root[data-layout="pill"] .mp-controls {
+  grid-area: controls;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  align-self: start;
+}
+.mp-root[data-layout="pill"] .mp-btn-prev,
+.mp-root[data-layout="pill"] .mp-btn-next {
+  background: none;
+  border: none;
+  display: flex;
+  align-items: center;
+  color: var(--mp-muted);
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px;
+}
+.mp-root[data-layout="pill"] .mp-btn-play {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  line-height: 1;
+  /* Reuses the theme's own fg/bg pair (proven high-contrast) rather than --mp-accent
+     — see the AA note at the top of this file. */
+  background: var(--mp-fg);
+  color: var(--mp-bg);
+}
+
+.mp-root[data-layout="pill"] .mp-volume-wrap {
+  grid-area: volume;
+  width: 100%;
+  height: 10px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  min-height: 0;
+}
+.mp-root[data-layout="pill"] .mp-volume {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+.mp-root[data-layout="pill"] .mp-volume::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 2px;
+  background: var(--mp-accent);
+  border-radius: 1px;
+}
+.mp-root[data-layout="pill"] .mp-volume::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--mp-fg);
+  margin-top: calc((2px - 8px) / 2);
+}
+
+.mp-root[data-layout="pill"] .mp-link-out {
+  grid-area: link;
+  font-size: 9px;
+  color: var(--mp-muted);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-height: 0;
+  justify-self: end;
+}
+.mp-root[data-layout="pill"] .mp-link-out:hover {
+  color: var(--mp-fg);
+  text-decoration: underline;
+}
+
+.mp-root[data-layout="pill"] .mp-source-badge {
+  grid-area: badge;
+  align-self: start;
+  font-size: 7px;
+  color: var(--mp-muted);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.mp-root[data-layout="pill"] .mp-empty,
+.mp-root[data-layout="pill"] .mp-error {
+  grid-area: 1 / 1 / 4 / 4; /* rows 1-3, columns 1-3 — badge (column 4) stays visible */
+  color: var(--mp-muted);
+  font-size: 11px;
+  align-self: center;
+}
