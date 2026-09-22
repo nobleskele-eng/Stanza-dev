@@ -35,6 +35,11 @@
 
 .mp-root[data-layout="card"][data-theme="t4-extreme"] .mp-window {
   position: relative;
+  /* Real bug found by actually running the app (2026-09-22): without this, the
+     ::before/::after frame's z-index:-1 (below) had no local stacking context to be
+     "-1" relative to, so it escaped to a much higher ancestor and rendered behind
+     nearly the whole page — invisible in practice, not just behind the card. */
+  isolation: isolate;
   background: var(--mp-bg);
   color: var(--mp-fg);
   border: 3px solid var(--mp-fg);

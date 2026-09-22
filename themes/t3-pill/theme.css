@@ -41,6 +41,16 @@
   padding: 8px 14px;
   width: 220px;
   font-family: var(--mp-font-body);
+  /* Real bug found by actually running the app (2026-09-22), not by any automated
+     check: a 0px grid ROW does not clip an item that has its own explicit/authored
+     height (mp-progress's height:2px, mp-volume-wrap's height:10px, the time parts'
+     natural line-height) — it just renders at that size and overlaps row 1. Nothing
+     in the test suite catches this: the grid-placement test only checks that
+     grid-column/row-start aren't "auto", the window-fit test measures .mp-window's
+     own box (which stays small precisely because the overflow isn't counted), and
+     the AA test checks color, not position. overflow:hidden here is what actually
+     makes "collapsed" mean collapsed. */
+  overflow: hidden;
   column-gap: 10px;
   row-gap: 4px;
   align-items: center;
@@ -56,6 +66,35 @@
 .mp-root[data-layout="pill"][data-theme="t3-pill"]:focus-within .mp-window {
   --t3-extra: auto;
   border-radius: calc(var(--mp-radius-window) / 4);
+}
+
+/* The 0px/auto row-track toggle above only reserves LAYOUT space — a grid item with
+   its own explicit height (mp-progress's 2px, mp-volume-wrap's 10px) still renders at
+   that height and visually pokes into row 1 from a 0px track (found by actually
+   running the app, 2026-09-22: overflow:hidden on .mp-window alone wasn't enough,
+   since the sliver sits right at row 1's own edge, still inside .mp-window's small
+   collapsed bounding box). opacity/pointer-events is what actually hides them. */
+.mp-root[data-layout="pill"][data-theme="t3-pill"] .mp-progress,
+.mp-root[data-layout="pill"][data-theme="t3-pill"] .mp-time-current,
+.mp-root[data-layout="pill"][data-theme="t3-pill"] .mp-time-total,
+.mp-root[data-layout="pill"][data-theme="t3-pill"] .mp-volume-wrap,
+.mp-root[data-layout="pill"][data-theme="t3-pill"] .mp-link-out {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--mp-motion-fast) ease;
+}
+.mp-root[data-layout="pill"][data-theme="t3-pill"][data-hover] .mp-progress,
+.mp-root[data-layout="pill"][data-theme="t3-pill"][data-hover] .mp-time-current,
+.mp-root[data-layout="pill"][data-theme="t3-pill"][data-hover] .mp-time-total,
+.mp-root[data-layout="pill"][data-theme="t3-pill"][data-hover] .mp-volume-wrap,
+.mp-root[data-layout="pill"][data-theme="t3-pill"][data-hover] .mp-link-out,
+.mp-root[data-layout="pill"][data-theme="t3-pill"]:focus-within .mp-progress,
+.mp-root[data-layout="pill"][data-theme="t3-pill"]:focus-within .mp-time-current,
+.mp-root[data-layout="pill"][data-theme="t3-pill"]:focus-within .mp-time-total,
+.mp-root[data-layout="pill"][data-theme="t3-pill"]:focus-within .mp-volume-wrap,
+.mp-root[data-layout="pill"][data-theme="t3-pill"]:focus-within .mp-link-out {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .mp-root[data-layout="pill"][data-theme="t3-pill"] .mp-artwork {

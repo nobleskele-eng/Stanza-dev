@@ -794,3 +794,49 @@ variation on "dark card, one accent."
   grid-placement, 34 T4 review-image captures, 2 new interaction captures, Chromium +
   WebKit) — full suite, plus a `--repeat-each=2` pass on `contract.spec.ts` for the T3
   fix; `npm run build` OK incl. `check-fixtures-excluded: OK`.
+
+## 2026-09-22 — Two real bugs found by actually running the app, not by any automated check
+
+You asked to run it locally. Started `npm run dev` + the built-in browser against the
+DevHarness's theme selector and clicked through all four themes — both bugs below were
+visible within the first minute of looking, and neither is anything the 320-test
+Playwright/vitest suite catches, because neither is about color, text, or explicit grid
+placement, the three things that suite actually asserts on.
+
+- **T3's collapsed pill wasn't actually collapsed.** `mp-progress`/`mp-time-*`/
+  `mp-volume-wrap` all have their own explicit CSS height (`height: 2px`, `height: 10px`,
+  natural line-height) — a `0px` grid ROW does not clip an item with an explicit height;
+  the item simply renders at its authored size and overlaps row 1, because CSS Grid
+  tracks aren't scroll/clip containers. First fix attempt (`overflow: hidden` on
+  `.mp-window`) wasn't sufficient either: the overlapping sliver sits right at row 1's
+  own edge, still inside `.mp-window`'s small collapsed bounding box, so there was
+  nothing past the edge to clip. Real fix: explicit `opacity: 0; pointer-events: none;`
+  on the five collapsing parts by default, flipping to `opacity: 1` on `[data-hover]`/
+  `:focus-within` (the same technique `.mp-artist` already used, which never had this
+  bug because it isn't a grid item). `e2e/contract.spec.ts`'s grid-placement test never
+  catches this class of bug — it only checks that `grid-column/row-start` isn't `"auto"`,
+  nothing about whether the rendered box actually stays within its track.
+- **T4's rotated frame — the theme's whole "memorable thing" — never rendered at all.**
+  `.mp-window::before`/`::after` had `z-index: -1` but `.mp-window` itself had
+  `position: relative` with no `z-index` of its own, so it never established a local
+  stacking context — the `-1` was relative to some much higher ancestor, sending the
+  frame to the bottom of nearly the whole page's paint order, not just behind the card.
+  Fixed with `isolation: isolate` on `.mp-window`. The fixture-matrix screenshots taken
+  for `sheet-5-t4-extreme.png` earlier today all silently show this broken (no visible
+  frame) — worth a second look at that sheet now that it's fixed, next time it's
+  regenerated. No test suite assertion touches z-index/stacking at all.
+- **Why the suite missed both:** `matrix.spec.ts` asserts text-color contrast,
+  `contract.spec.ts` asserts grid-area assignment (not track-vs-item size) and window
+  bounding-box dimensions (not what's painted where inside it), `palette.test.ts`/
+  `contrast.ts` are pure color math. Nothing anywhere renders a screenshot and diffs it
+  against an expected image (the `e2e/review/` sheets are for human eyes, not asserted
+  on) or checks computed stacking/paint order. This is a real gap, not just these two
+  bugs' root cause — recorded here rather than silently patched, since it says something
+  about what the suite can and can't catch going forward.
+- Added `.claude/launch.json` (`npm run dev` on port 1420) so the Browser pane tool can
+  start the dev server directly in future sessions.
+- **Result (ran):** found via manual inspection in a real browser, not a test failure.
+  After both fixes: `npx tsc --noEmit` clean; `npx vitest run` 67 passed; `npx playwright
+  test` 320 passed, unchanged count (both fixes are CSS-only, no new test cases — the
+  suite's blind spot here is the point of this entry); `npm run build` OK incl.
+  `check-fixtures-excluded: OK`.
