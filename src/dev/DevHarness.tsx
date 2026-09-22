@@ -14,12 +14,21 @@ type FixtureMap = Record<string, NowPlaying>;
 
 const LAYOUTS: readonly Layout[] = ["strip", "pill", "card"];
 
+// Every theme built so far, each styling exactly one layout (docs/PLAN.md §4). Default
+// theme id used whenever `?theme=` is absent, e.g. old links that only set `?layout=`.
+const THEMES = [
+  { id: "t1-default", layout: "strip" as Layout },
+  { id: "t2-artwork", layout: "card" as Layout },
+  { id: "t3-pill", layout: "pill" as Layout },
+];
+const DEFAULT_THEME = "t1-default";
+
 /**
- * `?fixture=<name>&layout=<layout>` renders exactly one fixture state with a static
- * position, for the Playwright fixture matrix (e2e/matrix.spec.ts). No store, no
+ * `?fixture=<name>&layout=<layout>&theme=<id>` renders exactly one fixture state with a
+ * static position, for the Playwright fixture matrix (e2e/matrix.spec.ts). No store, no
  * interpolation — deterministic output is what screenshots need.
  */
-function MatrixCell({ fixtureName, layout }: { fixtureName: string; layout: Layout }) {
+function MatrixCell({ fixtureName, layout, theme }: { fixtureName: string; layout: Layout; theme: string }) {
   const [fixtures, setFixtures] = useState<FixtureMap | null>(null);
 
   useEffect(() => {
@@ -32,7 +41,7 @@ function MatrixCell({ fixtureName, layout }: { fixtureName: string; layout: Layo
 
   return (
     <div data-testid="matrix-cell" style={{ display: "inline-block", padding: 16, background: "#f6f6f6" }}>
-      <Player nowPlaying={fixture} positionMs={fixture.positionMs} layout={layout} platform="windows" />
+      <Player nowPlaying={fixture} positionMs={fixture.positionMs} layout={layout} theme={theme} platform="windows" />
     </div>
   );
 }
@@ -41,8 +50,15 @@ export function DevHarness() {
   const params = new URLSearchParams(window.location.search);
   const fixtureName = params.get("fixture");
   const layoutParam = params.get("layout") as Layout | null;
+  const themeParam = params.get("theme");
   if (fixtureName) {
-    return <MatrixCell fixtureName={fixtureName} layout={layoutParam && LAYOUTS.includes(layoutParam) ? layoutParam : "strip"} />;
+    return (
+      <MatrixCell
+        fixtureName={fixtureName}
+        layout={layoutParam && LAYOUTS.includes(layoutParam) ? layoutParam : "strip"}
+        theme={themeParam ?? DEFAULT_THEME}
+      />
+    );
   }
   return <FullHarness />;
 }
@@ -53,7 +69,8 @@ function FullHarness() {
   const [adapter] = useState(() => new MockAdapter("spotify", { source: "spotify", status: "idle", positionMs: 0, positionUpdatedAt: Date.now(), caps: { seek: false, volume: false, shuffle: false, repeat: false, album: false } }));
   const [snapshot, setSnapshot] = useState<NowPlaying>(store.getSnapshot());
   const [now, setNow] = useState(Date.now());
-  const [layout, setLayout] = useState<Layout>("strip");
+  const [theme, setTheme] = useState(DEFAULT_THEME);
+  const layout = THEMES.find((t) => t.id === theme)?.layout ?? "strip";
 
   useEffect(() => {
     import("../../dev/fixtures/nowPlaying").then((mod) => setFixtures(mod.fixtures));
@@ -94,11 +111,11 @@ function FullHarness() {
       </fieldset>
 
       <fieldset>
-        <legend>layout</legend>
-        {(["strip", "pill", "card"] as const).map((l) => (
-          <label key={l} style={{ marginRight: 12 }}>
-            <input type="radio" name="layout" checked={layout === l} onChange={() => setLayout(l)} />
-            {l}
+        <legend>theme</legend>
+        {THEMES.map((t) => (
+          <label key={t.id} style={{ marginRight: 12 }}>
+            <input type="radio" name="theme" checked={theme === t.id} onChange={() => setTheme(t.id)} />
+            {t.id} ({t.layout})
           </label>
         ))}
       </fieldset>
@@ -106,7 +123,7 @@ function FullHarness() {
       <button onClick={() => store.playPause()}>play/pause</button>
 
       <div style={{ margin: "20px 0" }}>
-        <Player nowPlaying={snapshot} positionMs={positionMs} layout={layout} platform="windows" />
+        <Player nowPlaying={snapshot} positionMs={positionMs} layout={layout} theme={theme} platform="windows" />
       </div>
 
       <pre>{JSON.stringify({ ...snapshot, interpolatedPositionMs: positionMs }, null, 2)}</pre>

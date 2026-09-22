@@ -10,7 +10,10 @@
 import type { Layout } from "../player/Player";
 import { WCAG_AA_NORMAL, contrastRatio, parseColor } from "./contrast";
 
-export const CONTRACT_VERSION = 1;
+// v2 (2026-09-22): added `data-theme` to Root so multiple themes sharing one layout
+// (T4 reuses `card`, same as T2) don't collide when their CSS is loaded together
+// (docs/THEME_CONTRACT.md, docs/DECISIONS.md). No part/attribute was renamed, only added.
+export const CONTRACT_VERSION = 2;
 
 export type ControlType = "color" | "length" | "number" | "font";
 

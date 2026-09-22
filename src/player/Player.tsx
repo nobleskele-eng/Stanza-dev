@@ -12,6 +12,9 @@ interface PlayerProps {
   nowPlaying: NowPlaying;
   positionMs: number;
   layout: Layout;
+  /** Active theme id (contract v2, DECISIONS.md 2026-09-22) — lets a theme scope its
+   * CSS to itself via `[data-theme]`, needed once two themes can share one `layout`. */
+  theme: string;
   platform: Platform;
   onPlayPause?: () => void;
   onNext?: () => void;
@@ -28,6 +31,7 @@ export function Player({
   nowPlaying,
   positionMs,
   layout,
+  theme,
   platform,
   onPlayPause,
   onNext,
@@ -76,6 +80,7 @@ export function Player({
     <div
       className="mp-root"
       data-layout={layout}
+      data-theme={theme}
       data-source={source}
       data-status={status}
       data-platform={platform}

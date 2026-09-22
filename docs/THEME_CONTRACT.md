@@ -1,9 +1,16 @@
 # Stanza — Theme Contract
 
-**Contract version: 1**
-**Status: frozen** (2026-09-22 — every item in "Remaining before this contract can be
-frozen" below is checked off). From here, any change to a part, attribute or variable
-name is a version bump made in the same change as the code that needs it.
+**Contract version: 2**
+**Status:** live at v2. v1 froze 2026-09-22 (every item in "Remaining before this
+contract can be frozen" below was checked off); v2 followed the same day, in the same
+change as the code that needed it (`data-theme`, below) — building T4 on the `card`
+layout meant two themes could share one layout for the first time, and nothing
+distinguished their CSS once both loaded together. Any further change to a part,
+attribute or variable name is a version bump made in the same change as the code that
+needs it.
+
+### Changelog
+- **v2 (2026-09-22):** added `data-theme` to **Root**. Nothing renamed or removed.
 
 This file is the source of truth for the class names, data attributes and CSS custom
 properties a Stanza theme may rely on. Most of it is checked by tests, not by hand:
@@ -21,6 +28,10 @@ See `docs/PLAN.md` §4 for rationale and the theme roster (T1–T4).
 `[data-cap-volume="true"]`.
 
 - `data-layout` — `pill | card | strip`
+- `data-theme` — the active theme's `id` (its `theme.json` `id`, e.g. `t2-artwork`). A theme
+  scopes its CSS with `[data-layout="…"][data-theme="…"]` together, not `data-layout` alone —
+  more than one theme can target the same layout (T2 and T4 both use `card`), and only
+  `data-theme` tells their rules apart when both are loaded at once.
 - `data-source` — `spotify | soundcloud`
 - `data-status` — `idle | playing | paused | unavailable | error`
 - `data-platform` — `windows | macos`
@@ -54,8 +65,8 @@ never sets those.
 `--mp-bg`, `--mp-fg`, `--mp-muted`, `--mp-accent`, `--mp-radius-window`, `--mp-radius-control`,
 `--mp-font-display`, `--mp-font-body`, `--mp-shadow`, `--mp-motion-fast`, `--mp-motion-slow`
 
-A theme declares them on `.mp-root[data-layout="…"]`. Only tokens listed in the theme's
-`controls` are editable by the customizer.
+A theme declares them on `.mp-root[data-layout="…"][data-theme="…"]` (both attributes — see
+**Root**). Only tokens listed in the theme's `controls` are editable by the customizer.
 
 ---
 
@@ -150,7 +161,7 @@ with none is auto-placed by the browser and lands in whichever cell is free.
 
 ### Shared DOM (all layouts)
 ```html
-<div class="mp-root" data-layout="…" data-source="spotify" data-status="playing"
+<div class="mp-root" data-layout="…" data-theme="…" data-source="spotify" data-status="playing"
      data-platform="windows" data-cap-seek data-cap-volume data-cap-album
      style="--mp-progress: 0.2">            <!-- 0–1, set by the player -->
   <div class="mp-window">                   <!-- the grid; theme paints the card here -->
@@ -184,10 +195,10 @@ idle / error            └ .mp-empty / .mp-error span row 1, columns 1–2 ┘
 ```
 Every part is explicitly placed. Annotated theme excerpt (from `themes/t1-default/theme.css`):
 ```css
-.mp-root[data-layout="strip"] { --mp-bg: #0b0b0d; --mp-fg: #f2f0ea; /* tokens live on the root */ }
-.mp-root[data-layout="strip"] .mp-window { background: var(--mp-bg); border-radius: var(--mp-radius-window); }
-.mp-root[data-layout="strip"] .mp-progress-fill { width: calc(var(--mp-progress) * 100%); }  /* progress in pure CSS */
-.mp-root[data-layout="strip"] .mp-meta > * { animation: mp-line-in var(--mp-motion-slow); }   /* replays per track */
+.mp-root[data-layout="strip"][data-theme="t1-default"] { --mp-bg: #0b0b0d; --mp-fg: #f2f0ea; }
+.mp-root[data-layout="strip"][data-theme="t1-default"] .mp-window { background: var(--mp-bg); border-radius: var(--mp-radius-window); }
+.mp-root[data-layout="strip"][data-theme="t1-default"] .mp-progress-fill { width: calc(var(--mp-progress) * 100%); }
+.mp-root[data-layout="strip"][data-theme="t1-default"] .mp-meta > * { animation: mp-line-in var(--mp-motion-slow); }
 ```
 
 ### `pill` — compact (T3) · complete
@@ -204,12 +215,12 @@ entirely, as long as every part it shows keeps an explicit `grid-area`). Rows 2�
 sized to `0px` by default via a CSS custom property, revealing on `data-hover`/`:focus-within` —
 the "place or hide" allowance below, done as a hide-until-interaction rather than an outright hide:
 ```css
-.mp-root[data-layout="pill"] .mp-window {
+.mp-root[data-layout="pill"][data-theme="t3-pill"] .mp-window {
   grid-template-rows: auto var(--t3-extra, 0px) var(--t3-extra, 0px);
   grid-template-areas: "artwork meta controls badge" "artwork progress progress progress" "artwork time volume link";
 }
-.mp-root[data-layout="pill"][data-hover] .mp-window,
-.mp-root[data-layout="pill"]:focus-within .mp-window { --t3-extra: auto; }
+.mp-root[data-layout="pill"][data-theme="t3-pill"][data-hover] .mp-window,
+.mp-root[data-layout="pill"][data-theme="t3-pill"]:focus-within .mp-window { --t3-extra: auto; }
 ```
 `data-hover` never fires for keyboard users (see **Root**), so any hover-reveal theme must also
 key off `:focus-within` — T3 is the first theme to actually exercise this requirement.
@@ -229,16 +240,17 @@ row 7  link
 row 8  badge
 idle / error      └ .mp-empty / .mp-error span rows 1–7, column 1 (badge stays visible) ┘
 ```
-Every part is explicitly placed. Annotated theme excerpt (from `themes/t2-artwork/theme.css`,
-the "Glow Card" direction — a soft ambient glow behind the card, built from the track's own
-extracted colors, never the artwork's pixels):
+**T4 also uses `card`** (v2's reason for existing — see `data-theme` in **Root**). Every part is
+explicitly placed. Annotated theme excerpt (from `themes/t2-artwork/theme.css`, the "Glow Card"
+direction — a soft ambient glow behind the card, built from the track's own extracted colors,
+never the artwork's pixels):
 ```css
-.mp-root[data-layout="card"] { --mp-bg: #101014; --mp-fg: #f4f4f2; /* tokens live on the root */ }
-.mp-root[data-layout="card"] .mp-window {
+.mp-root[data-layout="card"][data-theme="t2-artwork"] { --mp-bg: #101014; --mp-fg: #f4f4f2; }
+.mp-root[data-layout="card"][data-theme="t2-artwork"] .mp-window {
   background: var(--mp-bg);
   box-shadow: 0 28px 60px -12px var(--mp-art-1, var(--mp-accent)), 0 8px 28px -6px var(--mp-art-2, var(--mp-accent));
 }
-.mp-root[data-layout="card"] .mp-btn-play {
+.mp-root[data-layout="card"][data-theme="t2-artwork"] .mp-btn-play {
   background: var(--mp-art-1, var(--mp-accent));   /* guaranteed-AA pair (palette.test.ts) */
   color: var(--mp-art-fg, var(--mp-bg));
 }

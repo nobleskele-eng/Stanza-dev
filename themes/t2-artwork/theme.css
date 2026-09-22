@@ -9,7 +9,7 @@
    a cooler, calmer family than T1's warm near-black + ink-red, so the two don't read
    as variations on one theme. */
 
-.mp-root[data-layout="card"] {
+.mp-root[data-layout="card"][data-theme="t2-artwork"] {
   --mp-bg: #101014;
   --mp-fg: #f4f4f2;
   --mp-muted: #85858c;
@@ -23,7 +23,7 @@
   --mp-motion-slow: 400ms;
 }
 
-.mp-root[data-layout="card"] .mp-window {
+.mp-root[data-layout="card"][data-theme="t2-artwork"] .mp-window {
   background: var(--mp-bg);
   color: var(--mp-fg);
   border-radius: var(--mp-radius-window);
@@ -38,20 +38,20 @@
     0 8px 28px -6px var(--mp-art-2, var(--mp-accent));
 }
 
-.mp-root[data-layout="card"] .mp-artwork {
+.mp-root[data-layout="card"][data-theme="t2-artwork"] .mp-artwork {
   width: 184px;
   height: 184px;
   background: linear-gradient(145deg, #26262e, #16161b);
   object-fit: cover;
 }
 
-.mp-root[data-layout="card"] .mp-meta {
+.mp-root[data-layout="card"][data-theme="t2-artwork"] .mp-meta {
   min-width: 0;
   max-width: 100%;
   text-align: center;
 }
 
-.mp-root[data-layout="card"] .mp-title {
+.mp-root[data-layout="card"][data-theme="t2-artwork"] .mp-title {
   font-family: var(--mp-font-display);
   font-weight: 700;
   font-size: 16px;
@@ -62,8 +62,8 @@
   transition: opacity var(--mp-motion-fast) ease;
 }
 
-.mp-root[data-layout="card"] .mp-artist,
-.mp-root[data-layout="card"] .mp-album {
+.mp-root[data-layout="card"][data-theme="t2-artwork"] .mp-artist,
+.mp-root[data-layout="card"][data-theme="t2-artwork"] .mp-album {
   font-size: 10px;
   color: var(--mp-muted);
   text-transform: uppercase;
@@ -74,14 +74,14 @@
   text-overflow: ellipsis;
 }
 
-.mp-root[data-layout="card"] .mp-progress {
+.mp-root[data-layout="card"][data-theme="t2-artwork"] .mp-progress {
   height: 3px;
   background: #24242b;
   border-radius: 2px;
   position: relative;
   overflow: hidden;
 }
-.mp-root[data-layout="card"] .mp-progress-fill {
+.mp-root[data-layout="card"][data-theme="t2-artwork"] .mp-progress-fill {
   position: absolute;
   inset: 0;
   width: calc(var(--mp-progress) * 100%);
@@ -92,21 +92,21 @@
   transition: width var(--mp-motion-fast) linear;
 }
 
-.mp-root[data-layout="card"] .mp-time-current,
-.mp-root[data-layout="card"] .mp-time-total {
+.mp-root[data-layout="card"][data-theme="t2-artwork"] .mp-time-current,
+.mp-root[data-layout="card"][data-theme="t2-artwork"] .mp-time-total {
   font-size: 10px;
   color: var(--mp-muted);
   width: 100%;
 }
 
-.mp-root[data-layout="card"] .mp-controls {
+.mp-root[data-layout="card"][data-theme="t2-artwork"] .mp-controls {
   display: flex;
   align-items: center;
   gap: 20px;
 }
 
-.mp-root[data-layout="card"] .mp-btn-prev,
-.mp-root[data-layout="card"] .mp-btn-next {
+.mp-root[data-layout="card"][data-theme="t2-artwork"] .mp-btn-prev,
+.mp-root[data-layout="card"][data-theme="t2-artwork"] .mp-btn-next {
   background: none;
   border: none;
   display: flex;
@@ -119,7 +119,7 @@
   border-radius: var(--mp-radius-control);
 }
 
-.mp-root[data-layout="card"] .mp-btn-play {
+.mp-root[data-layout="card"][data-theme="t2-artwork"] .mp-btn-play {
   width: 36px;
   height: 36px;
   border-radius: 50%;
@@ -138,14 +138,14 @@
   color: var(--mp-art-fg, var(--mp-bg));
 }
 
-.mp-root[data-layout="card"] .mp-volume-wrap {
+.mp-root[data-layout="card"][data-theme="t2-artwork"] .mp-volume-wrap {
   width: 120px;
   height: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.mp-root[data-layout="card"] .mp-volume {
+.mp-root[data-layout="card"][data-theme="t2-artwork"] .mp-volume {
   appearance: none;
   -webkit-appearance: none;
   width: 100%;
@@ -153,13 +153,13 @@
   background: transparent;
   cursor: pointer;
 }
-.mp-root[data-layout="card"] .mp-volume::-webkit-slider-runnable-track {
+.mp-root[data-layout="card"][data-theme="t2-artwork"] .mp-volume::-webkit-slider-runnable-track {
   width: 100%;
   height: 3px;
   background: var(--mp-accent);
   border-radius: 2px;
 }
-.mp-root[data-layout="card"] .mp-volume::-webkit-slider-thumb {
+.mp-root[data-layout="card"][data-theme="t2-artwork"] .mp-volume::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   width: 10px;
@@ -169,18 +169,18 @@
   margin-top: calc((3px - 10px) / 2);
 }
 
-.mp-root[data-layout="card"] .mp-link-out {
+.mp-root[data-layout="card"][data-theme="t2-artwork"] .mp-link-out {
   font-size: 10px;
   color: var(--mp-muted);
   text-decoration: none;
   letter-spacing: 0.04em;
 }
-.mp-root[data-layout="card"] .mp-link-out:hover {
+.mp-root[data-layout="card"][data-theme="t2-artwork"] .mp-link-out:hover {
   color: var(--mp-fg);
   text-decoration: underline;
 }
 
-.mp-root[data-layout="card"] .mp-source-badge {
+.mp-root[data-layout="card"][data-theme="t2-artwork"] .mp-source-badge {
   font-size: 9px;
   color: var(--mp-muted);
   letter-spacing: 0.1em;
@@ -192,8 +192,8 @@
   padding: 3px 7px;
 }
 
-.mp-root[data-layout="card"] .mp-empty,
-.mp-root[data-layout="card"] .mp-error {
+.mp-root[data-layout="card"][data-theme="t2-artwork"] .mp-empty,
+.mp-root[data-layout="card"][data-theme="t2-artwork"] .mp-error {
   color: var(--mp-muted);
   padding: 40px 0;
   text-align: center;
@@ -203,7 +203,7 @@
   from { opacity: 0; }
   to { opacity: 1; }
 }
-.mp-root[data-layout="card"] .mp-title,
-.mp-root[data-layout="card"] .mp-artist {
+.mp-root[data-layout="card"][data-theme="t2-artwork"] .mp-title,
+.mp-root[data-layout="card"][data-theme="t2-artwork"] .mp-artist {
   animation: mp-t2-fade-in var(--mp-motion-slow) ease-out;
 }

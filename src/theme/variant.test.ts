@@ -14,7 +14,7 @@ import {
 
 const manifest: ThemeManifest = {
   id: "test-theme",
-  contract: 1,
+  contract: CONTRACT_VERSION,
   layout: "strip",
   layouts: ["card"],
   controls: {
@@ -26,7 +26,7 @@ const manifest: ThemeManifest = {
   },
 };
 
-const base = { theme: "test-theme", contract: 1, layout: "strip", overrides: {}, hidden: [] };
+const base = { theme: "test-theme", contract: CONTRACT_VERSION, layout: "strip", overrides: {}, hidden: [] };
 const codes = (r: ReturnType<typeof validateVariant>) => r.issues.map((i) => `${i.code}@${i.path}`);
 
 describe("validateValue — by control type", () => {
@@ -127,8 +127,9 @@ describe("validateVariant — whole-file rules", () => {
   });
 
   it("rejects a contract version mismatch on either side", () => {
-    expect(codes(validateVariant({ ...base, contract: 2 }, manifest))).toEqual(["contract-mismatch@contract"]);
-    expect(codes(validateVariant(base, { ...manifest, contract: 2 }))).toEqual(["contract-mismatch@contract"]);
+    const mismatched = CONTRACT_VERSION + 1;
+    expect(codes(validateVariant({ ...base, contract: mismatched }, manifest))).toEqual(["contract-mismatch@contract"]);
+    expect(codes(validateVariant(base, { ...manifest, contract: mismatched }))).toEqual(["contract-mismatch@contract"]);
   });
 
   it("rejects layouts the theme does not offer (or that don't exist)", () => {
@@ -150,7 +151,7 @@ describe("validateVariant — whole-file rules", () => {
   });
 
   it("treats missing overrides/hidden as empty, wrong container types as issues", () => {
-    expect(validateVariant({ theme: "test-theme", contract: 1, layout: "strip" }, manifest)).toEqual({
+    expect(validateVariant({ theme: "test-theme", contract: CONTRACT_VERSION, layout: "strip" }, manifest)).toEqual({
       variant: base,
       issues: [],
     });
@@ -220,7 +221,9 @@ describe("validateVariant — overrides", () => {
   });
 
   it("survives a __proto__ key from JSON.parse without polluting anything", () => {
-    const parsed = JSON.parse('{"theme":"test-theme","contract":1,"layout":"strip","overrides":{"__proto__":{"x":1}}}');
+    const parsed = JSON.parse(
+      `{"theme":"test-theme","contract":${CONTRACT_VERSION},"layout":"strip","overrides":{"__proto__":{"x":1}}}`,
+    );
     const r = validateVariant(parsed, manifest);
     expect(r.variant?.overrides).toEqual({});
     expect(({} as Record<string, unknown>).x).toBeUndefined();

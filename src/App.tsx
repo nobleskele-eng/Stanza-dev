@@ -12,7 +12,7 @@ function ProductionPlaceholder() {
   // Real Spotify/GSMTC adapter wiring is a later phase (docs/PLAN.md Phase 5+ /
   // the stranded spike/s2-gsmtc branch). The theme/DOM contract itself is done
   // (Phase 3) — rendered here idle, with no adapter feeding it yet.
-  return <Player nowPlaying={IDLE_NOW_PLAYING} positionMs={0} layout="strip" platform="windows" />;
+  return <Player nowPlaying={IDLE_NOW_PLAYING} positionMs={0} layout="strip" theme="t1-default" platform="windows" />;
 }
 
 function App() {

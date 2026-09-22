@@ -3,7 +3,7 @@
   "name": "[NEEDS COPY]",
   "author": "[NEEDS COPY]",
   "version": "1.0.0",
-  "contract": 1,
+  "contract": 2,
   "layout": "pill",
   "window": { "width": 248, "height": 80 },
   "colorMode": "static",

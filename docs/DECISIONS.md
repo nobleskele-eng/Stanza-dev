@@ -694,3 +694,49 @@ untested until now).
   `npx playwright test` 248 passed (176 + 72 new: 34 T3 matrix/AA, T3 window-fits +
   grid-placement, 34 T3 review-image captures, 2 new interaction captures, Chromium +
   WebKit); `npm run build` OK incl. `check-fixtures-excluded: OK`.
+
+## 2026-09-22 — Contract v2: `data-theme`, ahead of building T4
+
+Prerequisite discovered while starting T4, not planned in advance. T4's direction (your
+choice, after narrowing from three pitched options) reuses the `card` layout — the first
+time two themes share a layout. The current theme-loading stand-in (every theme's CSS
+statically imported into `App.tsx` at once, scoped only by `[data-layout]`) has no way to
+tell two same-layout themes' rules apart once both are loaded, so T2 and T4 would collide
+and fight over the same elements.
+
+**Two fixes considered:** (a) add `data-theme` to Root, a small contract bump, mechanical
+to apply; (b) build real single-active-theme CSS loading now (a `<link href>` the dev
+harness swaps, closer to PLAN.md's actual Rust-file-watcher design) — bigger, and pulls
+forward "Phase 4 switching infrastructure" work that was deliberately deferred after T2.
+Went with (a): smallest footprint, doesn't require standing up loading infrastructure
+just to unblock a fourth theme file, and it's infrastructure the real theme picker will
+need anyway (it has to know which theme is active). This is a judgment call, not a
+creative one, so made and logged rather than asked.
+
+- **Contract → v2.** `docs/THEME_CONTRACT.md`: added `data-theme` to **Root**, a
+  Changelog section, updated the shared-DOM example and all three themes' annotated
+  excerpts. Nothing renamed or removed — a pure addition, so v1's own "frozen" status
+  isn't invalidated, v2 just supersedes it (documented explicitly rather than silently
+  overwriting the freeze note).
+- `src/player/Player.tsx`: new required `theme` prop → `data-theme` on `.mp-root`,
+  alongside the existing `data-layout`.
+- `src/dev/DevHarness.tsx`: `MatrixCell` reads `?theme=` (default `t1-default`);
+  `FullHarness` gets a theme radio list that also drives `layout` (a theme has exactly
+  one layout, so picking the theme picks the layout).
+- `themes/{t1-default,t2-artwork,t3-pill}/theme.css`: every top-level selector gained
+  `[data-theme="<id>"]` alongside `[data-layout="…"]` (mechanical, `sed`, then verified
+  by the unchanged matrix/contract suites passing). `theme.json` `contract: 1 → 2` for
+  all three, plus `src/theme/variant.ts`'s `CONTRACT_VERSION` — `variant.test.ts`'s
+  fixtures were hardcoding the literal `1` as "the matching version" in several places;
+  switched those to reference `CONTRACT_VERSION` so the next bump doesn't silently break
+  them the same way.
+- `e2e/{contract,matrix,review}.spec.ts`: `url()`/`open()` helpers and the `THEMES`
+  arrays now thread a theme id through as `&theme=`, not just `&layout=`.
+- **Verified nothing broke:** this was a mechanical, wide-reaching change (7 non-test
+  source files, 3 theme CSS files, 3 spec files) — ran the full suite, not a subset, to
+  be sure.
+- **Result (ran):** `npx tsc --noEmit` clean; `npx vitest run` 67 passed (unchanged —
+  variant tests still pass after switching their fixtures off the hardcoded `1`);
+  `npx playwright test` 248 passed (unchanged count — this step only rescopes existing
+  themes' CSS, adds no new themes or test cases yet); `npm run build` OK incl.
+  `check-fixtures-excluded: OK`.

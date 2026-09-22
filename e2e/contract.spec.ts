@@ -36,10 +36,11 @@ function bulletTokens(section: string, pattern: RegExp): string[] {
 const documentedParts = bulletTokens("Parts", /^- `\.(mp-[a-z-]+)`/);
 const documentedRootAttrs = bulletTokens("Root", /^- `(data-[a-z-]+)`/);
 
-const url = (fixture: string, layout = "strip") => `/?fixture=${encodeURIComponent(fixture)}&layout=${layout}`;
+const url = (fixture: string, layout = "strip", theme = "t1-default") =>
+  `/?fixture=${encodeURIComponent(fixture)}&layout=${layout}&theme=${theme}`;
 
-async function open(page: Page, fixture: string, layout = "strip") {
-  await page.goto(url(fixture, layout));
+async function open(page: Page, fixture: string, layout = "strip", theme = "t1-default") {
+  await page.goto(url(fixture, layout, theme));
   await expect(page.getByTestId("matrix-cell")).toBeVisible();
 }
 
@@ -103,7 +104,7 @@ for (const { id, json } of THEMES) {
     let maxW = 0;
     let maxH = 0;
     for (const name of Object.keys(fixtures)) {
-      await open(page, name, json.layout);
+      await open(page, name, json.layout, id);
       // Hover, not just the default state — a theme may reveal more content on
       // data-hover (T3's collapsed pill) and the window must fit that too, since the
       // native window can't resize itself on hover. A no-op for themes that don't
@@ -130,7 +131,7 @@ for (const { id, json } of THEMES) {
     page,
   }) => {
     for (const name of Object.keys(fixtures)) {
-      await open(page, name, json.layout);
+      await open(page, name, json.layout, id);
       const auto = await page.evaluate(() =>
         [...document.querySelector(".mp-window")!.children].flatMap((el) => {
           const s = getComputedStyle(el);

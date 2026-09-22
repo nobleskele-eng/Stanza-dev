@@ -2,12 +2,11 @@ import { expect, test } from "@playwright/test";
 import { fixtures } from "../dev/fixtures/nowPlaying";
 import { WCAG_AA_NORMAL, contrastRatio, parseColor } from "../src/theme/contrast";
 
-// One entry per theme built so far (docs/PLAN.md §4 theme roster). `pill` (T3) is
-// still a structure-only placeholder until it gets its own theme.
+// One entry per theme built so far (docs/PLAN.md §4 theme roster).
 const THEMES = [
-  { id: "T1", layout: "strip" },
-  { id: "T2", layout: "card" },
-  { id: "T3", layout: "pill" },
+  { id: "T1", themeId: "t1-default", layout: "strip" },
+  { id: "T2", themeId: "t2-artwork", layout: "card" },
+  { id: "T3", themeId: "t3-pill", layout: "pill" },
 ];
 
 const TEXT_PARTS = [
@@ -26,14 +25,14 @@ const TEXT_PARTS = [
 
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
-for (const { id, layout } of THEMES) {
+for (const { id, themeId, layout } of THEMES) {
   for (const name of Object.keys(fixtures)) {
     test(`${id} ${layout} — ${name}`, async ({ page }, testInfo) => {
       const consoleErrors: string[] = [];
       page.on("console", (m) => m.type() === "error" && consoleErrors.push(m.text()));
       page.on("pageerror", (e) => consoleErrors.push(e.message));
 
-      await page.goto(`/?fixture=${encodeURIComponent(name)}&layout=${layout}`);
+      await page.goto(`/?fixture=${encodeURIComponent(name)}&layout=${layout}&theme=${themeId}`);
       const cell = page.getByTestId("matrix-cell");
       await expect(cell).toBeVisible();
       await expect(page.locator(".mp-source-badge")).toBeVisible(); // D10: never hidden
