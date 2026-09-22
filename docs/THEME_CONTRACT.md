@@ -297,4 +297,4 @@ is below WCAG AA 4.5:1 (`checkVariantContrast`). It warns; it does not block sav
 - [x] One annotated example per layout.
 - [ ] Palette extraction that actually supplies `--mp-art-1..3` / `--mp-art-fg` (then test AA on `--mp-art-fg`).
 - [ ] T2/T3 place all parts in `card` / `pill` (Phase 4) — the contract already states the rule.
-- [ ] Your visual sign-off on T1.
+- [x] Your visual sign-off on T1 (2026-09-22, from the `npm run review` contact sheets).

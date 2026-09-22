@@ -540,3 +540,16 @@ the sign-off. The contract is not yet fully frozen: palette extraction (`--mp-ar
 still open per its own "Remaining before this contract can be frozen" checklist.
 - **Result:** doc-only change, re-ran nothing new (see the entry above for the last full
   verification, still current).
+
+## 2026-09-22 — T1 visual sign-off given
+
+You reviewed the three `npm run review` contact sheets (states; capabilities/artwork;
+layouts + hover/keyboard focus) and confirmed T1. Checked off in `docs/THEME_CONTRACT.md`'s
+freeze checklist. Two items remain on that checklist: palette extraction for
+`--mp-art-1..3`/`--mp-art-fg` (PLAN.md's Phase 3 gate includes "text on `--mp-art-fg` meets
+WCAG AA 4.5:1", untested because nothing supplies real values yet — currently fallback
+only), and T2/T3 placing every part in `card`/`pill`, which is explicitly Phase 4 work per
+PLAN.md. So Phase 3 isn't fully gated closed until palette extraction lands or is
+consciously deferred; Phase 4 (themes, switching, customizer UI) is the next body of work
+either way.
+- **Result:** doc-only change, no re-verification needed.
