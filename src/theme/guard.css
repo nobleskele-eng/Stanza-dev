@@ -13,15 +13,14 @@
   opacity: 1 !important;
 }
 
-/* Artwork is shown unmodified (D10/C3): no filter/blur, animation, transparency,
-   transform, cropping shapes, masks or blending. Radius is 4px (small player). */
+/* Artwork guard, narrowed 2026-09-22 (D10 relaxed — docs/DECISIONS.md). Themes may
+   now crop (border-radius/clip-path), filter (blur/duotone/etc.) and animate the
+   artwork; interactive controls may still never sit on/over it (enforced by
+   e2e/contract.spec.ts's bounding-box overlap check, not a CSS property here).
+   Still locked: transparency, transform, masking, blending. */
 .mp-artwork {
-  filter: none !important;
-  animation: none !important;
-  border-radius: 4px !important;
   opacity: 1 !important;
   transform: none !important;
-  clip-path: none !important;
   mask: none !important;
   mix-blend-mode: normal !important;
 }

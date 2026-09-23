@@ -30,12 +30,27 @@ Drop this in the repo as `docs/PLAN.md`. Section 8 is the seed for `CLAUDE.md`.
 | D7 | Spotify Web API | **New: excluded from v1** | 5-user dev cap, Premium-owner requirement, endpoint removals (C1). Not needed for now-playing + transport. Revisit only for a "save to library" button. |
 | D8 | Spotify Web Playback SDK | **New: rejected** | Needs Widevine DRM; license failures are common in desktop/embedded webviews |
 | D9 | One playback source active at a time | **New constraint** | SoundCloud API Terms prohibit playback experiences that combine SoundCloud content with other services (C13) |
-| D10 | Artwork shown unmodified; ambience comes from colours *derived* from it | **New design constraint** | Spotify guidelines forbid crop/blur/overlay/animation of artwork; SoundCloud terms forbid modifying User Content (C3, C13) |
+| D10 | Artwork's crop/filter/animation are theme-authorable; controls may never sit on top of it | **Relaxed 2026-09-22** | Originally driven by Spotify's Design Guidelines (C3) and SoundCloud's terms (C13); relaxed for this project deliberately, not a compliance claim — see amendment below and DECISIONS.md |
 | D11 | No native blur/Mica/Acrylic in default themes | **New** | Your Win10 machine: Mica is Win11-only, Acrylic lags while dragging (C9). A mini player gets dragged constantly. |
 | D12 | Frontend: React + TypeScript + Vite, plain CSS with custom properties, **no Tailwind** | **New** | User themes need stable semantic hooks. Utility-class soup makes a theme contract impossible. React chosen over Svelte for your and Claude Code's familiarity; bundle size is dominated by the native shell anyway. |
 | D13 | Windows-first; macOS merged only after testing on a real Mac | **New** | You can't meaningfully build or test macOS from Windows. CI can compile it, but AppleScript permissions and window transparency only verify on a Mac. |
 | D14 | Customization = three layers: (a) in-app customizer editing theme tokens, saved as variants; (b) user CSS snippets layered on top of the active theme; (c) importable theme packages | Confirmed | Customization is the core purpose of the project. |
 | D15 | v1 ships Spotify-only on Windows; SoundCloud support and Windows any-app mode are grouped into a post-v1 expansion phase, order TBD | Confirmed | You want v1 launched with Spotify first rather than carrying SoundCloud's spike/API-terms risk (D6, D9, C13) into the critical path. |
+
+**D10 amendment (2026-09-22):** relaxed from "unmodified artwork" to "cropped
+(`border-radius`/`clip-path`), overlaid, or filtered (blur/duotone) artwork —
+interactive controls still never sit on top of it, and the artwork itself still
+never animates in a way that would need `opacity`/`transform` (both stay locked
+in `src/theme/guard.css`, along with `mask`/`mix-blend-mode`). A conscious
+deviation from Spotify's Design Guidelines (C3) and, by extension, the spirit of
+SoundCloud's User Content terms (C13) that originally motivated D10 — C3's own
+resolution note already anticipated this exact tension ("anyone reviewing your
+portfolio who knows the rules will spot a blurred-artwork background") and this
+amendment accepts that tradeoff deliberately for this personal/portfolio
+project, not as a claim of continued guideline compliance. D9 (one source
+active, never combined) and C13's attribution requirements (badge, link-out, no
+SoundCloud-confusable naming) are untouched. Full rationale: `docs/DECISIONS.md`
+2026-09-22.
 
 ---
 
@@ -188,7 +203,11 @@ interface NowPlaying {
 
 ### Artwork and colour
 - Rust fetches the artwork (no canvas CORS problems) and extracts 3–5 dominant colours, exposed as `--mp-art-1..3` plus a contrast-checked `--mp-art-fg`.
-- The artwork element itself: unmodified, 4px radius, never under text or controls.
+- The artwork element itself (D10, relaxed 2026-09-22): a theme may crop it
+  (`border-radius`/`clip-path`), overlay text/graphics on top of it, apply
+  `filter` treatments (blur, duotone), and animate it. It must never sit under
+  interactive controls; `opacity`/`transform`/`mask`/`mix-blend-mode` stay
+  guard-locked (`src/theme/guard.css`).
 
 ---
 
@@ -264,7 +283,7 @@ Locations: bundled (read-only, app resources) and user (`<app data dir>/themes`)
 
 ### First-party themes (each stress-tests a different part of the contract)
 
-**Design rationale for the ordering below:** artwork and track/artist text are the only things Spotify/SoundCloud restrict — unmodified image, unaltered strings. Everything else (layout, shape, motion, type, color, iconography, control affordances) is fully yours. An artwork-forward theme is bounded by definition: however good the layout, it reads as "unmodified square image + reformatted text," and it sits in the same genre as every other now-playing view, official or fan-made. A typography/motion-forward theme has no such ceiling and isn't a reskin of anything that already exists. So the type-led theme is the flagship, not the fallback.
+**Design rationale for the ordering below (revised 2026-09-22):** the original argument was that artwork-forward is bounded by definition — "however good the layout, it reads as unmodified square image plus reformatted text," the same genre as every other now-playing view — while a type/motion-forward theme has no such ceiling. That argument depended on D10's old strict form and no longer holds now that cropping, overlay, filter and animation are theme-authorable (D10, relaxed) — an artwork-forward theme with heavy treatment isn't generic either. T1 stays the flagship for a different, still-valid reason: its identity — type, motion, layout — is generated entirely from data the app always has, so its impact doesn't depend on any given track's artwork being present, high-resolution, or good-looking, a condition genuinely outside this project's control (GSMTC/AppleScript artwork quality varies by source, and some tracks have none at all). T2/T4's artwork-forward impact is structurally capped by the source image's own quality in a way T1's isn't. T1 also keeps its own visual sign-off and is what this document already calls "what the project is judged on" — changing flagship status was never on the table here.
 
 - **T1 Default (flagship)** — type/motion-led, artwork optional or reduced to a small accent. The extracted-palette system (colors pulled from the artwork, never the pixels themselves) carries per-track identity here — kinetic type on track change, real type scale and rhythm doing the work that artwork would otherwise do. This is what ships first and what the project is judged on.
 - **T2 Artwork-forward (traditional variant)** — card, `colorMode: artwork`. Proves the contract also supports the conventional approach; positioned as "the expected version," not the centerpiece.

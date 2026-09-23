@@ -18,8 +18,11 @@
 - Fixtures live only in /dev/fixtures, are obviously synthetic, and must be
   excluded from production builds.
 - Styling/layout tasks never change copy, names or data.
-- Artwork: never blur, crop, overlay, animate, or place controls over it.
-  Radius 4px.
+- Artwork: cropping (border-radius/clip-path), filter (blur/duotone), and
+  animation are theme-authorable (D10 relaxed 2026-09-22, DECISIONS.md). Still
+  locked: opacity, transform, mask, mix-blend-mode. Interactive controls may
+  never sit on/over the artwork's bounding box (enforced by e2e/contract.spec.ts).
+  Default radius 4px, theme-overridable.
 
 ## Process
 - Before coding: list files to touch, the acceptance check, the verification

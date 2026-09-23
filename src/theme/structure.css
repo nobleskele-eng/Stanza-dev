@@ -12,6 +12,14 @@
   align-items: center;
 }
 
+/* Default artwork radius (D10 relaxed 2026-09-22, docs/DECISIONS.md): guard.css no
+   longer force-locks this, so themes that set no radius of their own (T2/T3/T4)
+   need a plain, low-specificity default to keep looking the same. A theme's own
+   higher-specificity rule overrides this normally. */
+.mp-artwork {
+  border-radius: 4px;
+}
+
 /* --- strip layout (T1) --- */
 .mp-root[data-layout="strip"] .mp-window {
   grid-template-columns: auto 1fr auto;

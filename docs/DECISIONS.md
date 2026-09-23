@@ -840,3 +840,121 @@ placement, the three things that suite actually asserts on.
   test` 320 passed, unchanged count (both fixes are CSS-only, no new test cases — the
   suite's blind spot here is the point of this entry); `npm run build` OK incl.
   `check-fixtures-excluded: OK`.
+
+## 2026-09-22 — D10 relaxed: artwork crop/overlay/filter/animation now allowed (permanent default)
+
+Prompted by feedback that the shipped four-theme roster (all passing the 320+67-test
+fixture-matrix/AA/grid suite, contract frozen at v2) has "nothing cool/frontier/
+boundary-pushing about it." Shown two references (a Portishead card using collaged
+real track-text as background texture behind a square photo; a Lorde player with
+artwork cropped to a circle and a scrubber riding its edge) and asked for layered
+text, shape movement, depth, shadows.
+
+**Scope, as decided across two rounds of questions:** redesign T1 only; T2/T3/T4
+stay as-is. D10 relaxes as a **permanent project-wide default**, not a T1-only
+exception — `guard.css` and the `@layer guard, theme, user` cascade apply to every
+theme and every user snippet, not just T1.
+
+**What changed, precisely, across both rounds:**
+- Round 1 approved: `border-radius`/`clip-path` (crop into non-square shapes),
+  overlaying text/graphics on top of the artwork, `filter` (blur/duotone on the
+  artwork's own pixels).
+- Round 2, on review of the guard-scope split, also approved: `animation`.
+- Still prohibited, unchanged: interactive controls rendered on/over the artwork's
+  bounding box. Never a guard-CSS-lockable property, only a documented convention —
+  now enforced by a new Playwright bounding-box overlap check in
+  `e2e/contract.spec.ts`, run per-theme, per-fixture, with hover applied first (T3's
+  hover-revealed controls).
+- Still guard-locked: `opacity`, `transform`, `mask`, `mix-blend-mode` on
+  `.mp-artwork`.
+
+**What this knowingly deviates from — not glossed over:** D10's original reason
+(PLAN.md §1, C3, C13) was Spotify's Design Guidelines forbidding crop/blur/overlay/
+animation of artwork, and (by extension, ambiguously) SoundCloud's terms against
+modifying User Content. C3's own resolution note already anticipated this exact
+tension: *"Comply anyway — it's cheap, and anyone reviewing your portfolio who
+knows the rules will spot a blurred-artwork background."* Flagged to the user
+twice, across two separate rounds of questions (once broadly, once itemized by
+specific property) — confirmed both times. This is a personal/portfolio project,
+not a Spotify Platform integration under review; chose visual ambition over
+guideline conformance for this one constraint. Not legal advice; a conscious
+tradeoff, logged rather than silently dropped. D9 (one source active, never
+combined) and C13's attribution requirements (badge, link-out, no
+SoundCloud-confusable naming) are untouched.
+
+**T1-flagship rationale, rewritten (PLAN.md §4):** the old argument — artwork-forward
+is bounded by definition, type/motion-forward has no ceiling — no longer holds once
+crop/overlay/filter/animation are allowed. T1 stays flagship because its identity
+(type, motion, layout) is generated from data the app always has, so its impact
+doesn't depend on any given track's artwork quality — unlike T2/T4, which are
+structurally capped by the source image. T1 also keeps its existing visual sign-off
+and is what PLAN.md already calls "what the project is judged on"; changing
+flagship status wasn't requested.
+
+**No contract version bump.** The v1→v2 bump (2026-09-22, earlier today) was for a
+genuinely new Root attribute (`data-theme`). This change adds no part/attribute/
+variable — only `guard.css`'s internal permissions and the prose describing them
+change. Per the contract's own stated rule ("any change to a part, attribute or
+**variable name** is a version bump"), that doesn't cross the bar. A direction that
+*would* have needed one ("Collage" — real track/artist text as a decorative
+background layer via a new `data-title`/`data-artist` attribute) was considered and
+explicitly not built this round, in favor of "Ring + Depth" (see the redesign entry
+below) — a possible future direction, not abandoned.
+
+**guard.css, before → after:**
+```css
+/* before */
+.mp-artwork {
+  filter: none !important; animation: none !important; border-radius: 4px !important;
+  opacity: 1 !important; transform: none !important; clip-path: none !important;
+  mask: none !important; mix-blend-mode: normal !important;
+}
+/* after */
+.mp-artwork {
+  opacity: 1 !important; transform: none !important;
+  mask: none !important; mix-blend-mode: normal !important;
+}
+```
+**Side effect caught and fixed in the same change:** none of the four themes
+declared their own `border-radius` on `.mp-artwork` — all four got 4px only from
+guard's forced rule. Deleting that line with no replacement would have silently
+regressed T2/T3/T4 to square corners, even though scope is T1-only. Fixed with a
+plain, low-specificity default in `src/theme/structure.css`
+(`.mp-artwork { border-radius: 4px; }`) — same specificity as guard's old rule, so
+T2/T3/T4 look identical, and T1's higher-specificity rule overrides it normally.
+
+**New enforcement replacing lost guard coverage:** `e2e/contract.spec.ts` gains a
+bounding-box overlap assertion (`.mp-artwork` vs. every interactive control:
+`.mp-btn-prev/play/next`, `.mp-volume-wrap`, `.mp-link-out`), run per-theme.
+`.mp-progress` is deliberately excluded — non-interactive per the "Not in v1"
+section, and T1's redesign depends on it overlapping the artwork by design.
+First implementation used Playwright's `locator.boundingBox()`, which hung for 30s
+per call in WebKit (root cause not fully diagnosed — likely its actionability/
+stability wait); switched to `page.evaluate` + `getBoundingClientRect()` directly,
+matching the pattern the grid-placement test already used, which resolved it
+immediately.
+
+**Also rewritten in the same change:** the existing guard hostile-stylesheet test
+now asserts the new locked/unlocked split (previously all 8 properties were
+expected to stay locked; now 4 are). Closed a pre-existing gap while rewriting it:
+the old test injected `mask: linear-gradient(...)` in its attack but never actually
+read back the computed `mask` value to confirm it was blocked — now it does.
+
+**Docs touched:** `CLAUDE.md` (Content section), `docs/PLAN.md` (D10 decision-log
+row + new amendment paragraph, "Artwork and colour" section, T1-flagship
+rationale), `docs/THEME_CONTRACT.md` (`.mp-artwork` Parts bullet, Snippets/Layer-order
+guard prose, Rules section — noting explicitly this is a guard/Rules-layer change
+only, not a new customizer-exposed control). `docs/THEME_CONTRACT.md`'s `strip`/`card`
+layout sections and T1's annotated example are pending a further update once T1's
+actual redesign (below) lands.
+
+**Not yet done as of this entry:** no theme.css has been written yet. This entry is
+the decision + mechanics; T1's actual visual direction ("Ring + Depth," combining
+two of three pitched concepts) is a separate change — see the next entry once it
+lands.
+- **Result (ran):** `npx tsc --noEmit` clean; `npx vitest run` 67 passed (unchanged);
+  `npx playwright test e2e/contract.spec.ts e2e/matrix.spec.ts` 166 passed (both
+  engines) — confirms T2/T3/T4 unaffected, the rewritten guard test's new split is
+  correct, and the new overlap test passes against all four themes' current markup
+  with zero code changes needed (nothing currently violates the still-prohibited
+  controls-over-artwork rule).

@@ -146,7 +146,9 @@ for (const { id, json } of THEMES) {
   });
 }
 
-test("guard: a theme/snippet cannot modify artwork or hide the source badge with ordinary declarations", async ({ page }) => {
+test("guard: opacity/transform/mask/mix-blend-mode still locked; crop/filter/animation are now theme-authorable (D10 relaxed 2026-09-22)", async ({
+  page,
+}) => {
   await open(page, "very light artwork");
   await page.addStyleTag({
     content: `
@@ -157,11 +159,45 @@ test("guard: a theme/snippet cannot modify artwork or hide the source badge with
   const art = await page.evaluate(() => {
     const s = getComputedStyle(document.querySelector("img.mp-artwork")!);
     return {
-      opacity: s.opacity, transform: s.transform, clipPath: s.clipPath, filter: s.filter,
-      blend: s.mixBlendMode, radius: s.borderTopLeftRadius, animation: s.animationName,
+      opacity: s.opacity, transform: s.transform, mask: s.mask, blend: s.mixBlendMode,
+      clipPath: s.clipPath, filter: s.filter, radius: s.borderTopLeftRadius, animation: s.animationName,
     };
   });
-  expect(art).toEqual({ opacity: "1", transform: "none", clipPath: "none", filter: "none", blend: "normal", radius: "4px", animation: "none" });
+  expect(art).toEqual({
+    // still guard-locked
+    opacity: "1", transform: "none", mask: "none", blend: "normal",
+    // theme/user-authorable since the D10 relaxation — the hostile stylesheet's values took effect
+    clipPath: "circle(30%)", filter: "blur(8px)", radius: "50%", animation: "x",
+  });
   await expect(page.locator(".mp-source-badge")).toBeVisible();
   expect(await page.locator(".mp-source-badge").evaluate((e) => getComputedStyle(e).opacity)).toBe("1");
+});
+
+const CONTROL_SELECTORS = [".mp-btn-prev", ".mp-btn-play", ".mp-btn-next", ".mp-volume-wrap", ".mp-link-out"];
+
+test("D10: interactive controls never overlap the artwork's bounding box", async ({ page }) => {
+  for (const { id, json } of THEMES) {
+    for (const name of Object.keys(fixtures)) {
+      await open(page, name, json.layout, id);
+      await page.locator(".mp-window").hover(); // reveal hover-only controls (T3)
+      // page.evaluate + getBoundingClientRect, not locator.boundingBox() — the latter
+      // waits for actionability/stability and hung indefinitely in WebKit here.
+      const overlaps = await page.evaluate((selectors) => {
+        const rect = (el: Element) => el.getBoundingClientRect();
+        const art = document.querySelector(".mp-artwork");
+        if (!art) return []; // idle/error: no artwork rendered
+        const a = rect(art);
+        const hits: string[] = [];
+        for (const sel of selectors) {
+          const el = document.querySelector(sel);
+          if (!el) continue; // conditional part absent (volume/link-out)
+          const b = rect(el);
+          const overlap = !(b.right <= a.left || b.left >= a.right || b.bottom <= a.top || b.top >= a.bottom);
+          if (overlap) hits.push(sel);
+        }
+        return hits;
+      }, CONTROL_SELECTORS);
+      expect(overlaps, `${id} ${name}: overlaps .mp-artwork`).toEqual([]);
+    }
+  }
 });

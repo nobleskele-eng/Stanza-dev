@@ -79,7 +79,7 @@ placeable with `grid-area`): `.mp-artwork`, `.mp-meta`, `.mp-progress`, `.mp-tim
 
 - `.mp-root` — outermost element; carries every attribute above
 - `.mp-window` — the layout grid; the theme paints the card here (background, radius, padding)
-- `.mp-artwork` — the artwork: an `<img>` when the track has artwork, otherwise an empty `<div>`. Style both. Never under text or controls.
+- `.mp-artwork` — the artwork: an `<img>` when the track has artwork, otherwise an empty `<div>`. Style both. Never under interactive controls (crop/overlay/filter/animation are theme-authorable, D10 relaxed 2026-09-22 — see **Rules**).
 - `.mp-meta` — wrapper for title / artist / album. Remounted (new `key`) on every track change so a CSS animation replays without JS
 - `.mp-title`
 - `.mp-artist`
@@ -273,15 +273,20 @@ Deliberately absent from contract v1. Adding any of them is a contract change.
 ## Snippets
 User CSS snippets may target any contract class, data attribute, or CSS custom property listed
 in this document, and are subject to the same rules as themes (see **Rules**) — including the
-guard-layer protections on `.mp-source-badge` and artwork.
+guard-layer protections on `.mp-source-badge` and artwork (narrower since D10 relaxed
+2026-09-22 — see **Rules** for exactly what's still locked).
 
 ## Layer order (customization, D14)
 ```
 @layer guard, theme, user;
 ```
 Theme CSS loads with `layer(theme)`; user snippets with `layer(user)`. The `guard` layer holds
-`!important` rules that keep `.mp-source-badge` displayed, visible and opaque, and keep artwork
-unmodified (no filter, animation, transparency, transform, clip, mask or blend; 4px radius).
+`!important` rules that keep `.mp-source-badge` displayed, visible and opaque, and keep
+artwork's `opacity`, `transform`, `mask` and `mix-blend-mode` locked. `border-radius`,
+`clip-path`, `filter` and `animation` are theme/user-authorable (D10 relaxed 2026-09-22 —
+DECISIONS.md). This is a guard/Rules-layer change only: it does not add an artwork-shape or
+filter token to any theme's customizer `controls` map — the end-user customizer is unaffected
+unless a theme later chooses to expose one.
 
 **Status:** `src/theme/guard.css` exists and is tested against ordinary declarations, but in
 Phase 3 it is a plain stylesheet, not yet inside `@layer guard`. Until the Phase 4 loader builds
@@ -330,7 +335,11 @@ is below WCAG AA 4.5:1 (`checkVariantContrast`). It warns; it does not block sav
   builds — see PLAN.md C6).
 - The page paints no background: the window is transparent, so anything a theme paints outside
   `.mp-window` shows as a rectangle behind the card. Paint the card, not the page.
-- Artwork: unmodified, 4px radius, never under text or controls (PLAN.md D10).
+- Artwork: cropping (`border-radius`/`clip-path`), overlaying text/graphics, filter
+  (blur/duotone) and animation are theme-authorable; never under interactive controls
+  (enforced by `e2e/contract.spec.ts`'s bounding-box overlap check); `opacity`,
+  `transform`, `mask`, `mix-blend-mode` stay guard-locked (PLAN.md D10, relaxed
+  2026-09-22 — DECISIONS.md). Default radius 4px, theme-overridable.
 - Text must meet WCAG AA 4.5:1 against its background (`e2e/matrix.spec.ts` checks every text part).
 - Visible keyboard focus on every control (`src/theme/structure.css` baseline; themes may restyle, not remove).
 
