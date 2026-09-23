@@ -13,7 +13,10 @@ import { WCAG_AA_NORMAL, contrastRatio, parseColor } from "./contrast";
 // v2 (2026-09-22): added `data-theme` to Root so multiple themes sharing one layout
 // (T4 reuses `card`, same as T2) don't collide when their CSS is loaded together
 // (docs/THEME_CONTRACT.md, docs/DECISIONS.md). No part/attribute was renamed, only added.
-export const CONTRACT_VERSION = 2;
+// v3 (2026-09-22): added `data-title`/`data-artist` to Root so a theme can read the
+// real track/artist text in a decorative pseudo-element (`content: attr(...)`), used
+// by T1's "Collage" layer. Also purely additive.
+export const CONTRACT_VERSION = 3;
 
 export type ControlType = "color" | "length" | "number" | "font";
 

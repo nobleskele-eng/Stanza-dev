@@ -5,7 +5,7 @@
    + one ink-red accent, still AA-verified); slab serif title over monospace
    metadata/time, both kept.
 
-   Two "memorable things," both direct uses of the newly-permitted properties:
+   Three "memorable things," each a direct use of a newly-permitted property:
    1. The artwork is circular (clip-path, not border-radius — see below) and
       framed by its own progress ring instead of a separate bar.
    2. On track change, the artwork reveals via an animated clip-path iris wipe.
@@ -13,9 +13,19 @@
       relaxation, so a classic fade/scale entrance is impossible — clip-path is
       the one unlocked property that's actually animatable into something worth
       watching, so the iris wipe isn't a compromise, it's what the newly-unlocked
-      properties point to. */
+      properties point to.
+   3. "Collage" (added 2026-09-22, contract v3): the track's own title/artist —
+      real text, not a generic pattern — bleeds behind the ring as large,
+      low-opacity, rotated type via `.mp-root::before`/`::after` reading
+      `data-title`/`data-artist` (`content: attr(...)`, only reads its own host
+      element's attribute, hence `.mp-root`, not `.mp-window`). Positioned to
+      overflow `.mp-window`'s edges near the top, same "peek past the card"
+      technique T4's sticker frame already proved — visible in the negative
+      space around the ring, not clipped by the card's own opaque background. */
 
 .mp-root[data-layout="card"][data-theme="t1-default"] {
+  position: relative;
+  isolation: isolate; /* local stacking context — same fix T4 needed for its frame */
   --mp-bg: #0b0b0d;
   --mp-fg: #f2f0ea;
   --mp-muted: #9a968d;
@@ -61,6 +71,61 @@
     "badge";
   row-gap: 12px;
   justify-items: center;
+}
+
+/* --- Collage: real track/artist text as a low-opacity, rotated backdrop layer,
+   behind everything (z-index: -1, within .mp-root's own stacking context —
+   see `isolation: isolate` above). Attached to .mp-root, not .mp-window,
+   because content: attr() only reads its own host element's attribute, and
+   data-title/data-artist live on .mp-root per contract convention. Deliberately
+   positioned near the top (behind the ring) rather than overlapping the
+   title/artist/controls text below, so it reads as backdrop texture, not
+   competing content. Decorative — not a TEXT_PARTS selector (pseudo-elements
+   aren't reachable by querySelector), so it's exempt from the AA check by
+   construction, same as T4's decorative elements.
+
+   Bounded width + overflow:hidden, not free-floating: real titles vary wildly
+   in length (fixture text especially — "no-artwork" fixture titles run ~90
+   characters), and at collage scale, unbounded nowrap text just runs off into
+   empty space rather than reading as a backdrop. Clipping it mid-word is
+   actually the authentic reference aesthetic (the Portishead card's collage
+   text is visibly cropped by the composition, not whole floating words) —
+   this isn't a workaround, it's the right technique either way. */
+.mp-root[data-layout="card"][data-theme="t1-default"]::before,
+.mp-root[data-layout="card"][data-theme="t1-default"]::after {
+  position: absolute;
+  z-index: -1;
+  width: 300px;
+  overflow: hidden;
+  font-family: var(--mp-font-display);
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+  color: color-mix(in srgb, var(--mp-fg) 22%, transparent);
+}
+.mp-root[data-layout="card"][data-theme="t1-default"]::before {
+  content: attr(data-title);
+  font-size: 46px;
+  top: 18px;
+  left: -96px; /* most of the box sits behind .mp-window; only this margin peeks */
+  transform: rotate(-8deg);
+}
+.mp-root[data-layout="card"][data-theme="t1-default"]::after {
+  content: attr(data-artist);
+  font-size: 32px;
+  top: 190px;
+  right: -96px;
+  text-align: right; /* clips from the start of the string, not the end, on this side */
+  transform: rotate(6deg);
+}
+/* "Hide title" should also hide the decorative echo of it — data-hide-* is
+   customizer plumbing (Phase 4, not built yet), but this keeps the contract
+   coherent for when it is. */
+.mp-root[data-layout="card"][data-theme="t1-default"][data-hide-title]::before {
+  display: none;
+}
+.mp-root[data-layout="card"][data-theme="t1-default"][data-hide-artist]::after {
+  display: none;
 }
 
 /* --- Ring + artwork: .mp-progress and .mp-artwork share the "artwork" grid

@@ -1041,3 +1041,79 @@ dropping "Collage" (real track/artist text as background texture — no `data-ti
   added to its loop, since total time tipped past the default 30s budget in WebKit — not a
   real hang, confirmed by profiling the actual per-iteration cost); `npm run build` OK incl.
   `check-fixtures-excluded: OK`.
+
+## 2026-09-22 — T1 gains "Collage": real track/artist text as backdrop (contract v3)
+
+You pushed back on the "Ring + Depth" redesign — fair: the "depth" half turned out to be
+one `box-shadow`, not the layered composition the Portishead reference actually showed.
+Offered three ways forward (build Collage now, push depth further, leave it); you picked
+building Collage — the piece explicitly scoped out earlier today for needing a new
+contract attribute.
+
+- **Contract → v3.** Added `data-title`/`data-artist` to Root (`src/player/Player.tsx`),
+  same `hasTrack && track ? ... : undefined` idiom as every other conditional attribute.
+  Bumped `CONTRACT_VERSION` (`src/theme/variant.ts`) 2→3 and all four `theme.json`
+  `contract` fields in lockstep — same reasoning as the v1→v2 migration: `variant.ts`
+  requires `manifest.contract === CONTRACT_VERSION` for every theme, so leaving three at
+  `2` while the constant moved to `3` would have silently broken their variant validation.
+  `variant.test.ts` needed no changes this time — the v1→v2 migration already switched its
+  fixtures off hardcoded literals onto `CONTRACT_VERSION` itself, and that paid off exactly
+  as intended.
+- **Why `.mp-root`, not `.mp-window`:** CSS `content: attr(x)` only ever reads the
+  attribute of the pseudo-element's own host element, never an ancestor's. `.mp-root` is
+  documented as carrying every attribute; putting `data-title` there instead of
+  `.mp-window` was the one choice that didn't create a new exception to that.
+- **Real design problem hit immediately, not anticipated in the plan:** the first version
+  (unbounded `white-space: nowrap`, 60px font) ran the fixture text (deliberately long,
+  "FIXTURE-ONLY-DEV-BUILD Track Title") clean off the screen — looked like a broken
+  overflow bug, not a backdrop. Fixed with a bounded `width` + `overflow: hidden`, which
+  clips mid-word — on reflection this is the *authentic* reference aesthetic anyway (the
+  Portishead card's collage text is visibly cropped by the composition, not whole floating
+  words), not a workaround dressed up as a feature.
+- **A real architectural tension, worked through rather than glossed over:** for the
+  clipped-but-visible peek to read as anything, a meaningful chunk of the pseudo-element's
+  box needs to sit *outside* `.mp-window`'s own opaque background, extending past its
+  edges. But `docs/THEME_CONTRACT.md`'s own `window` field guidance says the native window
+  should tightly fit `.mp-window` ("not needlessly larger") — the two goals directly
+  conflict. Resolved by treating T1's window as a **named, documented exception**: bumped
+  `theme.json` from `280×573` (tightly fit) to `340×600` (real reserved margin), and
+  `e2e/contract.spec.ts`'s window-fit test now skips the "filled by the largest state"
+  check specifically for `t1-default` (the ceiling/overflow check still applies to every
+  theme, unconditionally — content overflowing the declared window is still a real bug
+  regardless of the reason the window itself is sized generously). Documented in the field
+  table itself, not just buried in a comment, so a future reader of the contract doc alone
+  understands why T1 doesn't match its own stated rule.
+- **Worth being honest about a real limitation:** this window-size reservation is
+  currently *aspirational* — there is no code yet (Rust theme loader, Phase 4/5) that
+  actually centers/anchors `.mp-window` within a native canvas sized to `theme.json`'s
+  declared `window`. Today, in the dev harness, the peek is visible only because the
+  surrounding page happens to have room; the declared `340×600` is documentation of future
+  intent, verified correct-in-principle, not something currently mechanically enforced
+  beyond "doesn't overflow." Flagging this rather than implying it's already wired up.
+- **Tuned by direct visual inspection, not guesswork alone** — the first legible pass
+  (16% opacity, ~90px peek) was real but too subtle to register as intentional in a normal
+  screenshot; confirmed via `getComputedStyle`/`getBoundingClientRect` that it was working
+  correctly before concluding it just needed more presence, not a different mechanism.
+  Settled at 22% opacity, ~96px peek, verified legible in a tightly-cropped viewport
+  screenshot (clear rotated "...LY-D..." fragment, reads as texture, not noise).
+  **Deliberately still subtle, not a loud banner** — this is a compact mini player, not a
+  poster; a dramatic full-width bleed would have needed a *much* wider native window,
+  working against the product's own scale. Logged as a considered trade, not a compromise
+  reached by running out of time.
+- `data-hide-title`/`data-hide-artist` also hide the Collage layer's corresponding
+  pseudo-element — customizer plumbing that doesn't exist yet (Phase 4), but keeps the
+  contract coherent for when it does.
+- **One real, transient test failure while verifying, diagnosed rather than papered
+  over:** a single WebKit screenshot test ("card-t1 — no capabilities") hit Playwright's
+  "waiting for element to be stable" 30s timeout on the first full-suite run. Re-ran it in
+  isolation — passed cleanly in 690ms. Re-ran the *entire* suite a second time to confirm
+  it wasn't systemic — clean. Concluded WebKit resource contention under the full suite's
+  parallel load, not a real animation-stability bug in T1's CSS; logged as diagnosed, not
+  silently retried into a false green.
+- **Visual result: ready for review** — sent as the updated `sheet-1-states.png` and
+  `sheet-2-capabilities-artwork.png`.
+- **Result (ran):** `npx tsc --noEmit` clean; `npx vitest run` 67 passed (unchanged);
+  `npx playwright test` 322 passed (unchanged count — Collage is a pseudo-element, not a
+  new selector/test case; Chromium + WebKit, full suite run twice to confirm the one
+  transient failure above wasn't real); `npm run build` OK incl.
+  `check-fixtures-excluded: OK`.

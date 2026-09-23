@@ -89,6 +89,8 @@ export function Player({
       data-cap-shuffle={caps.shuffle || undefined}
       data-cap-repeat={caps.repeat || undefined}
       data-cap-album={caps.album || undefined}
+      data-title={hasTrack && track ? track.title : undefined}
+      data-artist={hasTrack && track ? track.artist : undefined}
       data-hover={hover || undefined}
       onPointerEnter={() => setHover(true)}
       onPointerLeave={() => setHover(false)}

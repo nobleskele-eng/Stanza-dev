@@ -1,16 +1,22 @@
 # Stanza — Theme Contract
 
-**Contract version: 2**
-**Status:** live at v2. v1 froze 2026-09-22 (every item in "Remaining before this
-contract can be frozen" below was checked off); v2 followed the same day, in the same
-change as the code that needed it (`data-theme`, below) — building T4 on the `card`
-layout meant two themes could share one layout for the first time, and nothing
-distinguished their CSS once both loaded together. Any further change to a part,
+**Contract version: 3**
+**Status:** live at v3. v1 froze 2026-09-22 (every item in "Remaining before this
+contract can be frozen" below was checked off); v2 and v3 both followed the same day,
+each in the same change as the code that needed it. Any further change to a part,
 attribute or variable name is a version bump made in the same change as the code that
 needs it.
 
 ### Changelog
-- **v2 (2026-09-22):** added `data-theme` to **Root**. Nothing renamed or removed.
+- **v2 (2026-09-22):** added `data-theme` to **Root** — building T4 on the `card`
+  layout meant two themes could share one layout for the first time, and nothing
+  distinguished their CSS once both loaded together.
+- **v3 (2026-09-22):** added `data-title`, `data-artist` to **Root**, for T1's
+  "Collage" layer (`content: attr(...)` in a decorative pseudo-element). Also the
+  D10 relaxation landed the same day (`.mp-artwork`'s `border-radius`/`clip-path`/
+  `filter`/`animation` are now theme-authorable) but didn't itself bump the
+  version — no part/attribute/variable was renamed or added by that change alone.
+  Nothing renamed or removed in v3 either.
 
 This file is the source of truth for the class names, data attributes and CSS custom
 properties a Stanza theme may rely on. Most of it is checked by tests, not by hand:
@@ -40,6 +46,11 @@ See `docs/PLAN.md` §4 for rationale and the theme roster (T1–T4).
 - `data-cap-shuffle` — the source supports shuffle
 - `data-cap-repeat` — the source supports repeat
 - `data-cap-album` — the source provides an album; when absent `.mp-album` is not rendered
+- `data-title` — the current track's title, verbatim, as a plain string. Only present when a
+  track exists (same condition as the track block itself). `.mp-title` already renders this
+  as real text — this attribute exists so a theme can read it in a *decorative* pseudo-element
+  (`content: attr(data-title)`) elsewhere, e.g. `themes/t1-default`'s "Collage" backdrop.
+- `data-artist` — same, for the artist.
 - `data-hover` — the pointer is over the player. Keyboard focus does **not** set it, so a theme
   that reveals controls on hover must also reveal them on `:focus-within`.
 
@@ -144,7 +155,7 @@ customization layer.
 | `contract` | integer | The contract version the theme was written against; must equal this file's version | variant validator |
 | `layout` | `pill \| card \| strip` | The default layout | variant validator |
 | `layouts` | array of layouts, optional | Extra layouts the theme supports; the customizer may switch between `layout` and these | variant validator |
-| `window` | `{width, height}` px | The native window size for this theme. Must be **at least the largest the player renders in any state**, and not needlessly larger: the largest state should fill it (±1 px) | `e2e/contract.spec.ts` against every fixture |
+| `window` | `{width, height}` px | The native window size for this theme. Must be **at least the largest the player renders in any state**, and not needlessly larger: the largest state should fill it (±1 px) — **except a theme with content that deliberately bleeds past `.mp-window`'s own edges** (`t1-default`'s "Collage" layer), which may declare real reserved margin instead | `e2e/contract.spec.ts` against every fixture (ceiling check always; "fills it" check skipped for named exceptions) |
 | `colorMode` | `static \| artwork` | `artwork` = the theme uses `--mp-art-*` (needs the palette extraction) | *planned* |
 | `nativeEffect` | `none \| mica \| vibrancy` | Optional native backdrop; off by default, Windows 11 only (D11/C9) | *planned* |
 | `controls` | map, optional | `{ "<token>": { "type": "color \| length \| number \| font", "min"?, "max"? } }`. Only these tokens are customizer-editable. App-provided variables are never editable even if listed | variant validator |
@@ -163,6 +174,7 @@ with none is auto-placed by the browser and lands in whichever cell is free.
 ```html
 <div class="mp-root" data-layout="…" data-theme="…" data-source="spotify" data-status="playing"
      data-platform="windows" data-cap-seek data-cap-volume data-cap-album
+     data-title="…" data-artist="…"
      style="--mp-progress: 0.2">            <!-- 0–1, set by the player -->
   <div class="mp-window">                   <!-- the grid; theme paints the card here -->
     <img class="mp-artwork" src="…">        <!-- or <div class="mp-artwork"> with no artwork -->
@@ -284,6 +296,21 @@ idle / error      └ .mp-empty / .mp-error span rows 1–6, column 1 (badge sta
 ```
 `opacity`/`transform` staying guard-locked on `.mp-artwork` even after the D10 relaxation is
 why this animates `clip-path` rather than a fade/scale entrance — see **Rules**.
+
+**T1 also has a "Collage" backdrop layer (added 2026-09-22, contract v3):** the track's own
+title/artist bleed behind the ring as large, low-opacity, rotated type —
+`.mp-root::before`/`::after` reading `data-title`/`data-artist` via `content: attr(...)`.
+Attached to `.mp-root`, not `.mp-window`, because `attr()` only reads its own host
+element's attribute. Deliberately clipped mid-word (`overflow: hidden` on a bounded
+`width`) rather than left to run free — real titles vary far more in length than looks
+good at collage scale, and clipped text is the authentic reference aesthetic anyway, not
+a workaround. **`t1-default`'s `window` (340×600) is deliberately larger than `.mp-window`
+itself measures** — a documented exception to the `window` field's own "not needlessly
+larger" guidance (see the field table above), reserving real margin for this layer to peek
+past the card's edges without being clipped once real native-window sizing is built.
+`e2e/contract.spec.ts`'s window-fit test excludes `t1-default` from the "filled by the
+largest state" check for exactly this reason (the ceiling/overflow check still applies to
+every theme unconditionally).
 
 ---
 

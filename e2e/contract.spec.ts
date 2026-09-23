@@ -48,6 +48,7 @@ test("the doc lists what we expect to parse (guards the parser itself)", () => {
   expect(documentedParts.length).toBeGreaterThanOrEqual(20);
   expect(documentedParts).toContain("mp-source-badge");
   expect(documentedRootAttrs).toContain("data-hover");
+  expect(documentedRootAttrs).toContain("data-title");
 });
 
 test("Parts list == every mp-* class the player renders across the fixture matrix", async ({ page }) => {
@@ -126,8 +127,17 @@ for (const { id, json } of THEMES) {
     // then-height of 80 (font-metric variance run-to-run, not just engine-to-engine) —
     // 8px wasn't enough headroom once both sources of variance are accounted for.
     const FILL_TOLERANCE = 12;
-    expect(maxW, "widest state fills window.width").toBeGreaterThanOrEqual(json.window.width - FILL_TOLERANCE);
-    expect(maxH, "tallest state fills window.height").toBeGreaterThanOrEqual(json.window.height - FILL_TOLERANCE);
+    // t1-default is a deliberate, documented exception to "not needlessly larger" (the
+    // field table's own words) — its window reserves real margin around .mp-window on
+    // purpose, for the "Collage" layer's text to peek past the card's own edges without
+    // being clipped by the native window frame once real window sizing is built
+    // (docs/DECISIONS.md 2026-09-22). The ceiling check above still applies to every
+    // theme unconditionally — .mp-window overflowing its declared window is still a
+    // real bug regardless of the reason the window itself is sized generously.
+    if (id !== "t1-default") {
+      expect(maxW, "widest state fills window.width").toBeGreaterThanOrEqual(json.window.width - FILL_TOLERANCE);
+      expect(maxH, "tallest state fills window.height").toBeGreaterThanOrEqual(json.window.height - FILL_TOLERANCE);
+    }
   });
 
   test(`${json.layout} layout (${id}): every rendered part has an explicit grid placement (nothing auto-placed)`, async ({

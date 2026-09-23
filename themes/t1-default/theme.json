@@ -3,9 +3,9 @@
   "name": "[NEEDS COPY]",
   "author": "[NEEDS COPY]",
   "version": "1.0.0",
-  "contract": 2,
+  "contract": 3,
   "layout": "card",
-  "window": { "width": 280, "height": 573 },
+  "window": { "width": 340, "height": 600 },
   "colorMode": "static",
   "nativeEffect": "none",
   "controls": {
