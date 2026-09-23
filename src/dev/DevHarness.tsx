@@ -17,7 +17,7 @@ const LAYOUTS: readonly Layout[] = ["strip", "pill", "card"];
 // Every theme built so far, each styling exactly one layout (docs/PLAN.md §4). Default
 // theme id used whenever `?theme=` is absent, e.g. old links that only set `?layout=`.
 const THEMES = [
-  { id: "t1-default", layout: "strip" as Layout },
+  { id: "t1-default", layout: "card" as Layout },
   { id: "t2-artwork", layout: "card" as Layout },
   { id: "t3-pill", layout: "pill" as Layout },
   { id: "t4-extreme", layout: "card" as Layout },
@@ -56,7 +56,7 @@ export function DevHarness() {
     return (
       <MatrixCell
         fixtureName={fixtureName}
-        layout={layoutParam && LAYOUTS.includes(layoutParam) ? layoutParam : "strip"}
+        layout={layoutParam && LAYOUTS.includes(layoutParam) ? layoutParam : "card"}
         theme={themeParam ?? DEFAULT_THEME}
       />
     );

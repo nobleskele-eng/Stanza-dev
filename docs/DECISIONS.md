@@ -958,3 +958,86 @@ lands.
   correct, and the new overlap test passes against all four themes' current markup
   with zero code changes needed (nothing currently violates the still-prohibited
   controls-over-artwork rule).
+
+## 2026-09-22 — Phase 4 / T1 redesigned: "Ring + Depth" (card layout)
+
+The actual visual work following the D10 relaxation above. Direction mixed from two of
+three pitched concepts, same pattern as T4's mix earlier today: "Ring" (Lorde-inspired —
+circular crop, progress-as-frame) + "Depth Stack" (elevation/shadow, staggered motion),
+dropping "Collage" (real track/artist text as background texture — no `data-title`/
+`data-artist` attribute needed this round, a possible future direction, not built).
+
+- **Layout: `strip` → `card`.** T1 now shares `card` with T2/T4 (three themes on one
+  layout — `data-theme` scoping, added earlier today for exactly this, does its job).
+  `strip` is now unused by any shipped theme; kept in `structure.css`, not deleted.
+- **The ring**: `.mp-progress` shares `.mp-artwork`'s grid area, painted as a
+  `conic-gradient` disc slightly larger than the artwork; the artwork (smaller, centered,
+  `z-index: 2` above the ring's `z-index: 1`) simply covers the ring's center, leaving the
+  outer band visible — no mask needed, just paint order. `.mp-progress-fill` is unused
+  (`display: none`) — the ring's own gradient *is* the fill, no separate bar element.
+- **The iris-wipe entrance**: `.mp-artwork`'s `clip-path` animates `circle(0% at center)` →
+  `circle(50% at center)` on track change. Not a stylistic pick — `opacity`/`transform`
+  stay guard-locked on `.mp-artwork` even after today's D10 relaxation, so a fade/scale
+  entrance is structurally impossible; `clip-path` is the one newly-authorable property
+  that's actually worth animating, so this is what the unlocked properties pointed to,
+  not a compromise.
+- **Needed a small `Player.tsx` change, discovered while building, not pre-planned**: the
+  artwork element is a sibling of `.mp-meta`, not a child, so it didn't share `.mp-meta`'s
+  existing per-track `key` remount (the mechanism every prior "replay CSS animation per
+  track" trick in this codebase depends on) — its animation would only ever have played
+  once, on first mount. Added the same key expression to the artwork element. **Immediately
+  hit a real bug from this**: giving both siblings the *literal same* key string caused a
+  React "two children with the same key" warning (keys must be unique among siblings, not
+  globally) — caught by `matrix.spec.ts`'s no-console-error assertion across all 15
+  affected fixtures/browsers, not by inspection. Fixed by prefixing the artwork's key
+  (`artwork::${title}::${artist}`).
+- **Depth**: `--mp-shadow` actually used for the first time (T1 declared it as `none`
+  since Phase 3) — a real multi-layer value on the controls panel (its own background
+  tone, `--t1-panel-bg`, distinct from `--mp-bg`), plus a separate literal shadow on
+  `.mp-window` for ambient card lift. Kept these as two different mechanisms deliberately:
+  if a customizer later exposes `--mp-shadow`, editing "the" shadow should mean the
+  panel's, not this subtle backdrop.
+- **Controls panel motion, decided against and logged as a deliberate non-choice**: the
+  plan considered animating the controls panel's entrance too (matching the staggered
+  title/artist). Didn't build it — the panel contains the play button, which a user might
+  be actively clicking when a track changes; remounting it to replay an entrance animation
+  risked dropping focus/hover state mid-interaction. Depth here is conveyed by the
+  permanent shadow instead, not motion. Title/artist *do* stagger (`animation-delay`) since
+  they're inside `.mp-meta`, already safely remounted, nothing interactive to disrupt.
+- **Reduced motion**: both the iris-wipe and the staggered title/artist entrance needed
+  their own explicit `@media (prefers-reduced-motion: reduce)` override — the third time
+  this exact lesson has applied this session (T4's marquee, now this) — the app-wide
+  0.001ms clamp alone would leave the iris-wipe snapped at a near-pinpoint circle rather
+  than showing the full artwork.
+- **Real bug found and fixed, pre-existing in T2 and T4, not introduced by this change**:
+  writing T1's `.mp-time-current`/`.mp-time-total` initially copied a `width: 100%` that
+  was never in the original strip-layout version. Checked why — a grid item's percentage
+  width resolves against its own grid area, so `100%` stretched both time elements to the
+  *entire* "time" cell width, leaving `justify-self: start`/`end` no free space to actually
+  shift within. Both elements rendered in the exact same position, one hidden behind the
+  other. Checked T2 and T4 (both already shipped, already signed off) and found the
+  identical `width: 100%` in both — same bug, silently live since each was built. Fixed all
+  three (removed the property; `structure.css`'s card-default `justify-self` — or T1's own,
+  since T1 overrides the grid — does the actual positioning once the element sizes to its
+  own content instead of stretching). T3 never had this bug (`pill` doesn't set `width` on
+  the time parts). No automated test catches sibling-bounding-box overlap in a shared grid
+  area — same class of gap as the T3/T4 visual bugs found earlier today by actually running
+  the app, not by any assertion.
+- **Visual result: ready for review** — sent as `sheet-1-states.png`, `sheet-2-
+  capabilities-artwork.png` (both now T1's redesign, card-t1), and the updated
+  `sheet-6-layouts-interaction.png`. Stills can't show the iris-wipe or staggered entrance —
+  flagged in the message, worth a live look in the browser pane too. `docs/THEME_CONTRACT.md`'s
+  freeze checklist gained a new, separate, still-unchecked sign-off line for this redesign —
+  the original 2026-09-22 T1 sign-off was for the old strip-layout design and wasn't edited.
+- **Docs**: `docs/PLAN.md`'s T1 roster one-liner rewritten to describe "Ring + Depth" instead
+  of "artwork optional or reduced to a small accent". `docs/THEME_CONTRACT.md`'s `strip`
+  section reframed as "complete, currently unused by any shipped theme" (structural CSS kept,
+  not deleted); `card` section gained T1's own grid override diagram and annotated excerpt
+  alongside T2's, and its "T4 also uses card" note now names T1 too.
+- **Result (ran):** `npx tsc --noEmit` clean; `npx vitest run` 67 passed (unchanged);
+  `npx playwright test` 322 passed (unchanged count — T1's matrix/review entries already
+  existed in both THEMES arrays, this just changes which layout/theme they exercise;
+  `contract.spec.ts` needed `test.slow()` on the D10 overlap test once T1's fixtures were
+  added to its loop, since total time tipped past the default 30s budget in WebKit — not a
+  real hang, confirmed by profiling the actual per-iteration cost); `npm run build` OK incl.
+  `check-fixtures-excluded: OK`.

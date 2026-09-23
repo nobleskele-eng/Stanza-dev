@@ -4,8 +4,8 @@
   "author": "[NEEDS COPY]",
   "version": "1.0.0",
   "contract": 2,
-  "layout": "strip",
-  "window": { "width": 400, "height": 202 },
+  "layout": "card",
+  "window": { "width": 280, "height": 573 },
   "colorMode": "static",
   "nativeEffect": "none",
   "controls": {

@@ -94,9 +94,13 @@
 
 .mp-root[data-layout="card"][data-theme="t2-artwork"] .mp-time-current,
 .mp-root[data-layout="card"][data-theme="t2-artwork"] .mp-time-total {
+  /* No width:100% (real bug found 2026-09-22, DECISIONS.md): a grid item's
+     percentage width resolves against its grid area, so 100% stretched both
+     elements to the full "time" cell width — leaving justify-self:start/end
+     (structure.css's card default) nothing to actually shift, since there was
+     no free space left. Both times rendered exactly on top of each other. */
   font-size: 10px;
   color: var(--mp-muted);
-  width: 100%;
 }
 
 .mp-root[data-layout="card"][data-theme="t2-artwork"] .mp-controls {

@@ -4,7 +4,7 @@ import { WCAG_AA_NORMAL, contrastRatio, parseColor } from "../src/theme/contrast
 
 // One entry per theme built so far (docs/PLAN.md §4 theme roster).
 const THEMES = [
-  { id: "T1", themeId: "t1-default", layout: "strip" },
+  { id: "T1", themeId: "t1-default", layout: "card" },
   { id: "T2", themeId: "t2-artwork", layout: "card" },
   { id: "T3", themeId: "t3-pill", layout: "pill" },
   { id: "T4", themeId: "t4-extreme", layout: "card" },

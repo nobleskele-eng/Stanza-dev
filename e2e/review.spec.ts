@@ -7,12 +7,12 @@ import { fixtures } from "../dev/fixtures/nowPlaying";
 test.use({ deviceScaleFactor: 2 });
 
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-const url = (fixture: string, layout = "strip", theme = "t1-default") =>
+const url = (fixture: string, layout = "card", theme = "t1-default") =>
   `/?fixture=${encodeURIComponent(fixture)}&layout=${layout}&theme=${theme}`;
 
 // One entry per theme built so far (docs/PLAN.md §4 theme roster).
 const THEMES = [
-  { id: "strip", themeId: "t1-default", layout: "strip" },
+  { id: "card-t1", themeId: "t1-default", layout: "card" },
   { id: "card", themeId: "t2-artwork", layout: "card" },
   { id: "pill", themeId: "t3-pill", layout: "pill" },
   { id: "card-extreme", themeId: "t4-extreme", layout: "card" },

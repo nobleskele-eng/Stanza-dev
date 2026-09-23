@@ -36,10 +36,10 @@ function bulletTokens(section: string, pattern: RegExp): string[] {
 const documentedParts = bulletTokens("Parts", /^- `\.(mp-[a-z-]+)`/);
 const documentedRootAttrs = bulletTokens("Root", /^- `(data-[a-z-]+)`/);
 
-const url = (fixture: string, layout = "strip", theme = "t1-default") =>
+const url = (fixture: string, layout = "card", theme = "t1-default") =>
   `/?fixture=${encodeURIComponent(fixture)}&layout=${layout}&theme=${theme}`;
 
-async function open(page: Page, fixture: string, layout = "strip", theme = "t1-default") {
+async function open(page: Page, fixture: string, layout = "card", theme = "t1-default") {
   await page.goto(url(fixture, layout, theme));
   await expect(page.getByTestId("matrix-cell")).toBeVisible();
 }
@@ -149,7 +149,14 @@ for (const { id, json } of THEMES) {
 test("guard: opacity/transform/mask/mix-blend-mode still locked; crop/filter/animation are now theme-authorable (D10 relaxed 2026-09-22)", async ({
   page,
 }) => {
-  await open(page, "very light artwork");
+  // Explicitly T2, not the default theme (T1 now, since its own "Ring + Depth"
+  // redesign puts high-specificity clip-path/animation rules directly on
+  // .mp-artwork — those would beat this test's plain, low-specificity hostile
+  // selector on ordinary cascade grounds alone, unrelated to whether guard.css
+  // is actually still enforcing anything). T2 declares none of the
+  // now-authorable properties on .mp-artwork itself, so the hostile
+  // stylesheet's low-specificity rule is the only thing competing with guard.
+  await open(page, "very light artwork", "card", "t2-artwork");
   await page.addStyleTag({
     content: `
       .mp-artwork { opacity: .2; transform: rotate(9deg); clip-path: circle(30%); mask: linear-gradient(#000, transparent);
@@ -176,6 +183,10 @@ test("guard: opacity/transform/mask/mix-blend-mode still locked; crop/filter/ani
 const CONTROL_SELECTORS = [".mp-btn-prev", ".mp-btn-play", ".mp-btn-next", ".mp-volume-wrap", ".mp-link-out"];
 
 test("D10: interactive controls never overlap the artwork's bounding box", async ({ page }) => {
+  // 4 themes × ~19 fixtures × a full page.goto() each is comfortably over the
+  // default 30s budget in WebKit (page loads are slower there — same lesson as
+  // T1/T2/T3/T4's window-fit tests). test.slow() triples it.
+  test.slow();
   for (const { id, json } of THEMES) {
     for (const name of Object.keys(fixtures)) {
       await open(page, name, json.layout, id);

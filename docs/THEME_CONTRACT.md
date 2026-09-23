@@ -182,8 +182,11 @@ with none is auto-placed by the browser and lands in whichever cell is free.
 ```
 (`.mp-empty` / `.mp-error` replace the track block in the idle / error states.)
 
-### `strip` — the flagship layout (T1) · complete
-The full player: everything placed. T1's window is 400×202 in its tallest state.
+### `strip` — complete, currently unused by any shipped theme
+The full player: everything placed, one row per concern. Defined in `structure.css` and
+still fully valid for a future theme to use — T1 (previously the only theme on `strip`)
+moved to `card` in its 2026-09-22 "Ring + Depth" redesign, so nothing currently ships on
+this layout.
 ```
 grid-template-columns:  auto        1fr         auto
                         ──────────  ──────────  ──────────
@@ -192,13 +195,6 @@ row 2                   progress    progress    progress
 row 3                   time        time        time      ← time-current left, time-total right
 row 4                   link        controls    volume
 idle / error            └ .mp-empty / .mp-error span row 1, columns 1–2 ┘
-```
-Every part is explicitly placed. Annotated theme excerpt (from `themes/t1-default/theme.css`):
-```css
-.mp-root[data-layout="strip"][data-theme="t1-default"] { --mp-bg: #0b0b0d; --mp-fg: #f2f0ea; }
-.mp-root[data-layout="strip"][data-theme="t1-default"] .mp-window { background: var(--mp-bg); border-radius: var(--mp-radius-window); }
-.mp-root[data-layout="strip"][data-theme="t1-default"] .mp-progress-fill { width: calc(var(--mp-progress) * 100%); }
-.mp-root[data-layout="strip"][data-theme="t1-default"] .mp-meta > * { animation: mp-line-in var(--mp-motion-slow); }
 ```
 
 ### `pill` — compact (T3) · complete
@@ -240,10 +236,11 @@ row 7  link
 row 8  badge
 idle / error      └ .mp-empty / .mp-error span rows 1–7, column 1 (badge stays visible) ┘
 ```
-**T4 also uses `card`** (v2's reason for existing — see `data-theme` in **Root**). Every part is
-explicitly placed. Annotated theme excerpt (from `themes/t2-artwork/theme.css`, the "Glow Card"
-direction — a soft ambient glow behind the card, built from the track's own extracted colors,
-never the artwork's pixels):
+**T1 and T4 also use `card`** (v2's reason for existing — see `data-theme` in **Root**). T4
+uses the shared arrangement above unmodified. Every part is explicitly placed. Annotated
+theme excerpt (from `themes/t2-artwork/theme.css`, the "Glow Card" direction — a soft
+ambient glow behind the card, built from the track's own extracted colors, never the
+artwork's pixels):
 ```css
 .mp-root[data-layout="card"][data-theme="t2-artwork"] { --mp-bg: #101014; --mp-fg: #f4f4f2; }
 .mp-root[data-layout="card"][data-theme="t2-artwork"] .mp-window {
@@ -255,6 +252,38 @@ never the artwork's pixels):
   color: var(--mp-art-fg, var(--mp-bg));
 }
 ```
+
+**T1 ("Ring + Depth", redesigned 2026-09-22) overrides `card`'s arrangement entirely**,
+same documented pattern T3 used for `pill` — `.mp-progress` shares the `artwork` grid area
+with `.mp-artwork` instead of getting its own row, painted as a ring around it rather than
+a separate bar:
+```
+grid-template-columns:  1fr
+row 1  artwork  ← .mp-artwork AND .mp-progress share this area (ring behind/around it)
+row 2  meta
+row 3  time
+row 4  controls
+row 5  volume
+row 6  link
+row 7  badge
+idle / error      └ .mp-empty / .mp-error span rows 1–6, column 1 (badge stays visible) ┘
+```
+```css
+.mp-root[data-layout="card"][data-theme="t1-default"] .mp-progress {
+  grid-area: artwork;                 /* same cell as .mp-artwork — the ring frames it */
+  background: conic-gradient(var(--mp-accent) calc(var(--mp-progress) * 360deg), var(--t1-ring-track) 0);
+  border-radius: 50%;
+  z-index: 1;                         /* behind the artwork (z-index: 2), painted after it */
+}
+.mp-root[data-layout="card"][data-theme="t1-default"] .mp-artwork {
+  z-index: 2;
+  clip-path: circle(50% at center);   /* crop — D10 relaxed 2026-09-22, see Rules */
+  animation: t1-iris-in var(--mp-motion-slow) ease-out;  /* reveals via clip-path, since
+                                                             opacity/transform stay locked */
+}
+```
+`opacity`/`transform` staying guard-locked on `.mp-artwork` even after the D10 relaxation is
+why this animates `clip-path` rather than a fade/scale entrance — see **Rules**.
 
 ---
 
@@ -350,4 +379,7 @@ is below WCAG AA 4.5:1 (`checkVariantContrast`). It warns; it does not block sav
 - [x] Palette extraction that actually supplies `--mp-art-1..3` / `--mp-art-fg` (2026-09-22, `src/theme/palette.ts`; AA on `--mp-art-fg` tested in `src/theme/palette.test.ts` and `e2e/palette.spec.ts`).
 - [x] T2 places all parts in `card` (2026-09-22, `themes/t2-artwork/`).
 - [x] T3 places all parts in `pill` (2026-09-22, `themes/t3-pill/`).
-- [x] Your visual sign-off on T1 (2026-09-22, from the `npm run review` contact sheets).
+- [x] Your visual sign-off on T1 (2026-09-22, from the `npm run review` contact sheets) —
+      **for T1's original strip-layout design.** T1 was substantially redesigned the same
+      day ("Ring + Depth," card layout — see `card` section above and `docs/DECISIONS.md`).
+- [ ] Your visual sign-off on T1's "Ring + Depth" redesign (contact sheets pending).

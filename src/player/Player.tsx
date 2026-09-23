@@ -103,10 +103,14 @@ export function Player({
 
         {hasTrack && track && (
           <>
+            {/* Same key-remount trick as .mp-meta below, so a theme's own artwork
+                animation (e.g. T1's iris-wipe reveal, now that D10 permits
+                animating .mp-artwork) replays per track too — .mp-artwork is a
+                sibling of .mp-meta, not a child, so it needs its own key. */}
             {track.artwork ? (
-              <img className="mp-artwork" src={track.artwork} alt="" />
+              <img className="mp-artwork" src={track.artwork} alt="" key={`artwork::${track.title}::${track.artist}`} />
             ) : (
-              <div className="mp-artwork" aria-hidden="true" />
+              <div className="mp-artwork" aria-hidden="true" key={`artwork::${track.title}::${track.artist}`} />
             )}
 
             {/* key remounts on track change so themes can retrigger a CSS
