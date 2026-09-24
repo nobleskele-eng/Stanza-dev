@@ -7,7 +7,8 @@
 // docs/COPY.md (CLAUDE.md), and the variant-import-error string is still [NEEDS COPY].
 // The UI maps codes to copy; this module never generates a message.
 
-import type { Layout } from "../player/Player";
+import type { TextFx } from "../fx/AnimatedText";
+import type { FxSettings, Layout } from "../player/Player";
 import { WCAG_AA_NORMAL, contrastRatio, parseColor } from "./contrast";
 
 // v2 (2026-09-22): added `data-theme` to Root so multiple themes sharing one layout
@@ -16,7 +17,11 @@ import { WCAG_AA_NORMAL, contrastRatio, parseColor } from "./contrast";
 // v3 (2026-09-22): added `data-title`/`data-artist` to Root so a theme can read the
 // real track/artist text in a decorative pseudo-element (`content: attr(...)`), used
 // by T1's "Collage" layer. Also purely additive.
-export const CONTRACT_VERSION = 3;
+// v4 (2026-09-23): opt-in animated effects — `data-fx-*` on Root, the `.mp-shapes` / `.mp-waveform`
+// parts, the simulated `--mp-beat` variable, and `effects` in variants. Purely additive.
+// v5 (2026-09-23): design round 2 (T5) — `data-fx-flow|morph|debris`, the `splitflap` text effect, `.mp-flow` /
+// `.mp-debris` parts, app-provided artwork filter ids, `--mp-flap-*` tokens, theme.json `fx`. Purely additive.
+export const CONTRACT_VERSION = 5;
 
 export type ControlType = "color" | "length" | "number" | "font";
 
@@ -34,6 +39,8 @@ export interface ThemeManifest {
   /** Extra layouts the theme supports beyond `layout`. */
   layouts?: Layout[];
   controls?: Record<string, ControlSpec>;
+  /** Effects the theme ships switched on (a variant still overrides). Same rules as `Variant.effects`. */
+  fx?: Effects;
 }
 
 /**
@@ -53,12 +60,24 @@ export const HIDEABLE_PARTS = [
 ] as const;
 export type HideablePart = (typeof HIDEABLE_PARTS)[number];
 
+/**
+ * Opt-in animated effects (animated-assets plan, step 4). Same shape the Player takes as its `fx`
+ * prop, so an applied variant passes straight through. Every value is an enum or boolean — never
+ * free text or CSS — so nothing here can carry an injection. The beat behind shapes/waveform is
+ * simulated (src/fx/beat.ts).
+ */
+export type Effects = FxSettings;
+export const TEXT_FX: readonly TextFx[] = ["typewriter", "ripple", "liquid", "splitflap"];
+export const EFFECT_KEYS = ["shapes", "waveform", "flow", "morph", "debris", "title", "artist"] as const;
+
 export interface Variant {
   theme: string;
   contract: number;
   layout: Layout;
   overrides: Record<string, string>;
   hidden: HideablePart[];
+  /** Omitted when nothing is switched on, so variants saved before effects existed stay valid unchanged. */
+  effects?: Effects;
 }
 
 export type IssueCode =
@@ -73,6 +92,7 @@ export type IssueCode =
   | "value-wrong-type"
   | "value-out-of-range"
   | "part-not-hideable"
+  | "effect-invalid"
   | "unknown-key";
 
 export interface Issue {
@@ -89,7 +109,7 @@ export interface ValidationResult {
 }
 
 const LAYOUTS: readonly Layout[] = ["pill", "card", "strip"];
-const KNOWN_KEYS = new Set(["theme", "contract", "layout", "overrides", "hidden"]);
+const KNOWN_KEYS = new Set(["theme", "contract", "layout", "overrides", "hidden", "effects"]);
 
 /**
  * PLAN.md §4 rejects `url(`, `;`, `{`, `}`. Also rejected, since each is a way to smuggle
@@ -156,6 +176,34 @@ export function validateValue(raw: unknown, spec: ControlSpec): { value: string 
     if (spec.max !== undefined && numeric > spec.max) return { code: "value-out-of-range" };
   }
   return { value };
+}
+
+/**
+ * Validates an untrusted effects object (a variant's `effects`, or a theme.json `fx`). Enum and
+ * boolean values only; invalid entries are dropped and reported, `false`/`null` mean "off" and are
+ * stored as absent. `path` prefixes the reported issue paths.
+ */
+export function validateEffects(input: unknown, path = "effects"): { effects: Effects; issues: Issue[] } {
+  const issues: Issue[] = [];
+  const effects: Effects = {};
+  if (isRecord(input)) {
+    for (const [key, raw] of Object.entries(input)) {
+      const at = `${path}.${key}`;
+      if (key === "shapes" || key === "waveform" || key === "flow" || key === "morph" || key === "debris") {
+        if (typeof raw !== "boolean") issues.push({ code: "effect-invalid", path: at });
+        else if (raw) effects[key] = true;
+      } else if (key === "title" || key === "artist") {
+        if (raw === undefined || raw === null) continue;
+        if (typeof raw === "string" && (TEXT_FX as readonly string[]).includes(raw)) effects[key] = raw as TextFx;
+        else issues.push({ code: "effect-invalid", path: at });
+      } else {
+        issues.push({ code: "unknown-key", path: at });
+      }
+    }
+  } else if (input !== undefined) {
+    issues.push({ code: "not-an-object", path });
+  }
+  return { effects, issues };
 }
 
 /** Layouts a theme offers: its own plus any listed in `layouts`. */
@@ -232,6 +280,10 @@ export function validateVariant(input: unknown, manifest: ThemeManifest): Valida
     issues.push({ code: "not-an-array", path: "hidden" });
   }
 
+  const fxResult = validateEffects(input.effects);
+  issues.push(...fxResult.issues);
+  const effects = fxResult.effects;
+
   return {
     variant: {
       theme: manifest.id,
@@ -239,6 +291,7 @@ export function validateVariant(input: unknown, manifest: ThemeManifest): Valida
       layout: input.layout as Layout,
       overrides,
       hidden,
+      ...(Object.keys(effects).length > 0 && { effects }),
     },
     issues,
   };
@@ -253,10 +306,16 @@ export function isAppProvided(token: string): boolean {
  * What to apply to `.mp-root`: CSS custom properties for `style.setProperty`, and the
  * `data-hide-<part>` attribute names. Clearing = removing exactly these.
  */
-export function variantToDom(variant: Variant): { properties: Record<string, string>; hideAttributes: string[] } {
+export function variantToDom(variant: Variant): {
+  properties: Record<string, string>;
+  hideAttributes: string[];
+  /** Pass as the Player's `fx` prop. */
+  effects: Effects;
+} {
   return {
     properties: { ...variant.overrides },
     hideAttributes: variant.hidden.map((p) => `data-hide-${p}`),
+    effects: { ...variant.effects },
   };
 }
 

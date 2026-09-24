@@ -107,7 +107,47 @@
   outline-offset: 2px;
 }
 
+/* Icon motion (default for every theme). Animates the inline <svg>, not the button, so it
+   can't fight a theme's own button transforms. Click = pure :active (no remount, so focus
+   and hover survive). The svg remounts when play<->pause swap, which replays mp-icon-in.
+   Overridable: --mp-icon-press-scale, --mp-icon-idle-anim (set to `none` to disable). */
+.mp-btn-prev svg,
+.mp-btn-play svg,
+.mp-btn-next svg {
+  transition: transform 120ms ease-out;
+}
+.mp-btn-play svg {
+  animation: mp-icon-in 180ms ease-out;
+}
+.mp-btn-prev:active svg,
+.mp-btn-play:active svg,
+.mp-btn-next:active svg {
+  transform: scale(var(--mp-icon-press-scale, 0.8));
+}
+.mp-btn-prev:active svg { transform: translateX(-2px) scale(var(--mp-icon-press-scale, 0.8)); }
+.mp-btn-next:active svg { transform: translateX(2px) scale(var(--mp-icon-press-scale, 0.8)); }
+/* Idle: only when paused, so a playing track has no looping motion competing with the theme. */
+.mp-root[data-status="paused"] .mp-btn-play svg {
+  animation: mp-icon-in 180ms ease-out, var(--mp-icon-idle-anim, mp-icon-idle 2.4s ease-in-out 180ms infinite);
+}
+@keyframes mp-icon-in {
+  from { transform: scale(0.6); }
+  to { transform: scale(1); }
+}
+@keyframes mp-icon-idle {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.14); }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  /* Explicit override (not just the clamp below): a paused looping pulse must land static. */
+  .mp-btn-prev svg,
+  .mp-btn-play svg,
+  .mp-btn-next svg,
+  .mp-root[data-status="paused"] .mp-btn-play svg {
+    animation: none;
+    transition: none;
+  }
   .mp-root * {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;

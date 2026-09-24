@@ -344,3 +344,16 @@
   padding: 60px 0;
   text-align: center;
 }
+
+/* --- Waveform (opt-in fx, app-provided part): T1's progress is the ring, so its waveform can't
+   replace a bar — it takes the "time" row instead (a thin strip; the time labels are hidden by
+   fx.css while it's on, their space is kept) and the ring stays visible. --- */
+.mp-root[data-layout="card"][data-theme="t1-default"] .mp-waveform {
+  grid-area: time;
+  width: 100%;
+  height: 14px;
+  align-self: center;
+}
+.mp-root[data-layout="card"][data-theme="t1-default"][data-fx-waveform] .mp-progress {
+  visibility: visible;
+}

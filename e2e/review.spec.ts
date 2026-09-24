@@ -16,6 +16,7 @@ const THEMES = [
   { id: "card", themeId: "t2-artwork", layout: "card" },
   { id: "pill", themeId: "t3-pill", layout: "pill" },
   { id: "card-extreme", themeId: "t4-extreme", layout: "card" },
+  { id: "card-kinetic", themeId: "t5-kinetic", layout: "card" },
 ];
 
 for (const { id, themeId, layout } of THEMES) {

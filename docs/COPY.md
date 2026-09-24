@@ -26,6 +26,20 @@ file tracks.
 - **Source badge wording:** [NEEDS COPY] — must satisfy each service's attribution
   requirements (see PLAN.md C3, C13).
 - **Customizer labels:** [NEEDS COPY]
+- **Effects section title:** [NEEDS COPY]
+- **Effect label — shapes:** [NEEDS COPY]
+- **Effect label — waveform:** [NEEDS COPY]
+- **Effect label — title text effect:** [NEEDS COPY]
+- **Effect label — artist text effect:** [NEEDS COPY]
+- **Effect option — typewriter:** [NEEDS COPY]
+- **Effect option — ripple:** [NEEDS COPY]
+- **Effect option — liquid:** [NEEDS COPY]
+- **Effect option — split-flap:** [NEEDS COPY]
+- **Effect label — flow backdrop:** [NEEDS COPY]
+- **Effect label — track-change morph:** [NEEDS COPY]
+- **Effect label — title debris:** [NEEDS COPY]
+- **Effect option — off:** [NEEDS COPY]
+- **Effects note (beat is simulated, not audio):** [NEEDS COPY] — must not imply the effects react to the music (PLAN.md D16).
 - **Contrast warning:** [NEEDS COPY]
 - **Variant import error:** [NEEDS COPY]
 - **Snippet import error:** [NEEDS COPY]

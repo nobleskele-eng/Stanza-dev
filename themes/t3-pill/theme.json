@@ -3,9 +3,9 @@
   "name": "[NEEDS COPY]",
   "author": "[NEEDS COPY]",
   "version": "1.0.0",
-  "contract": 3,
+  "contract": 5,
   "layout": "pill",
-  "window": { "width": 248, "height": 84 },
+  "window": { "width": 248, "height": 86 },
   "colorMode": "static",
   "nativeEffect": "none",
   "controls": {

@@ -1,5 +1,12 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { copy } from "../copy";
+import { AnimatedText, FxFilters, type TextFx } from "../fx/AnimatedText";
+import { Debris } from "../fx/Debris";
+import { Flow } from "../fx/Flow";
+import { Shapes } from "../fx/Shapes";
+import { useBeat } from "../fx/useBeat";
+import { useTrackTransition } from "../fx/useTrackTransition";
+import { Waveform } from "../fx/Waveform";
 import { extractPaletteFromUrl, type ArtPalette } from "../theme/palette";
 import type { NowPlaying } from "../types/player";
 import { formatMs, progressFraction } from "./format";
@@ -7,6 +14,21 @@ import { NextIcon, PauseIcon, PlayIcon, PrevIcon } from "./icons";
 
 export type Layout = "pill" | "card" | "strip";
 export type Platform = "windows" | "macos";
+
+/** Opt-in effect layers (customizer / dev harness). All off by default. The beat behind them is
+ * simulated, not audio analysis — see src/fx/beat.ts. */
+export interface FxSettings {
+  shapes?: boolean;
+  waveform?: boolean;
+  /** Decorative real-text backdrop the theme flows around its shapes (theme must style it). */
+  flow?: boolean;
+  /** Animate track changes with the browser's View Transitions (theme styles the transition). */
+  morph?: boolean;
+  /** The previous title's letters spill out as physics debris on track change (decorative, ~2.8 s). */
+  debris?: boolean;
+  title?: TextFx;
+  artist?: TextFx;
+}
 
 interface PlayerProps {
   nowPlaying: NowPlaying;
@@ -16,6 +38,7 @@ interface PlayerProps {
    * CSS to itself via `[data-theme]`, needed once two themes can share one `layout`. */
   theme: string;
   platform: Platform;
+  fx?: FxSettings;
   onPlayPause?: () => void;
   onNext?: () => void;
   onPrevious?: () => void;
@@ -28,15 +51,22 @@ interface PlayerProps {
  * needing three separate implementations to keep in sync.
  */
 export function Player({
-  nowPlaying,
-  positionMs,
+  nowPlaying: nowPlayingProp,
+  positionMs: positionMsProp,
   layout,
   theme,
   platform,
+  fx,
   onPlayPause,
   onNext,
   onPrevious,
 }: PlayerProps) {
+  // Track changes may be held back one frame so the browser can capture the old card first (morph).
+  const { nowPlaying, positionMs } = useTrackTransition(
+    { nowPlaying: nowPlayingProp, positionMs: positionMsProp },
+    nowPlayingProp.track ? `${nowPlayingProp.track.title}::${nowPlayingProp.track.artist}` : "",
+    Boolean(fx?.morph),
+  );
   const { source, status, track, caps, error } = nowPlaying;
   // data-hover = pointer is over the player (contract). Keyboard users get no data-hover, so a
   // theme that reveals controls on hover must also reveal them on :focus-within.
@@ -66,6 +96,15 @@ export function Player({
     };
   }, [artworkUrl]);
 
+  const shapesRef = useRef<SVGSVGElement>(null);
+  const waveformRef = useRef<HTMLDivElement>(null);
+  useBeat(
+    [shapesRef, waveformRef],
+    Boolean((fx?.shapes || fx?.waveform) && status === "playing" && track),
+    track?.title ?? "",
+    track?.artist ?? "",
+  );
+
   const rootStyle = {
     "--mp-progress": progress,
     ...(artPalette && {
@@ -91,17 +130,32 @@ export function Player({
       data-cap-album={caps.album || undefined}
       data-title={hasTrack && track ? track.title : undefined}
       data-artist={hasTrack && track ? track.artist : undefined}
+      data-fx-shapes={fx?.shapes || undefined}
+      data-fx-waveform={fx?.waveform || undefined}
+      data-fx-flow={fx?.flow || undefined}
+      data-fx-morph={fx?.morph || undefined}
+      data-fx-debris={fx?.debris || undefined}
+      data-fx-title={fx?.title}
+      data-fx-artist={fx?.artist}
       data-hover={hover || undefined}
       onPointerEnter={() => setHover(true)}
       onPointerLeave={() => setHover(false)}
       style={rootStyle}
     >
+      {/* Outside .mp-window: not a grid item, so it never needs a grid-area. */}
+      <FxFilters palette={artPalette} />
       <div className="mp-window">
         {status === "idle" && <div className="mp-empty">{copy("idle")}</div>}
 
         {status === "error" && (
           <div className="mp-error">{error?.detail ?? copy("errorFallback")}</div>
         )}
+
+        {fx?.debris && <Debris title={hasTrack && track ? track.title : ""} enabled={Boolean(fx?.debris)} />}
+
+        {hasTrack && track && fx?.flow && <Flow title={track.title} artist={track.artist} album={caps.album ? track.album : undefined} />}
+
+        {hasTrack && track && fx?.shapes && <Shapes ref={shapesRef} />}
 
         {hasTrack && track && (
           <>
@@ -119,8 +173,8 @@ export function Player({
                 animation (e.g. T1's line-in) purely by transition/animation —
                 no JS-driven timing needed. */}
             <div className="mp-meta" key={`${track.title}::${track.artist}`}>
-              <div className="mp-title">{track.title}</div>
-              <div className="mp-artist">{track.artist}</div>
+              <AnimatedText className="mp-title" text={track.title} effect={fx?.title} />
+              <AnimatedText className="mp-artist" text={track.artist} effect={fx?.artist} />
               {caps.album && track.album && <div className="mp-album">{track.album}</div>}
             </div>
 
@@ -129,6 +183,7 @@ export function Player({
             </div>
             <div className="mp-time-current">{formatMs(positionMs)}</div>
             <div className="mp-time-total">{formatMs(track.durationMs ?? 0)}</div>
+            {fx?.waveform && <Waveform ref={waveformRef} title={track.title} artist={track.artist} />}
 
             <div className="mp-controls">
               <button className="mp-btn-prev" type="button" aria-label={copy("previous")} onClick={onPrevious}>

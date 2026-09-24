@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
 import { MockAdapter } from "../adapters/mockAdapter";
-import { Player, type Layout } from "../player/Player";
+import type { TextFx } from "../fx/AnimatedText";
+import t1Json from "../../themes/t1-default/theme.json";
+import t2Json from "../../themes/t2-artwork/theme.json";
+import t3Json from "../../themes/t3-pill/theme.json";
+import t4Json from "../../themes/t4-extreme/theme.json";
+import t5Json from "../../themes/t5-kinetic/theme.json";
+import { emptyVariant, validateVariant, variantToDom, type ThemeManifest } from "../theme/variant";
+import { Player, type FxSettings, type Layout } from "../player/Player";
 import { PlayerStore, interpolatePositionMs } from "../store/playerStore";
 import type { NowPlaying } from "../types/player";
 
@@ -21,15 +28,23 @@ const THEMES = [
   { id: "t2-artwork", layout: "card" as Layout },
   { id: "t3-pill", layout: "pill" as Layout },
   { id: "t4-extreme", layout: "card" as Layout },
+  { id: "t5-kinetic", layout: "card" as Layout },
 ];
 const DEFAULT_THEME = "t1-default";
+const MANIFESTS: Record<string, ThemeManifest> = {
+  "t1-default": t1Json as ThemeManifest,
+  "t2-artwork": t2Json as ThemeManifest,
+  "t3-pill": t3Json as ThemeManifest,
+  "t4-extreme": t4Json as ThemeManifest,
+  "t5-kinetic": t5Json as ThemeManifest,
+};
 
 /**
  * `?fixture=<name>&layout=<layout>&theme=<id>` renders exactly one fixture state with a
  * static position, for the Playwright fixture matrix (e2e/matrix.spec.ts). No store, no
  * interpolation — deterministic output is what screenshots need.
  */
-function MatrixCell({ fixtureName, layout, theme }: { fixtureName: string; layout: Layout; theme: string }) {
+function MatrixCell({ fixtureName, layout, theme, fx }: { fixtureName: string; layout: Layout; theme: string; fx: FxSettings }) {
   const [fixtures, setFixtures] = useState<FixtureMap | null>(null);
 
   useEffect(() => {
@@ -42,7 +57,7 @@ function MatrixCell({ fixtureName, layout, theme }: { fixtureName: string; layou
 
   return (
     <div data-testid="matrix-cell" style={{ display: "inline-block", padding: 16, background: "#f6f6f6" }}>
-      <Player nowPlaying={fixture} positionMs={fixture.positionMs} layout={layout} theme={theme} platform="windows" />
+      <Player nowPlaying={fixture} positionMs={fixture.positionMs} layout={layout} theme={theme} platform="windows" fx={fx} />
     </div>
   );
 }
@@ -52,12 +67,16 @@ export function DevHarness() {
   const fixtureName = params.get("fixture");
   const layoutParam = params.get("layout") as Layout | null;
   const themeParam = params.get("theme");
+  const fxParam = (params.get("fx") ?? "").split(",");
+  const textFx = (k: string) => fxParam.find((x) => x.startsWith(`${k}:`))?.split(":")[1] as TextFx | undefined;
+  const fxFromUrl: FxSettings = { shapes: fxParam.includes("shapes"), waveform: fxParam.includes("waveform"), flow: fxParam.includes("flow"), morph: fxParam.includes("morph"), debris: fxParam.includes("debris"), title: textFx("title"), artist: textFx("artist") };
   if (fixtureName) {
     return (
       <MatrixCell
         fixtureName={fixtureName}
         layout={layoutParam && LAYOUTS.includes(layoutParam) ? layoutParam : "card"}
         theme={themeParam ?? DEFAULT_THEME}
+        fx={fxFromUrl}
       />
     );
   }
@@ -71,7 +90,15 @@ function FullHarness() {
   const [snapshot, setSnapshot] = useState<NowPlaying>(store.getSnapshot());
   const [now, setNow] = useState(Date.now());
   const [theme, setTheme] = useState(DEFAULT_THEME);
+  const [fx, setFx] = useState<FxSettings>({});
+  const [variantText, setVariantText] = useState("");
+  const [variantReport, setVariantReport] = useState("");
   const layout = THEMES.find((t) => t.id === theme)?.layout ?? "strip";
+  // A theme ships with its own effects on (theme.json `fx`); switching theme resets to those, as
+  // PLAN.md says switching clears the previous theme's overrides.
+  useEffect(() => {
+    setFx({ ...MANIFESTS[theme]?.fx });
+  }, [theme]);
 
   useEffect(() => {
     import("../../dev/fixtures/nowPlaying").then((mod) => setFixtures(mod.fixtures));
@@ -121,10 +148,62 @@ function FullHarness() {
         ))}
       </fieldset>
 
+      <fieldset>
+        <legend>effects (dev only; the beat is simulated, not audio)</legend>
+        {(["shapes", "waveform", "flow", "morph", "debris"] as const).map((k) => (
+          <label key={k} style={{ marginRight: 12 }}>
+            <input type="checkbox" checked={Boolean(fx[k])} onChange={(e) => setFx({ ...fx, [k]: e.target.checked })} />
+            {k}
+          </label>
+        ))}
+        {(["title", "artist"] as const).map((k) => (
+          <label key={k} style={{ marginRight: 12 }}>
+            {k}:{" "}
+            <select value={fx[k] ?? ""} onChange={(e) => setFx({ ...fx, [k]: (e.target.value || undefined) as TextFx | undefined })}>
+              <option value="">off</option>
+              <option value="typewriter">typewriter</option>
+              <option value="ripple">ripple</option>
+              <option value="liquid">liquid</option>
+              <option value="splitflap">splitflap</option>
+            </select>
+          </label>
+        ))}
+      </fieldset>
+
+      <fieldset>
+        <legend>variant JSON (dev only; validated against the selected theme, issues shown as raw codes)</legend>
+        <textarea
+          rows={6}
+          cols={60}
+          value={variantText}
+          placeholder={JSON.stringify({ ...emptyVariant(MANIFESTS[theme]), effects: { waveform: true, title: "typewriter" } })}
+          onChange={(e) => setVariantText(e.target.value)}
+        />
+        <div>
+          <button
+            onClick={() => {
+              let parsed: unknown;
+              try {
+                parsed = JSON.parse(variantText);
+              } catch {
+                setVariantReport("not-json");
+                return;
+              }
+              const r = validateVariant(parsed, MANIFESTS[theme]);
+              setVariantReport(r.issues.length ? r.issues.map((i) => `${i.code}@${i.path}`).join(", ") : "ok");
+              if (r.variant) setFx(variantToDom(r.variant).effects);
+            }}
+          >
+            apply variant
+          </button>{" "}
+          <span data-testid="variant-report">{variantReport}</span>
+        </div>
+      </fieldset>
+
       <button onClick={() => store.playPause()}>play/pause</button>
 
       <div style={{ margin: "20px 0" }}>
-        <Player nowPlaying={snapshot} positionMs={positionMs} layout={layout} theme={theme} platform="windows" />
+        <Player nowPlaying={snapshot} positionMs={positionMs} layout={layout} theme={theme} platform="windows" fx={fx} />
       </div>
 
       <pre>{JSON.stringify({ ...snapshot, interpolatedPositionMs: positionMs }, null, 2)}</pre>

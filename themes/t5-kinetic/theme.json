@@ -1,0 +1,19 @@
+{
+  "id": "t5-kinetic",
+  "name": "[NEEDS COPY]",
+  "author": "[NEEDS COPY]",
+  "version": "1.0.0",
+  "contract": 5,
+  "layout": "card",
+  "window": { "width": 320, "height": 490 },
+  "colorMode": "artwork",
+  "nativeEffect": "none",
+  "fx": { "title": "splitflap", "flow": true, "morph": true, "debris": true },
+  "controls": {
+    "--mp-bg": { "type": "color" },
+    "--mp-fg": { "type": "color" },
+    "--mp-muted": { "type": "color" },
+    "--mp-accent": { "type": "color" },
+    "--mp-radius-window": { "type": "length", "min": 0, "max": 48 }
+  }
+}

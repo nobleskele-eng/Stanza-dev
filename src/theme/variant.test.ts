@@ -4,8 +4,10 @@ import t1Json from "../../themes/t1-default/theme.json";
 import {
   CONTRACT_VERSION,
   HIDEABLE_PARTS,
+  TEXT_FX,
   checkVariantContrast,
   emptyVariant,
+  validateEffects,
   validateValue,
   validateVariant,
   variantToDom,
@@ -279,7 +281,61 @@ describe("emptyVariant / variantToDom", () => {
     expect(variantToDom(v)).toEqual({
       properties: { "--mp-bg": "#101010" },
       hideAttributes: ["data-hide-album", "data-hide-link-out"],
+      effects: {},
     });
+  });
+});
+
+describe("validateVariant — effects (animated assets, step 4)", () => {
+  const withFx = (effects: unknown) => validateVariant({ ...base, effects }, manifest);
+
+  it("a variant with no effects key is unchanged and carries no effects (old files stay valid)", () => {
+    const r = validateVariant(base, manifest);
+    expect(r.issues).toEqual([]);
+    expect(r.variant).toEqual(base);
+    expect(r.variant).not.toHaveProperty("effects");
+  });
+
+  it("accepts every effect value and round-trips them into the Player's fx shape", () => {
+    for (const t of TEXT_FX) {
+      const r = withFx({ shapes: true, waveform: true, flow: true, morph: true, debris: true, title: t, artist: t });
+      expect(r.issues).toEqual([]);
+      expect(r.variant!.effects).toEqual({ shapes: true, waveform: true, flow: true, morph: true, debris: true, title: t, artist: t });
+      expect(variantToDom(r.variant!).effects).toEqual({ shapes: true, waveform: true, flow: true, morph: true, debris: true, title: t, artist: t });
+    }
+  });
+
+  it("TEXT_FX is exactly the implemented text effects", () => {
+    expect([...TEXT_FX]).toEqual(["typewriter", "ripple", "liquid", "splitflap"]);
+  });
+
+  it("false / empty effects are stored as absent, not as an empty object", () => {
+    for (const e of [{}, { shapes: false, waveform: false }, { title: null }]) {
+      const r = withFx(e);
+      expect(r.issues).toEqual([]);
+      expect(r.variant).not.toHaveProperty("effects");
+    }
+  });
+
+  it("drops invalid values and unknown keys, keeps the valid ones (partial import)", () => {
+    const r = withFx({ shapes: "yes", waveform: true, title: "explode", artist: "ripple", confetti: true });
+    expect(codes(r).sort()).toEqual(["effect-invalid@effects.shapes", "effect-invalid@effects.title", "unknown-key@effects.confetti"].sort());
+    expect(r.variant!.effects).toEqual({ waveform: true, artist: "ripple" });
+  });
+
+  it("rejects CSS/markup smuggled through an effect value (enum only, never free text)", () => {
+    for (const evil of ["url(https://x)", "ripple;}body{display:none", "<script>", "typewriter ", "TYPEWRITER", "__proto__", 5, ["ripple"], {}]) {
+      const r = withFx({ title: evil });
+      expect(r.variant).not.toHaveProperty("effects");
+      expect(codes(r)).toEqual(["effect-invalid@effects.title"]);
+    }
+  });
+
+  it("wrong container type is an issue; __proto__ key does not pollute", () => {
+    for (const bad of ["x", 3, [], true]) expect(codes(withFx(bad))).toContain("not-an-object@effects");
+    const polluted = validateVariant(JSON.parse(`{"theme":"test-theme","contract":${CONTRACT_VERSION},"layout":"strip","effects":{"__proto__":{"shapes":true}}}`), manifest);
+    expect(({} as Record<string, unknown>).shapes).toBeUndefined();
+    expect(polluted.variant).not.toHaveProperty("effects");
   });
 });
 
@@ -319,5 +375,30 @@ describe("the real T1 theme.json", () => {
     );
     expect(codes(r)).toEqual(["token-not-editable@overrides.--mp-art-1"]);
     expect(r.variant?.overrides).toEqual({ "--mp-bg": "#101010", "--mp-radius-window": "12px" });
+  });
+});
+
+describe("theme.json `fx` defaults", () => {
+  const themes = import.meta.glob("../../themes/*/theme.json", { eager: true, import: "default" }) as Record<string, ThemeManifest>;
+
+  it("every shipped theme's fx (if any) validates cleanly with the variant effect rules", () => {
+    const entries = Object.entries(themes);
+    expect(entries.length).toBeGreaterThanOrEqual(5);
+    for (const [file, m] of entries) {
+      const r = validateEffects(m.fx);
+      expect(r.issues, file).toEqual([]);
+      if (m.fx) expect(r.effects, file).toEqual(m.fx); // nothing normalised away: defaults are in canonical form
+    }
+  });
+
+  it("T5 ships the split-flap title and the flow backdrop", () => {
+    const t5 = Object.entries(themes).find(([f]) => f.includes("t5-kinetic"))![1];
+    expect(t5.fx).toEqual({ title: "splitflap", flow: true, morph: true, debris: true });
+  });
+
+  it("validateEffects rejects non-objects and reports paths with the given prefix", () => {
+    expect(validateEffects("x", "fx").issues).toEqual([{ code: "not-an-object", path: "fx" }]);
+    expect(validateEffects({ title: "nope" }, "fx").issues).toEqual([{ code: "effect-invalid", path: "fx.title" }]);
+    expect(validateEffects(undefined)).toEqual({ effects: {}, issues: [] });
   });
 });

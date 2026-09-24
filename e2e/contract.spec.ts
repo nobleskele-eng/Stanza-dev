@@ -15,7 +15,7 @@ interface ThemeJson {
 }
 
 // Every theme built so far, each styling exactly one layout (docs/PLAN.md §4 theme roster).
-const THEMES = ["t1-default", "t2-artwork", "t3-pill", "t4-extreme"].map((id) => ({
+const THEMES = ["t1-default", "t2-artwork", "t3-pill", "t4-extreme", "t5-kinetic"].map((id) => ({
   id,
   json: JSON.parse(readFileSync(`themes/${id}/theme.json`, "utf8")) as ThemeJson,
 }));
@@ -39,8 +39,13 @@ const documentedRootAttrs = bulletTokens("Root", /^- `(data-[a-z-]+)`/);
 const url = (fixture: string, layout = "card", theme = "t1-default") =>
   `/?fixture=${encodeURIComponent(fixture)}&layout=${layout}&theme=${theme}`;
 
-async function open(page: Page, fixture: string, layout = "card", theme = "t1-default") {
-  await page.goto(url(fixture, layout, theme));
+// Every opt-in effect on at once (v4), so the doc-vs-DOM checks below see the effect parts/attributes too.
+const FX_ALL = "&fx=shapes,waveform,flow,morph,debris,title:ripple,artist:typewriter";
+// Implementation-detail classes the doc names as "not themable API" (see the `.mp-shape` bullet).
+const INTERNAL_CLASSES = new Set(["mp-shape-a", "mp-shape-b", "mp-shape-c", "mp-shape-d", "mp-shape-ring"]);
+
+async function open(page: Page, fixture: string, layout = "card", theme = "t1-default", fx = "") {
+  await page.goto(url(fixture, layout, theme) + fx);
   await expect(page.getByTestId("matrix-cell")).toBeVisible();
 }
 
@@ -60,6 +65,13 @@ test("Parts list == every mp-* class the player renders across the fixture matri
     );
     classes.forEach((c) => rendered.add(c));
   }
+  await open(page, "typical / all caps", "card", "t1-default", FX_ALL);
+  (
+    await page.evaluate(() =>
+      [...document.querySelectorAll(".mp-root, .mp-root *")].flatMap((e) => [...e.classList].filter((c) => c.startsWith("mp-"))),
+    )
+  ).forEach((c) => rendered.add(c));
+  INTERNAL_CLASSES.forEach((c) => rendered.delete(c));
   expect([...rendered].sort()).toEqual([...documentedParts].sort());
 });
 
@@ -73,11 +85,21 @@ test("Root attribute list == every data-* attribute the player sets (incl. data-
   }
   expect(rendered.has("data-hover"), "data-hover is absent until the pointer is over the player").toBe(false);
 
+  await open(page, "typical / all caps", "card", "t1-default", FX_ALL);
+  (await collect()).forEach((a) => rendered.add(a)); // data-fx-* only exist with effects on
   await open(page, "typical / all caps");
   await page.locator(".mp-window").hover();
   await expect(page.locator(".mp-root")).toHaveAttribute("data-hover", "true"); // wait for the re-render
   (await collect()).forEach((a) => rendered.add(a));
   expect([...rendered].sort()).toEqual([...documentedRootAttrs].sort());
+});
+
+test("the doc's stated contract version matches variant.ts and every theme.json", async () => {
+  const { CONTRACT_VERSION } = await import("../src/theme/variant");
+  const m = /Contract version: (\d+)\*\*/.exec(contract);
+  expect(m, "doc has a **Contract version: N** line").toBeTruthy();
+  expect(Number(m![1])).toBe(CONTRACT_VERSION);
+  for (const t of THEMES) expect(t.json.contract, t.id).toBe(CONTRACT_VERSION);
 });
 
 test("data-hover follows the pointer and clears on leave", async ({ page }) => {

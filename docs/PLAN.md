@@ -36,6 +36,7 @@ Drop this in the repo as `docs/PLAN.md`. Section 8 is the seed for `CLAUDE.md`.
 | D13 | Windows-first; macOS merged only after testing on a real Mac | **New** | You can't meaningfully build or test macOS from Windows. CI can compile it, but AppleScript permissions and window transparency only verify on a Mac. |
 | D14 | Customization = three layers: (a) in-app customizer editing theme tokens, saved as variants; (b) user CSS snippets layered on top of the active theme; (c) importable theme packages | Confirmed | Customization is the core purpose of the project. |
 | D15 | v1 ships Spotify-only on Windows; SoundCloud support and Windows any-app mode are grouped into a post-v1 expansion phase, order TBD | Confirmed | You want v1 launched with Spotify first rather than carrying SoundCloud's spike/API-terms risk (D6, D9, C13) into the critical path. |
+| D16 | Opt-in animated effects (shapes, waveform, typewriter/ripple/liquid/split-flap text, flow backdrop, track-change morph, physics debris) — the audio-looking ones driven by a **simulated** beat; icon click/idle motion on by default | **New 2026-09-23** | Wanted for the design showcase. Built as an app-provided layer (`src/fx/`, anime.js MIT + SVG filters), switched on per user via variants, not baked into themes. The beat is a seeded fake — nothing analyses the audio (no clean audio source, §9) — so no UI or doc may claim it reacts to the music. Contract v4, extended in v5 by design round 2 (theme T5). See `docs/DECISIONS.md` 2026-09-23. |
 
 **D10 amendment (2026-09-22):** relaxed from "unmodified artwork" to "cropped
 (`border-radius`/`clip-path`), overlaid, or filtered (blur/duotone) artwork —
@@ -289,6 +290,7 @@ Locations: bundled (read-only, app resources) and user (`<app data dir>/themes`)
 - **T2 Artwork-forward (traditional variant)** — card, `colorMode: artwork`. Proves the contract also supports the conventional approach; positioned as "the expected version," not the centerpiece.
 - **T3 Pill (compact)** — minimal chrome, small footprint, tests long titles and a no-image layout at minimum size.
 - **T4 Extreme** — deliberately maximal, your call on direction. Proves the contract doesn't cap expression.
+- **T5 Kinetic (added 2026-09-23, design round 2)** — a tape deck that is visibly alive: squircle body (`corner-shape`), reels whose packs follow real progress, live palette-driven artwork duotone, a split-flap title, a real-text flow backdrop wrapped around the reels, a cassette-swap track-change transition and a physics spill of the previous title. The showpiece for the opt-in effect layers; T1–T4 are unchanged.
 
 Per theme, before any code: 4–6 named hex values, type roles, one "memorable thing", then a check that it isn't a generic default (cream + terracotta serif, black + acid green, identical soft-shadow cards, all-caps eyebrow labels).
 
@@ -471,7 +473,7 @@ Targets the "confirmed it understood, then failed repeatedly" problem.
 - Apple Music, YouTube Music, local files, Linux
 - Spotify Web API features (like/save, queue, search) — only with Premium and the 5-user dev cap
 - SoundCloud API features (search, logged-in likes) — needs Artist Pro
-- Audio visualiser — no clean audio source: Spotify's stream isn't accessible, the SoundCloud iframe is cross-origin. Windows system-audio loopback is possible but a separate project.
+- Audio visualiser (real audio reaction) — no clean audio source: Spotify's stream isn't accessible, the SoundCloud iframe is cross-origin. Windows system-audio loopback is possible but a separate project. **Partly superseded by D16 (2026-09-23):** decorative shapes/waveform now exist but run on a *simulated* beat, not the music; real audio reaction is still parked.
 - Lyrics
 - Theme sharing / marketplace
 - Notarised or store distribution

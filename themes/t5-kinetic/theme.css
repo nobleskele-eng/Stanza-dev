@@ -1,0 +1,333 @@
+/* T5 — "Kinetic" tape deck (docs/PLAN.md §4; DECISIONS.md 2026-09-23, design round 2). Card
+   layout. Direction: a cassette deck that is visibly alive — a squircle body whose corners
+   breathe (CSS corner-shape, Chromium/WebView2; degrades to plain rounded corners elsewhere),
+   two tape reels whose packs shrink/grow with REAL playback progress and spin only while
+   playing, chunky keycap-style controls. Palette is deliberately none of T1-T4's families and
+   avoids PLAN.md's generic defaults: deep teal ink #12343b, cream #f4ecd8, muted teal-grey
+   #9fb8b4, signal orange #ff5a1f, tape brown #2a1b14. Orange is decorative/behind-dark-text
+   only; text pairs are fg/bg and muted/bg (AA-checked by e2e/matrix.spec.ts).
+
+   Later steps (not in this file yet): live artwork treatment, split-flap title, text flowing
+   around the reel, track-change morph, physics debris. */
+
+.mp-root[data-layout="card"][data-theme="t5-kinetic"] {
+  --mp-bg: #12343b;
+  --mp-fg: #f4ecd8;
+  --mp-muted: #9fb8b4;
+  --mp-accent: #ff5a1f;
+  --mp-radius-window: 40px;
+  --mp-radius-control: 8px;
+  --mp-font-display: "Bahnschrift", "Segoe UI Variable Display", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --mp-font-body: Consolas, "SFMono-Regular", ui-monospace, monospace;
+  --mp-shadow: none;
+  --mp-motion-fast: 150ms;
+  --mp-motion-slow: 450ms;
+  /* Split-flap tiles (used by the app-provided flap title; fall back to --mp-bg/--mp-fg). */
+  --mp-flap-bg: #0b2429;
+  --mp-flap-fg: #f4ecd8;
+  --mp-flap-edge: #051417;
+  --t5-tape: #2a1b14;
+  --t5-ink: #071a1e;
+  --t5-key: #0b2429;
+  --t5-key-edge: #051417;
+  --t5-art: 140px;
+  --t5-pad-top: 26px;
+  /* Reel centre, measured from the card's left/right edge. The reels' `left`/`right` rules below and the
+     flow shapes both derive from this, so they cannot drift apart. */
+  --t5-reel-cx: 26px;
+  --t5-reel-cy: calc(var(--t5-pad-top) + var(--t5-art) / 2);
+  --t5-flow-alpha: 9%;
+  /* Reel pack diameters follow real progress: left starts full and unspools, right winds up. */
+  --t5-reel-l: calc(104px - var(--mp-progress, 0) * 52px);
+  --t5-reel-r: calc(52px + var(--mp-progress, 0) * 52px);
+}
+
+.mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-window {
+  position: relative;
+  isolation: isolate; /* keeps the reels' z-index:-1 inside the card, above its background (T4 lesson) */
+  overflow: hidden;
+  background: var(--mp-bg);
+  color: var(--mp-fg);
+  width: 260px;
+  padding: var(--t5-pad-top) 30px 20px;
+  border-radius: var(--mp-radius-window);
+  corner-shape: superellipse(2); /* squircle where supported; falls back to plain radius */
+  transition: border-radius var(--mp-motion-slow) ease, corner-shape var(--mp-motion-slow) ease;
+  font-family: var(--mp-font-body);
+  row-gap: 12px;
+}
+/* The body breathes when the pointer is on it. */
+.mp-root[data-layout="card"][data-theme="t5-kinetic"][data-hover] .mp-window {
+  corner-shape: superellipse(3.5);
+  border-radius: 28px;
+}
+
+/* --- Tape reels: two pseudo-elements on the card, vertically centred on the artwork row. The
+   disc IS the tape pack (border-radius clips every background layer to a circle); the spoked hub
+   shows through a fixed 20px window in the tape layer. Decorative, aria-free, no pointer events. --- */
+.mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-window::before,
+.mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-window::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  border-radius: 50%;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at center, var(--t5-ink) 0 4px, transparent 5px),
+    radial-gradient(circle at center, transparent 0 19px, var(--t5-tape) 20px),
+    repeating-conic-gradient(from 0deg, var(--mp-fg) 0 15deg, var(--t5-ink) 15deg 60deg);
+  animation: t5-spin 2.6s linear infinite;
+  animation-play-state: paused;
+}
+.mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-window::before {
+  width: var(--t5-reel-l);
+  height: var(--t5-reel-l);
+  top: calc(var(--t5-pad-top) + var(--t5-art) / 2 - var(--t5-reel-l) / 2);
+  left: calc(var(--t5-reel-cx) - var(--t5-reel-l) / 2);
+}
+.mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-window::after {
+  width: var(--t5-reel-r);
+  height: var(--t5-reel-r);
+  top: calc(var(--t5-pad-top) + var(--t5-art) / 2 - var(--t5-reel-r) / 2);
+  right: calc(var(--t5-reel-cx) - var(--t5-reel-r) / 2);
+  animation-duration: 2.1s; /* the take-up reel runs a touch faster, like the real thing */
+}
+.mp-root[data-layout="card"][data-theme="t5-kinetic"][data-status="playing"] .mp-window::before,
+.mp-root[data-layout="card"][data-theme="t5-kinetic"][data-status="playing"] .mp-window::after {
+  animation-play-state: running;
+}
+@keyframes t5-spin {
+  to { transform: rotate(360deg); }
+}
+
+.mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-artwork {
+  width: var(--t5-art);
+  height: var(--t5-art);
+  background: linear-gradient(145deg, #1d4a52, #0c2529);
+  object-fit: cover;
+  border-radius: 30px;
+  corner-shape: squircle; /* cassette-window look; harmless no-op where unsupported */
+  box-shadow: 0 0 0 3px var(--t5-ink);
+  /* Live duotone from the track's own palette (app-provided filter, src/fx/artFilter.ts); D10 allows
+     filter. Alternates: url(#mp-art-posterize), url(#mp-art-dither). */
+  filter: url(#mp-art-duotone);
+}
+
+.mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-meta {
+  min-width: 0;
+  max-width: 100%;
+  text-align: center;
+}
+.mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-title {
+  font-family: var(--mp-font-display);
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: 0.01em;
+  color: var(--mp-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-artist,
+.mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-album {
+  font-family: var(--mp-font-display);
+  font-size: 13px;
+  color: var(--mp-muted);
+  margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --- Flow (opt-in `data-fx-flow`, on by default for T5 via theme.json fx): the real title/artist/album,
+   repeated, as a faint backdrop that WRAPS AROUND the two reels. Two floated shapes with
+   `shape-outside: circle()` do the wrapping natively; because their radius comes from the same
+   progress-driven variables as the reels, the wrap reflows live as the tape unspools. Measured against
+   Pretext first (DECISIONS.md 2026-09-23). Alpha is kept at 9% so muted text on top stays >= 4.5:1
+   (tested against the worst-case blended background). --- */
+.mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-flow {
+  font-family: var(--mp-font-display);
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 1.12;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--mp-fg) var(--t5-flow-alpha), transparent);
+}
+.mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-flow > i:nth-of-type(1) {
+  float: left;
+  width: calc(var(--t5-reel-cx) + var(--t5-reel-l) / 2 + 10px);
+  height: calc(var(--t5-reel-cy) + var(--t5-reel-l) / 2 + 10px);
+  shape-outside: circle(calc(var(--t5-reel-l) / 2 + 10px) at var(--t5-reel-cx) var(--t5-reel-cy));
+}
+.mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-flow > i:nth-of-type(2) {
+  float: right;
+  width: calc(var(--t5-reel-cx) + var(--t5-reel-r) / 2 + 10px);
+  height: calc(var(--t5-reel-cy) + var(--t5-reel-r) / 2 + 10px);
+  shape-outside: circle(calc(var(--t5-reel-r) / 2 + 10px) at calc(100% - var(--t5-reel-cx)) var(--t5-reel-cy));
+}
+
+/* Tape counter: a slim rule, the reels above are the real progress read-out. */
+.mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-progress {
+  height: 4px;
+  background: var(--t5-ink);
+  border-radius: 2px;
+  position: relative;
+  overflow: hidden;
+}
+.mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-progress-fill {
+  position: absolute;
+  inset: 0;
+  width: calc(var(--mp-progress) * 100%);
+  background: var(--mp-accent); /* decorative, not text */
+  border-radius: 2px;
+  transition: width var(--mp-motion-fast) linear;
+}
+.mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-time-current,
+.mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-time-total {
+  /* No width:100% (DECISIONS.md 2026-09-22: it stacked both times in one spot). */
+  font-size: 11px;
+  color: var(--mp-muted);
+}
+
+/* Keycap transport: chunky keys with a darker lower edge; play is the orange key. */
+.mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-btn-prev,
+.mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-btn-next,
+.mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-btn-play {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 50px;
+  height: 38px;
+  border: none;
+  border-bottom: 4px solid var(--t5-key-edge);
+  border-radius: var(--mp-radius-control);
+  background: var(--t5-key);
+  color: var(--mp-fg);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform var(--mp-motion-fast) ease, border-bottom-width var(--mp-motion-fast) ease;
+}
+.mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-btn-play {
+  width: 64px;
+  background: var(--mp-accent);
+  border-bottom-color: #a83000;
+  color: #1a0a02; /* dark on orange, AA-safe */
+}
+.mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-btn-prev:active,
+.mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-btn-next:active,
+.mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-btn-play:active {
+  border-bottom-width: 1px;
+  transform: translateY(3px);
+}
+
+.mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-volume-wrap {
+  width: 130px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-volume {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 10px;
+  background: transparent;
+  cursor: pointer;
+}
+.mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-volume::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 4px;
+  background: var(--t5-ink);
+  border-radius: 2px;
+}
+.mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-volume::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--mp-accent);
+  margin-top: calc((4px - 12px) / 2);
+}
+
+.mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-link-out {
+  font-size: 11px;
+  color: var(--mp-muted);
+  text-decoration: none;
+}
+.mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-link-out:hover {
+  color: var(--mp-fg);
+  text-decoration: underline;
+}
+
+.mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-source-badge {
+  font-size: 10px;
+  color: var(--mp-muted);
+  letter-spacing: 0.06em;
+  border: 1px solid var(--t5-tape);
+  border-radius: var(--mp-radius-control);
+  padding: 3px 8px;
+}
+
+.mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-empty,
+.mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-error {
+  color: var(--mp-muted);
+  padding: 40px 0;
+  text-align: center;
+}
+
+/* --- Track-change morph (opt-in `data-fx-morph`, on by default for T5 via theme.json fx): the app wraps
+   the track swap in document.startViewTransition(); this names the card so the browser animates it, and
+   styles the transition as a cassette swap — the old deck tilts and slides out, the new one slides in with
+   a small overshoot. Both stay fully opaque (no fade), so the artwork is never faded; the rest of the page
+   (the root group) is left untouched. The `:has()` scopes the document-level pseudo-elements to this theme.
+   Chromium-only today; where startViewTransition is missing the swap is instant. --- */
+.mp-root[data-layout="card"][data-theme="t5-kinetic"][data-fx-morph] .mp-window {
+  view-transition-name: mp-card;
+}
+html:has(.mp-root[data-theme="t5-kinetic"][data-fx-morph])::view-transition-old(root),
+html:has(.mp-root[data-theme="t5-kinetic"][data-fx-morph])::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+html:has(.mp-root[data-theme="t5-kinetic"][data-fx-morph])::view-transition-old(mp-card) {
+  animation: t5-deck-out 420ms cubic-bezier(0.5, 0, 0.9, 0.4) both;
+  mix-blend-mode: normal;
+  transform-origin: 50% 100%;
+}
+html:has(.mp-root[data-theme="t5-kinetic"][data-fx-morph])::view-transition-new(mp-card) {
+  animation: t5-deck-in 620ms cubic-bezier(0.2, 1.25, 0.4, 1) 120ms both;
+  mix-blend-mode: normal;
+  transform-origin: 50% 100%;
+}
+@keyframes t5-deck-out {
+  to { transform: translateX(-115%) rotate(-9deg); }
+}
+@keyframes t5-deck-in {
+  from { transform: translateX(115%) rotate(9deg); }
+}
+/* Reduced motion: no transition is started at all (useTrackTransition), so nothing to override here. */
+
+/* Reduced motion: explicit static state (the app-wide 0.001ms clamp would freeze the reels
+   mid-turn and snap the corner morph). */
+@media (prefers-reduced-motion: reduce) {
+  .mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-window::before,
+  .mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-window::after {
+    animation: none;
+  }
+  .mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-window {
+    transition: none;
+  }
+  .mp-root[data-layout="card"][data-theme="t5-kinetic"][data-hover] .mp-window {
+    corner-shape: superellipse(2);
+    border-radius: var(--mp-radius-window);
+  }
+}

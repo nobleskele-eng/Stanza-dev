@@ -1,8 +1,8 @@
 # Stanza — Theme Contract
 
-**Contract version: 3**
-**Status:** live at v3. v1 froze 2026-09-22 (every item in "Remaining before this
-contract can be frozen" below was checked off); v2 and v3 both followed the same day,
+**Contract version: 5**
+**Status:** live at v5. v1 froze 2026-09-22 (every item in "Remaining before this
+contract can be frozen" below was checked off); v2 and v3 followed the same day, v4 and v5 the day after,
 each in the same change as the code that needed it. Any further change to a part,
 attribute or variable name is a version bump made in the same change as the code that
 needs it.
@@ -17,6 +17,22 @@ needs it.
   `filter`/`animation` are now theme-authorable) but didn't itself bump the
   version — no part/attribute/variable was renamed or added by that change alone.
   Nothing renamed or removed in v3 either.
+- **v4 (2026-09-23):** opt-in animated effects (see **Effects**). Added to **Root**:
+  `data-fx-shapes`, `data-fx-waveform`, `data-fx-title`, `data-fx-artist`. Added parts:
+  `.mp-shapes`, `.mp-shape`, `.mp-waveform`, `.mp-wave-base`, `.mp-wave-fill`, `.mp-fx-filters`.
+  Added app-provided variable `--mp-beat` (**simulated**, not audio). Added `effects` to
+  **Variants**. Also documented here for the first time, because they shipped earlier the same
+  week: the icon motion custom properties `--mp-icon-press-scale` / `--mp-icon-idle-anim`.
+  Nothing renamed or removed.
+- **v5 (2026-09-23):** design round 2 / theme T5 (see **Effects**). Added to **Root**: `data-fx-flow`,
+  `data-fx-morph`, `data-fx-debris`; `data-fx-title`/`data-fx-artist` gain the value `splitflap`.
+  Added parts: `.mp-flow`, `.mp-debris`. `.mp-fx-filters` now also carries three app-defined artwork
+  filters (`mp-art-duotone`, `mp-art-posterize`, `mp-art-dither`) that a theme may apply with
+  `filter: url(#…)`. Added optional theme tokens `--mp-flap-bg`, `--mp-flap-fg`, `--mp-flap-edge`.
+  Added the optional `theme.json` field `fx` (effects a theme ships switched on) and `flow`, `morph`,
+  `debris` to **Variants**' `effects`. Documented the track-change transition convention (the app
+  starts the view transition; a theme names `.mp-window` and styles the pseudo-elements). Nothing
+  renamed or removed; every v4 theme and variant keeps working unchanged apart from its `contract` number.
 
 This file is the source of truth for the class names, data attributes and CSS custom
 properties a Stanza theme may rely on. Most of it is checked by tests, not by hand:
@@ -24,7 +40,7 @@ properties a Stanza theme may rely on. Most of it is checked by tests, not by ha
 player really renders, and `src/theme/variant.test.ts` checks the hideable-part list against
 `src/theme/structure.css`. Anything below marked *planned* is not enforced yet.
 
-See `docs/PLAN.md` §4 for rationale and the theme roster (T1–T4).
+See `docs/PLAN.md` §4 for rationale and the theme roster (T1–T5).
 
 ---
 
@@ -51,6 +67,13 @@ See `docs/PLAN.md` §4 for rationale and the theme roster (T1–T4).
   as real text — this attribute exists so a theme can read it in a *decorative* pseudo-element
   (`content: attr(data-title)`) elsewhere, e.g. `themes/t1-default`'s "Collage" backdrop.
 - `data-artist` — same, for the artist.
+- `data-fx-shapes` — present when the shapes effect is on (opt-in, see **Effects**).
+- `data-fx-waveform` — present when the waveform effect is on.
+- `data-fx-flow` — present when the flow backdrop is on (**Effects**).
+- `data-fx-morph` — present when the track-change morph is on: the app wraps a track swap in a view transition.
+- `data-fx-debris` — present when the previous-title debris spill is on.
+- `data-fx-title` — `typewriter | ripple | liquid | splitflap`; absent when off. Applies to `.mp-title`.
+- `data-fx-artist` — same, for `.mp-artist`.
 - `data-hover` — the pointer is over the player. Keyboard focus does **not** set it, so a theme
   that reveals controls on hover must also reveal them on `:focus-within`.
 
@@ -71,6 +94,11 @@ never sets those.
   the exact case PLAN.md flags for a future macOS/AppleScript adapter) — so every theme must
   still give every use a fallback, e.g. `var(--mp-art-1, var(--mp-accent))`. T1 is
   `colorMode: static` and does not use them.
+- `--mp-beat` — 0–1, only while an effect that uses it is on and the track is `playing` (else 0 or
+  absent). Written on `.mp-shapes` and `.mp-waveform`, **not** `.mp-root`, so use it inside those
+  parts. **Simulated:** a smooth per-track pulse seeded from the title and artist
+  (`src/fx/beat.ts`); it does not listen to the audio and must never be presented as if it did
+  (PLAN.md §9, D16). Held at 0 under `prefers-reduced-motion`. Never editable.
 
 ## Theme tokens (theme-authored)
 `--mp-bg`, `--mp-fg`, `--mp-muted`, `--mp-accent`, `--mp-radius-window`, `--mp-radius-control`,
@@ -78,6 +106,12 @@ never sets those.
 
 A theme declares them on `.mp-root[data-layout="…"][data-theme="…"]` (both attributes — see
 **Root**). Only tokens listed in the theme's `controls` are editable by the customizer.
+
+**Optional (v5), read only by the split-flap title:** `--mp-flap-bg` (tile background), `--mp-flap-fg` (tile
+text), `--mp-flap-edge` (the hairline across each tile). They fall back to `--mp-bg` / `--mp-fg` / a dark
+hairline, and are passed straight into the flap library's inline styles as `var()` strings. The
+tile text/background pair must meet WCAG AA 4.5:1 (the matrix cannot see it — the library paints the
+tiles inline — so `e2e/flap.spec.ts` checks it for T5).
 
 ---
 
@@ -107,6 +141,14 @@ placeable with `grid-area`): `.mp-artwork`, `.mp-meta`, `.mp-progress`, `.mp-tim
 - `.mp-volume` — the `<input type="range">` inside the wrapper; theme-styled freely
 - `.mp-source-badge` — **required, always rendered, never hideable** (guard layer, D10/C13)
 - `.mp-link-out` — an `<a>`; only when the track has a permalink (Spotify via GSMTC provides none). In `strip` it lives in the artwork column and is truncated with an ellipsis rather than widening that column, so its copy must be short
+- `.mp-shapes` — **opt-in** (`data-fx-shapes`): decorative SVG layer, absolutely positioned inside `.mp-window` (**not** a grid item — it needs no `grid-area`), `aria-hidden`, `pointer-events: none` (guard-locked), behind every other part, clipped to the window box.
+- `.mp-shape` — a shape group inside `.mp-shapes` (four, with internal variant classes `mp-shape-a`…`mp-shape-d` and `mp-shape-ring` that are implementation detail, not themable API). Colour with `fill`; opacity, drift and beat pulse are set in `src/fx/fx.css`.
+- `.mp-waveform` — **opt-in** (`data-fx-waveform`): a grid item, `aria-hidden`. A seeded, static bar profile of the track filled to `--mp-progress`, with a tiny shimmer from `--mp-beat`. Default placement (`src/fx/fx.css`) spans the progress + time rows and hides the bar and time labels with `visibility:hidden` so the window keeps its size; `pill` hides it. A theme may place it differently (T1 does).
+- `.mp-wave-base` — inside `.mp-waveform`: the muted full-length bar layer. Style with `fill` on its `path`.
+- `.mp-wave-fill` — inside `.mp-waveform`: the accent "played" layer stacked on the base, clipped to `--mp-progress`.
+- `.mp-fx-filters` — a hidden 0×0 `<svg>` of filter definitions: the ripple/liquid text effects and, since v5, three **artwork treatments** a theme applies with `filter: url(#…)` on `.mp-artwork` (D10 allows `filter`): `#mp-art-duotone` (shadows→highlights recoloured from the track's palette; the default choice, works in every engine tried), `#mp-art-posterize` (four-level bands) and `#mp-art-dither` (ordered Bayer dither, recoloured to the duotone — relies on `feImage` inside an HTML filter, unverified in WKWebView). The colours are computed by the app from `--mp-art-*` (SVG attributes cannot read CSS variables), so a track with no palette gets plain greyscale. Always rendered, in `.mp-root` outside `.mp-window` (not a grid item). Never restyle or `display:none` it — that disables the filters.
+- `.mp-flow` — **opt-in** (`data-fx-flow`): a decorative backdrop made of the real title/artist/album repeated with `·` separators; `aria-hidden`, `pointer-events: none` (guard-locked), `z-index: -2`, absolutely positioned and clipped inside `.mp-window` (**not** a grid item). It contains two empty `<i>` elements that a theme floats left/right and gives `shape-outside` so the text wraps around them (T5: two circles sized from `--mp-progress`, so the wrap reflows live). **Invisible until a theme styles it** (`color: transparent` by default) — the theme supplies colour, size and the shapes. Keep its alpha low enough that text on top stays AA against the worst-case blended backdrop (`e2e/flow.spec.ts` computes it for T5).
+- `.mp-debris` — **opt-in** (`data-fx-debris`): decorative layer, `aria-hidden`, `pointer-events: none` (guard-locked), `z-index: -1`, clipped inside `.mp-window`, **empty except during a ~2.8 s spill**. When the title changes, the *previous* title's letters (at most 32, real characters only) fall, tumble and pile up (Matter.js, loaded lazily on the first spill), then fade and are destroyed. Never the readable copy; skipped under reduced motion. Themes cannot restyle the letters beyond the inherited font and `--mp-fg`.
 - `.mp-empty` — replaces the track block when `data-status="idle"`
 - `.mp-error` — replaces the track block when `data-status="error"`; shows the error detail
 
@@ -135,7 +177,7 @@ customization layer.
   "name": "[NEEDS COPY]",
   "author": "[NEEDS COPY]",
   "version": "1.0.0",
-  "contract": 1,
+  "contract": 5,
   "layout": "strip",
   "layouts": ["strip"],
   "window": { "width": 400, "height": 202 },
@@ -158,6 +200,7 @@ customization layer.
 | `window` | `{width, height}` px | The native window size for this theme. Must be **at least the largest the player renders in any state**, and not needlessly larger: the largest state should fill it (±1 px) — **except a theme with content that deliberately bleeds past `.mp-window`'s own edges** (`t1-default`'s "Collage" layer), which may declare real reserved margin instead | `e2e/contract.spec.ts` against every fixture (ceiling check always; "fills it" check skipped for named exceptions) |
 | `colorMode` | `static \| artwork` | `artwork` = the theme uses `--mp-art-*` (needs the palette extraction) | *planned* |
 | `nativeEffect` | `none \| mica \| vibrancy` | Optional native backdrop; off by default, Windows 11 only (D11/C9) | *planned* |
+| `fx` | effects object, optional | Effects this theme ships switched **on**, using the same keys and values as a variant's `effects` (`shapes`, `waveform`, `flow`, `morph`, `debris`: `true`; `title`, `artist`: `typewriter \| ripple \| liquid \| splitflap`). A variant still overrides it, and switching theme resets to the new theme's own. Validated with the variant effect rules; nothing but the dev harness applies it yet (no theme loader exists) | `src/theme/variant.test.ts` (every shipped `theme.json`) |
 | `controls` | map, optional | `{ "<token>": { "type": "color \| length \| number \| font", "min"?, "max"? } }`. Only these tokens are customizer-editable. App-provided variables are never editable even if listed | variant validator |
 
 Unknown fields: *planned* to be ignored by the Phase 4 loader (nothing reads `theme.json` at runtime yet). Copy fields hold `[NEEDS COPY]` rather than invented text.
@@ -248,7 +291,7 @@ row 7  link
 row 8  badge
 idle / error      └ .mp-empty / .mp-error span rows 1–7, column 1 (badge stays visible) ┘
 ```
-**T1 and T4 also use `card`** (v2's reason for existing — see `data-theme` in **Root**). T4
+**T1, T4 and T5 also use `card`** (v2's reason for existing — see `data-theme` in **Root**). T4
 uses the shared arrangement above unmodified. Every part is explicitly placed. Annotated
 theme excerpt (from `themes/t2-artwork/theme.css`, the "Glow Card" direction — a soft
 ambient glow behind the card, built from the track's own extracted colors, never the
@@ -314,6 +357,49 @@ every theme unconditionally).
 
 ---
 
+## Effects (v4 + v5, opt-in)
+Everything here except the icons is **off by default** and switched on per user through a
+variant's `effects`, or shipped on by a theme through its `theme.json` `fx`. A theme never has to author
+anything for them to work, and must still look complete with them off. The app supplies the effect
+runtime (`src/fx/`: anime.js for text, `@splitflap/core` for the flap board, Matter.js for debris) — the
+"CSS only, no JS" rule under **Rules** is about theme authoring.
+
+- **Icons (on for every theme, not opt-in).** The transport icons animate their inline `<svg>`
+  (`src/theme/structure.css`): a press on `:active` (no remount), a pop-in when play↔pause swap,
+  and a looping pulse on the play icon **only while `data-status="paused"`**. Tunable with
+  `--mp-icon-press-scale` (default `0.8`) and `--mp-icon-idle-anim` (an `animation` value; set
+  `none` to disable). Reduced motion turns all of it off.
+- **Text effects** (`data-fx-title`, `data-fx-artist`): `typewriter` (letters revealed in turn),
+  `ripple` (gentle continuous distortion), `liquid` (text resolves out of a blur on each track
+  change — a coalesce-in, not an old→new morph), and (v5) `splitflap`. They animate the real text and
+  never change it. While `typewriter` is active the letters are inline-blocks, which defeats
+  `text-overflow: ellipsis` (an over-long title hard-clips instead). `ripple`/`liquid` share one
+  SVG filter each (`.mp-fx-filters`), so title and artist using the same effect animate together.
+- **`splitflap` (v5)** renders the title/artist as a Solari-style board of fixed cells (title: 10 × 20 px;
+  artist: 14 × 14 px) that flips from the previous real title to the new one. Rules that make it safe:
+  the flip alphabet is **only the letters of the old and new titles** (+ space), so no glyph outside the real
+  text is ever shown; the board is **upper-case** (the accessible copy keeps the original case); titles longer
+  than the row **page through in chunks of whole words** every 3.2 s; text the library would garble
+  (emoji, astral CJK) and reduced motion fall back to the plain title. The board is `aria-hidden`; the only
+  readable child of `.mp-title` is a visually-hidden exact copy of the real string. Tile colours come from
+  the `--mp-flap-*` tokens.
+- **Shapes and waveform** (`data-fx-shapes`, `data-fx-waveform`): see the parts above. Both are
+  driven by the **simulated** `--mp-beat`.
+- **Flow** (`data-fx-flow`, v5): the `.mp-flow` backdrop; a theme styles it and provides the shapes it wraps around.
+- **Track-change morph** (`data-fx-morph`, v5): when the track identity (title + artist) changes, the player keeps
+  showing the old card until the browser has captured it, then swaps inside
+  `document.startViewTransition(...)`. Changes that are not a new track (position, play/pause) pass straight
+  through with no delay and no transition. Off / unsupported / reduced motion → an instant swap. **The theme owns
+  the look:** it sets `view-transition-name` on `.mp-window` and styles `::view-transition-old/new(<name>)`
+  (scope them with `html:has(.mp-root[data-theme="…"][data-fx-morph])`). Use transforms, not opacity, so the
+  artwork is never faded; a theme that opts in but styles nothing gets the browser's default page cross-fade,
+  which fades everything. Chromium and Playwright's WebKit build support it; WKWebView on macOS is untested.
+- **Debris** (`data-fx-debris`, v5): the `.mp-debris` spill described above.
+- **Rules:** effects respect `prefers-reduced-motion` (static text, beat 0, no drift, no flaps, no flow reflow
+  animation, no transition, no debris); decorative layers never take pointer input and never cover a control or
+  the source badge; the `theme.json` `window` size must not be affected by an effect being on (`e2e/fx.spec.ts`,
+  `e2e/flap.spec.ts`). Every effect uses only real track strings — no invented text.
+
 ## Not in v1
 Deliberately absent from contract v1. Adding any of them is a contract change.
 - **Shuffle / repeat / seek controls.** `data-cap-shuffle`, `data-cap-repeat` and `data-cap-seek`
@@ -352,10 +438,12 @@ the same property can still win. The guarantee in this section is *planned* unti
 ## Variants (customizer, D14)
 A variant is one JSON file per saved look, in `<app data dir>/variants/`, tied to one theme:
 ```json
-{ "theme": "<theme id>", "contract": 1, "layout": "strip",
+{ "theme": "<theme id>", "contract": 4, "layout": "strip",
   "overrides": { "--mp-bg": "#101010", "--mp-radius-window": "12px" },
-  "hidden": ["album", "volume"] }
+  "hidden": ["album", "volume"],
+  "effects": { "shapes": true, "waveform": true, "flow": true, "morph": true, "debris": true, "title": "splitflap", "artist": "ripple" } }
 ```
+`effects` is optional; omit it (or leave every value off) for no effects.
 Implemented and unit-tested in `src/theme/variant.ts`. Variant files are untrusted input.
 
 **Rejects the whole file** (nothing applied): not an object; `theme` is not the active
@@ -374,6 +462,9 @@ one of its `layouts`.
   `@`, `/*`, `<`, `>` or a control character (checked before trimming).
 - a `hidden` entry that is not one of `title, artist, album, progress, time, controls,
   volume, link-out`. The source badge and artwork can never be hidden.
+- an `effects` entry that is not `shapes`/`waveform`/`flow`/`morph`/`debris` (boolean) or `title`/`artist` (one of
+  `typewriter`, `ripple`, `liquid`, `splitflap`) — reported as `effect-invalid`, or `unknown-key` for any other
+  key. `false` is stored as absent. Enum/boolean only: no free text ever reaches CSS.
 - unknown top-level keys.
 
 Failures are returned as machine codes plus a path, never as text: user-facing wording

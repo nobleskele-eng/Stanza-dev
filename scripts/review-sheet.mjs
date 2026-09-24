@@ -11,6 +11,7 @@ const groups = [
   ["3-t2-card", "T2 — artwork-forward / card, all fixtures", (n) => n.startsWith("state--card--")],
   ["4-t3-pill", "T3 — micro pill, all fixtures (collapsed; see group 6 for hover-expanded)", (n) => n.startsWith("state--pill--")],
   ["5-t4-extreme", "T4 — extreme / card, all fixtures (static frame; motion doesn't show in a still)", (n) => n.startsWith("state--card-extreme--")],
+  ["7-t5-kinetic", "T5 — kinetic tape deck / card, all fixtures (static frame; reels, corner morph and later effects don't show in a still)", (n) => n.startsWith("state--card-kinetic--")],
   ["6-layouts-interaction", "Layouts · hover · keyboard focus · T3 collapsed vs expanded", (n) => n.startsWith("layout--") || n.startsWith("interaction--")],
 ];
 const b64 = (f) => (fs.existsSync(f) ? "data:image/png;base64," + fs.readFileSync(f).toString("base64") : "");

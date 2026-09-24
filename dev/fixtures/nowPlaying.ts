@@ -16,6 +16,12 @@ function flatArtwork(color: string): string {
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
+// Synthetic multi-colour artwork so palette-driven treatments (duotone/dither) have something to show.
+function colorfulArtwork(): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"><!-- ${MARK} --><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e8b93a"/><stop offset="0.5" stop-color="#d1495b"/><stop offset="1" stop-color="#2e4a9a"/></linearGradient></defs><rect width="128" height="128" fill="url(#g)"/><circle cx="40" cy="42" r="22" fill="#f4f1de"/><circle cx="92" cy="88" r="30" fill="#1b1f3b"/><rect x="60" y="14" width="10" height="100" fill="#6fd08c"/></svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
 function base(overrides: Partial<NowPlaying>): NowPlaying {
   return {
     source: "spotify",
@@ -52,6 +58,10 @@ export const fixtures: Record<string, NowPlaying> = {
       album: `${MARK} アルバム`,
       durationMs: 180_000,
     },
+  }),
+
+  "emoji title (split-flap falls back to plain text)": base({
+    track: { title: `${MARK} Party 🎉`, artist: `${MARK} Artist Name`, album: `${MARK} Album Name`, durationMs: 210_000 },
   }),
 
   "no artwork, no album": base({
@@ -95,6 +105,7 @@ export const fixtures: Record<string, NowPlaying> = {
 
   "no album cap": base({ caps: { ...FULL_CAPS, album: false } }),
 
+  "colorful artwork (filter test)": base({ track: { ...base({}).track!, artwork: colorfulArtwork() } }),
   "very light artwork": base({ track: { ...base({}).track!, artwork: flatArtwork("#fafafa") } }),
   "very dark artwork": base({ track: { ...base({}).track!, artwork: flatArtwork("#050505") } }),
 };

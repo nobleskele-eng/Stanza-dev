@@ -1117,3 +1117,510 @@ contract attribute.
   new selector/test case; Chromium + WebKit, full suite run twice to confirm the one
   transient failure above wasn't real); `npm run build` OK incl.
   `check-fixtures-excluded: OK`.
+
+## 2026-09-23 — Animated assets, step 1: icon click/idle animation (all themes)
+
+First step of the approved animated-assets plan (text/shape effects follow, as customizer
+opt-ins under contract v4; icons are the only default-on piece).
+
+- `src/theme/structure.css`: transport icons animate the inline `<svg>` (not the button, so a
+  theme's own button transforms can't clash). Click = pure CSS `:active` press (prev/next also
+  nudge 2px in their direction) with no remount, so focus/hover survive (same reasoning as
+  T1's decision not to animate the controls panel). Play<->pause swap replays a short
+  `mp-icon-in` because the svg remounts. Idle = looped pulse on the play icon only while
+  `data-status="paused"`; nothing loops while playing.
+- Reduced motion gets its own explicit override (animation/transition `none`) rather than
+  relying on the global 0.001ms clamp, which would leave a looping pulse frozen mid-scale.
+- New optional custom properties `--mp-icon-press-scale` and `--mp-icon-idle-anim` are used
+  with fallbacks. **Not yet in THEME_CONTRACT.md** — to be documented in the v4 bump alongside
+  the fx attributes, not versioned separately.
+- Chose plain SVG+CSS over Lottie/Rive/Lordicon: research (see plan) put Lottie at 60-100 kB
+  gzipped and Rive's runtime near 200 kB, far too heavy for three icons.
+- **Result (ran):** `npx tsc --noEmit` clean; `npx vitest run` 67 passed; `npx playwright test`
+  322 passed (Chromium + WebKit); computed styles in the harness (paused fixture) show
+  `mp-icon-in, mp-icon-idle` running on `.mp-btn-play svg`. Visual result: **ready for
+  review** — not screenshotted; motion isn't visible in a still.
+
+## 2026-09-23 — Animated assets, step 2: simulated beat, waveform, shapes (opt-in)
+
+Second step of the approved plan. Adds the app-provided `src/fx/` layer; **contract v4 is NOT
+bumped yet and `THEME_CONTRACT.md` is not updated** — that is deliberately batched into step 5
+(with the icon custom properties from step 1, and the text effects), so until then `data-fx-shapes`,
+`data-fx-waveform`, `.mp-shapes`, `.mp-waveform` and `--mp-beat` exist in code but are undocumented.
+Everything is off by default (`Player`'s new optional `fx` prop); no customizer UI exists, so only
+the dev harness (checkboxes, or `?fx=shapes,waveform` in the matrix URL) turns them on.
+
+- **The beat is simulated, not audio analysis.** `src/fx/beat.ts` seeds a smooth raised-cosine
+  pulse (80–128 BPM, slowly wandering phase, half-time overtone) from a hash of title+artist.
+  Nothing listens to the music (PLAN.md §9: no clean audio source). It must never be described as
+  reacting to audio. Subtlety is enforced, not just intended: `beat.test.ts` asserts the value
+  never jumps >0.3 in one ~30fps frame, and CSS uses it at 5–10% amplitude.
+- **Waveform is a static seeded bar profile** of the track (`waveformPeaks`), filled to
+  `--mp-progress`; only a ~10% vertical shimmer follows the beat. Built as two stacked SVGs
+  sharing one path (muted base + accent clip) rather than adopting wavesurfer.js (see plan: it is
+  built around a real audio element).
+- **Window size cannot change** (theme.json windows are fixed and the native window can't resize
+  itself). So the waveform does not add a row: it spans the existing progress+time rows (card,
+  strip) and hides the bar and time labels with `visibility:hidden` so their space is kept. T1's
+  progress is the ring, so its waveform takes the `time` row as a 14px strip and the ring stays.
+  The compact pill (T3) has no room and hides the waveform. **Trade-off: time labels are hidden
+  while the waveform is on.**
+- **Shapes** sit at `z-index:-1` inside `.mp-window` (which gets `isolation:isolate` only when
+  shapes are on — the T4 stacking lesson), clipped to the window box, `pointer-events:none`
+  (also locked in `guard.css`), ~16% opacity so they don't disturb text contrast.
+- **useBeat** writes `--mp-beat` onto the two effect elements only (not `.mp-root`), ~30fps,
+  0 when paused or under reduced motion. Explicit reduced-motion overrides for shapes/waveform.
+- **Environment note:** the built-in browser pane only fires `requestAnimationFrame` when it paints
+  a frame, so I could not watch continuous motion there; the moving beat is verified by
+  `e2e/fx.spec.ts` in Chromium and WebKit instead (samples >3 distinct values in 5s).
+- Real bug found while verifying: my first `fx.spec.ts` failed on T3 because a `display:none`
+  waveform has a 0×0 box at the origin and looked "outside the window" — a test bug, fixed by
+  skipping the containment check for hidden elements.
+- **Result (ran):** `npx tsc --noEmit` clean; `npx vitest run` 75 passed (8 new in `beat.test.ts`);
+  `npx playwright test` 346 passed (24 new in `e2e/fx.spec.ts`: window size unchanged with fx on,
+  layers inside the window, shapes non-interactive, waveform overlaps no control, beat moves/holds
+  at 0 when paused/reduced motion, no console errors — all four themes, both engines);
+  `npm run build` OK incl. `check-fixtures-excluded: OK`. Visual result: **ready for review** (I
+  looked at T2 and T1 with both on; stills can't show motion).
+
+## 2026-09-23 — Animated assets, step 3: text effects (typewriter, ripple, liquid)
+
+Third step of the approved plan. Adds `animejs` 4.5.0 (MIT) as the one new dependency and
+`src/fx/AnimatedText.tsx`. Opt-in via `FxSettings.title/artist` (dev harness selects, or
+`?fx=title:ripple,artist:liquid`). **Contract v4 still not bumped / THEME_CONTRACT.md still not
+updated** (batched into step 5); `data-fx-title`/`data-fx-artist` exist in code, undocumented.
+
+- **typewriter:** anime `splitText({chars, accessible})` + `stagger(38ms)` opacity reveal.
+- **ripple:** `feTurbulence`+`feDisplacementMap` SVG filter (Henry-from-Online technique), with the
+  displacement scale and noise frequency animated by anime; continuous, gentle.
+- **liquid:** gooey blur + alpha-contrast matrix; the title *resolves* out of a blur on each track
+  change, then the filter is removed so resting text is crisp. **This is not the old-title →
+  new-title morph the plan floated** — the element remounts per track, so the old text is gone; it
+  is a coalesce-in. Said plainly rather than calling it a morph.
+- Filters live in one hidden 0x0 `<svg>` (`FxFilters`) rendered in `.mp-root` *outside*
+  `.mp-window` so it is never a grid item (no `grid-area` needed). It must not be `display:none`
+  (that disables the filter). Title and artist share one filter each, so both animate together
+  when both use the same effect — acceptable, not per-element.
+- Reduced motion renders plain static text (no split, no filter), tested.
+- **Real finding:** anime's `accessible` mode adds ONE visually-hidden copy of the string for
+  screen readers and marks the letter spans `aria-hidden`, so `textContent` reads the text twice
+  while typewriter is active. My first test asserted equality and failed on exactly this; the test
+  now checks the visible letters spell the original and the a11y copy is exact. Screen readers hear
+  the text once.
+- **Known visual limitation (seen, not fixed):** typewriter splits into inline-block letters, which
+  defeats `text-overflow: ellipsis`, so a title too long for its box hard-clips mid-letter
+  ("…DEV-E") instead of ending in "…" while typewriter is on. Ripple/liquid keep the ellipsis.
+  Worth a follow-up (e.g. a fade mask on the edge) rather than guessing now.
+- **Cost:** production JS 230.7 kB → 273.4 kB (gzip 72.97 → 89.71 kB, +16.7 kB), measured from
+  `npm run build`, not estimated.
+- Test bugs found and fixed while verifying (not product bugs): asserted before the async
+  fixture load finished; T3's collapsed title reports Playwright-"hidden" so those checks use
+  `toBeAttached`; a regex lost its backslash when written via a script.
+- **Result (ran):** `npx tsc --noEmit` clean; `npx vitest run` 75 passed; `npx playwright test`
+  378 passed (Chromium + WebKit; new: per theme × 3 effects for text-unchanged/settles/no console
+  errors, plus reduced-motion) — WebKit ran the SVG filters without errors, but pass/fail there
+  says nothing about how the filters *look*; `npm run build` OK incl.
+  `check-fixtures-excluded: OK`. In the browser pane I saw T1 typewriter mid-reveal ("F") and
+  finished, with the artist ripple filter applied. Visual result: **ready for review** — the
+  ripple/liquid look in particular needs your eyes, and a real WebKit/Mac check.
+
+## 2026-09-23 — Animated assets, step 4: `effects` in the variant model + harness variant box
+
+Fourth step of the plan. Effects can now be saved/imported as part of a customizer variant and
+validated like everything else in it. **Contract still not bumped to v4 and THEME_CONTRACT.md's
+"Variants" section still not updated** (batched into step 5), so `CONTRACT_VERSION` stays 3 and the
+`effects` key is undocumented until then.
+
+- `src/theme/variant.ts`: `Variant.effects?: Effects` (`Effects` = the Player's `FxSettings`, so an
+  applied variant passes straight in as the `fx` prop). `shapes`/`waveform` are booleans;
+  `title`/`artist` are an enum (`TEXT_FX`: typewriter, ripple, liquid). **No free text or CSS
+  anywhere in it**, so the existing injection rules (`url(`, `;`, `{}` …) don't even apply — an
+  out-of-enum string is just `effect-invalid`.
+- **Backward compatible on purpose:** `effects` is omitted from a validated variant when nothing is
+  on (`false`/`null`/`{}` all normalise to absent), so variants saved before effects existed
+  validate to exactly what they were (asserted). New issue code `effect-invalid`; `unknown-key`
+  and `not-an-object` reused for stray effect keys / wrong container. Invalid entries are dropped
+  individually (partial import), same policy as overrides.
+- `variantToDom` now also returns `effects` (always an object, possibly empty). One existing test
+  updated for the new field; nothing else changed in existing expectations.
+- `src/dev/DevHarness.tsx`: a dev-only "variant JSON" box validates pasted JSON against the
+  selected theme's real `theme.json` and applies `effects`, showing issues as raw codes (no prose —
+  displayed strings come from COPY.md, CLAUDE.md). **This is a dev tool, not the customizer**: no
+  customizer UI, persistence, or per-theme variant storage exists yet (Phase 4).
+- Not done here: overrides/hidden from a pasted variant are validated but not applied by the
+  harness (only effects are); a failed validation of the whole file (wrong theme/contract) applies
+  nothing and keeps the previous state, tested.
+- **Result (ran):** `npx tsc --noEmit` clean; `npx vitest run` 82 passed (7 new in
+  `variant.test.ts`: old-file compatibility, every value round-trips, false/empty → absent,
+  partial import, injection attempts incl. `TYPEWRITER`/`"typewriter "`/`__proto__`/non-strings,
+  wrong container, prototype pollution); `npx playwright test` 380 passed (new e2e: paste a variant
+  → `data-fx-*` attributes appear; invalid value dropped with `effect-invalid@effects.title` while
+  valid ones apply; wrong-theme variant applies nothing); `npm run build` OK incl.
+  `check-fixtures-excluded: OK` (273.69 kB JS / 89.87 kB gzip).
+
+## 2026-09-23 — Animated assets, step 5: contract v4 + docs (plan complete)
+
+Final step. Everything from steps 1–4 is now documented and versioned in one change, as CLAUDE.md
+requires ("bump the contract version and update the doc in the same change").
+
+- `CONTRACT_VERSION` 3→4 (`src/theme/variant.ts`) and all four `theme.json` `contract` fields, in
+  lockstep (the v2→v3 lesson). Purely additive — nothing renamed or removed.
+- `docs/THEME_CONTRACT.md`: version/status/changelog; Root (`data-fx-shapes|waveform|title|artist`);
+  App-provided variables (`--mp-beat`, flagged **simulated**); Parts (`.mp-shapes`, `.mp-shape`,
+  `.mp-waveform`, `.mp-wave-base`, `.mp-wave-fill`, `.mp-fx-filters`); a new **Effects** section
+  (also finally documents step 1's `--mp-icon-press-scale` / `--mp-icon-idle-anim`, and states the
+  typewriter-ellipsis limitation and the shared-filter behaviour); Variants (`effects` shape,
+  `effect-invalid`, and the stale example's `"contract": 1` → 4).
+- `docs/PLAN.md`: new **D16** row; §9 audio-visualiser bullet now says decorative shapes/waveform
+  exist on a *simulated* beat and real audio reaction is still parked.
+- `docs/COPY.md`: customizer effect labels/options/note as `[NEEDS COPY]` (no UI reads them yet).
+- `.mp-fx-filters` class added to the filter `<svg>` (it had none; the contract test would not have
+  matched it otherwise).
+- **The doc-vs-DOM tests now cover effects:** `e2e/contract.spec.ts` renders one fixture with every
+  effect on and unions its classes/attributes into the Parts/Root comparison (the five internal
+  `mp-shape-*` variant classes are explicitly exempt and named as such in the doc), and a new test
+  fails if the doc's "Contract version: N", `CONTRACT_VERSION`, or any theme.json ever disagree.
+- **The new tests caught two of my own slips before they shipped:** the first draft listed
+  `.mp-wave-base` and `.mp-wave-fill` in ONE bullet, which the doc parser (first backtick token per
+  bullet) read as one part — the Parts test failed until they were split; and my regex edit to the
+  spec lost a backslash through a script (syntax error, and `tsc` doesn't cover `e2e/`, so only
+  running Playwright showed it).
+- **Result (ran):** `npx tsc --noEmit` clean; `npx vitest run` 82 passed; `npx playwright test`
+  382 passed (Chromium + WebKit); `npm run build` OK incl. `check-fixtures-excluded: OK`
+  (274.26 kB JS / 90.02 kB gzip).
+
+### Plan status
+Done: icon animation (default), simulated beat, waveform, shapes, typewriter/ripple/liquid text,
+variant `effects` + validation, contract v4 + docs. **Still open / not built:** a real customizer
+UI and persistence (Phase 4); the typewriter-ellipsis fix; watching the ripple/liquid look and
+WebKit rendering by eye (and on a real Mac); T1/T2/T3/T4 have not been visually re-reviewed with
+effects on beyond T1/T2 spot checks; real audio reaction (parked, D16).
+
+## 2026-09-23 — Design round 2, S9 spike + step 1: T5 "Kinetic" skeleton
+
+Plan: `~/.claude/plans/i-want-to-add-elegant-taco.md` (research → picks: split-flap title, text around
+the ring, physics letters, artwork treatments, squircle card, track-change morph, tape reels;
+delivered as new theme T5, vibe "chaotic kinetic"). This entry covers the spike and step 1 only;
+steps 2–7 (treatments, split-flap, text wrap, view-transition morph, physics debris, contract v5)
+are NOT built.
+
+**S9 spike outcome (checks, not shipped code):**
+- The embedded browser (Chrome 152) supports `corner-shape` (`superellipse(2)` and `squircle`),
+  `document.startViewTransition`, `shape-outside`, `Intl.Segmenter` and `CSS.registerProperty`.
+  **Caveat:** that is this dev pane, not the user's installed WebView2 — Tauri uses the evergreen
+  Edge runtime, so it is *probably* as new, but is unverified until the real Tauri build is run.
+- Flap library: `@splitflap/core` 0.1.1 is MIT, 14 kB unpacked, zero deps, vanilla, no sound, with a
+  clean `new SplitFlap(el,{text}).setText()` API — a better fit than `solari-split-flap` (whole-board,
+  synthesized click sound, 87 kB). Very new (0.1.x, March 2026), so adopt behind one wrapper.
+  **Flag for your call:** a flap display flips through intermediate glyphs before landing on the
+  real text (and `textInit` defaults to random letters). The final text is always the real title;
+  I will seed `textInit` with the previous title, but the transient in-between glyphs are inherent to
+  the effect. Say if you read CLAUDE.md's "never generate displayed text" as ruling that out.
+- Still to be *measured*, not assumed: `shape-outside` vs Pretext reflow jank (step 4), Matter.js
+  cleanup/leak check (step 6). `matter-js` 0.20.0 and `@chenglou/pretext` 0.0.9 are both MIT.
+
+**Step 1 — `themes/t5-kinetic/` (card layout), done:**
+- Teal-ink `#12343b` / cream `#f4ecd8` / muted `#9fb8b4` / signal orange `#ff5a1f` / tape brown —
+  deliberately not T1–T4's palettes and not PLAN.md's generic defaults (no cream+terracotta serif,
+  no black+acid-green). Orange is decorative or behind dark text; text pairs are fg/bg and muted/bg.
+- **Squircle body** via `corner-shape: superellipse(2)`, breathing to `superellipse(3.5)` + smaller
+  radius on `data-hover`; artwork uses `corner-shape: squircle`. Plain rounded corners where
+  unsupported (WKWebView — untested).
+- **Tape reels** = the two pseudo-elements of `.mp-window` (no new parts, no contract change): the
+  disc *is* the tape pack (`border-radius` clips the background layers), spoked hub via
+  `repeating-conic-gradient`; left pack shrinks and right grows with real `--mp-progress`; they spin
+  only while `data-status="playing"` (right reel slightly faster). `.mp-window` gets
+  `isolation:isolate` so the `z-index:-1` reels stay above the card's own background (T4 lesson).
+- Keycap transport (chunky keys, orange play), tape-counter rule, reduced motion = static reels and
+  no corner morph (explicit override, not just the global clamp).
+- `theme.json`: `window` 320×490 (measured: guess high at 640, the contract test reported the real
+  tallest state 484, locked in with headroom). `colorMode` is declared `artwork` for the coming
+  palette-driven treatment; T5 does not use `--mp-art-*` yet.
+- T5 added to every theme list: harness, `contract/matrix/review/fx` specs, `review-sheet.mjs`.
+- **Unrelated flaky test found and fixed while running the full suite:** T3's window-fit test
+  failed in WebKit (CJK fixture measured 85.25px vs the 84+1 ceiling) — the same run-to-run
+  font-metric jitter class already logged on 2026-09-22, not caused by T5. Raised T3's `window`
+  height 84→86 after `--repeat-each` runs showed 87 breaks *Chromium's* lower fill bound (24/24 pass
+  at 86 over 12 repeats per engine). This edits a signed-off theme's declared native window size by
+  2px; flagging rather than hiding it.
+- **Result (ran):** `npx tsc --noEmit` clean; `npx vitest run` 82 passed; `npx playwright test`
+  full suite green after the T3 fix (T5: 34 matrix/AA cells × 2 engines, window-fit, grid
+  placement, fx layers and text effects on T5 all pass); `npm run build` OK incl.
+  `check-fixtures-excluded: OK`. Looked at T5 in the browser pane: renders, squircle corners and
+  reels visible. Visual result: **ready for review** — reel spin and the hover corner morph are
+  motion; not watched.
+
+## 2026-09-23 — Design round 2, step 2: live artwork treatments (T5 uses duotone)
+
+Step 2 of the T5 plan. **Contract v5 / THEME_CONTRACT.md not touched yet** (batched into step 7):
+the three filter ids below are code-only and undocumented until then.
+
+- `src/fx/artFilter.ts` (pure, 10 unit tests): `pickDuotone` chooses shadows = the darkest palette
+  colour pushed 55% toward black, highlights = the most saturated colour (lifted 40% toward white)
+  when the artwork has a real accent (saturation ≥ 0.25), else the lightest; falls back to the
+  lightest, then plain black/white, so the pair always separates by ≥ 4:1 (tested on mid-tone,
+  RGB-primary and near-grey palettes). No palette (no artwork / loading / tainted canvas) → plain
+  greyscale. Also our own Bayer-matrix generator (`bayerMatrix`, checked against the textbook 4×4).
+- **Why JS:** SVG filter `tableValues` are attributes and can't read `--mp-art-*`, so the app
+  computes them from the extracted palette and renders the defs.
+- `FxFilters` (the existing hidden `.mp-fx-filters` svg) now always renders (was only when a
+  ripple/liquid text effect was on) and also holds `#mp-art-duotone`, `#mp-art-posterize`,
+  `#mp-art-dither`. Reusing the documented class meant no new part, so the doc-vs-DOM test still
+  matches. Cost of "always rendered": a tiny 0×0 svg + an 8×8 canvas-generated tile per render.
+- **Dither** is our own chain (grey → compare against a repeating 8×8 Bayer tile via feImage/feTile/
+  feComposite → threshold → recolour to the duotone), *not* a copy of `dither-with-css` (no license
+  stated). The arithmetic is tuned so alpha stays 1 (k2+k3+k4 = 1); a naïve "gray − tile + 0.5"
+  would have halved alpha and clamped the colour (premultiplied-alpha trap).
+- T5's `.mp-artwork` uses `filter: url(#mp-art-duotone)`. Posterize and dither are one-line
+  swaps. **T5 ships with duotone, not dither, on purpose:** dither looked best in Chromium but relies
+  on `feImage` inside an HTML-element filter, which I could not verify in WebKit/WKWebView; duotone
+  is the safe cross-engine default.
+- New synthetic fixture `colorful artwork (filter test)` (FIXTURE-marked, dev-only; palette navy /
+  red / cream) so the treatments have something to show. It adds one cell per theme to every matrix.
+- **Looked at, in the browser pane (Chrome 152), all three on the fixture:** duotone = mauve/navy,
+  posterize = vivid 4-level bands, dither = pink-on-navy halftone dots. Rendering in WebKit is
+  untested beyond "no console errors".
+- **Result (ran):** `npx tsc --noEmit` clean; `npx vitest run` 92 passed (10 new);
+  `npx playwright test` 492 passed (Chromium + WebKit; new: filters exist in every theme, duotone
+  table follows the palette, dither tile is a generated PNG, T5 applies the filter and T2 leaves
+  artwork unfiltered); `npm run build` OK incl. `check-fixtures-excluded: OK` (277.88 kB JS /
+  91.14 kB gzip, +1.12 kB gzip for this step). Visual result: **ready for review**.
+
+## 2026-09-23 — Design round 2, step 3: split-flap title (T5)
+
+Step 3 of the T5 plan. **Contract v5 / THEME_CONTRACT.md not touched yet** (step 7): `splitflap` in
+`data-fx-title`/`data-fx-artist`, the `--mp-flap-bg/fg/edge` tokens and theme.json `fx` exist in code
+but are undocumented until then. You did not answer last turn's question about in-between glyphs, so I
+took the conservative reading (below) rather than assume it was fine.
+
+- **@splitflap/core 0.1.1 (MIT, ~9 kB source, zero deps, no sound) — read its source before adopting.**
+  Three behaviours would have broken CLAUDE.md's "never generate displayed text" or garbled real
+  titles, each handled in our code instead of trusted:
+  1. It flips through its *whole default alphabet* (`A–Z 0–9 .,!?#@()+-=`) on the way to a letter, and
+     random letters when no `textInit` is given. **Fix:** `charsMap` is built from ONLY the distinct
+     letters of the previous and new title (+ space) (`flapAlphabet`), `textInit` is always the
+     previous real title (kept in a module-level `lastShown`, because the player remounts the title
+     each track), and `maxFlips: 6` keeps runs short. Verified by a test that samples every glyph on
+     the board every 40 ms while it flips and asserts none is outside that alphabet.
+  2. It silently replaces any character not in its map with a space — CJK/accented titles would have
+     gone blank. **Fix:** the alphabet is the title's own characters, so nothing is substituted; the
+     CJK fixture is tested.
+  3. It `toUpperCase()`s and reads one UTF-16 unit at a time. **Fix:** we upper-case first and
+     paginate/pad the upper-cased text; text it would garble (emoji, astral CJK; `isFlapSafe`) falls
+     back to the plain title (new fixture `emoji title (split-flap falls back to plain text)`).
+     The board therefore shows CAPITALS (like a real Solari board, and like T2's CSS-uppercased
+     artist); the accessible copy keeps the original case.
+- **Fixed cells, so long titles page:** 10 columns × 20 px for the title (14 × 14 px for an artist),
+  cell width chosen so CJK glyphs fit. `paginate` packs whole words greedily and hard-splits a word
+  longer than a page; a property test proves no character is ever lost or added. Multi-page titles
+  advance every 3.2 s. Note the synthetic fixture's 22-character hyphenated "word" hard-splits
+  mid-word ("FIXTURE-ON…") — real titles mostly wrap cleanly on spaces.
+- Accessibility: the board is `aria-hidden`; the only readable child of `.mp-title` is a
+  visually-hidden exact copy of the real string (tested). Reduced motion shows plain static text, no
+  board (tested). Tile text is cream on `--mp-flap-bg` ink and is AA-checked in a test (the library
+  paints tile colours inline, so the matrix's `.mp-title` colour check can't see them).
+- **New theme tokens** `--mp-flap-bg`, `--mp-flap-fg`, `--mp-flap-edge` (fall back to `--mp-bg`/
+  `--mp-fg`) passed through as `var()` strings to the library's inline styles.
+- **theme.json `fx` defaults:** new optional `fx` field (T5: `{"title":"splitflap"}`), validated by a
+  new shared `validateEffects` (the variant validator was refactored to use it; every shipped
+  theme's `fx` is unit-tested). There is no real theme loader yet, so only the dev harness applies
+  it — switching theme resets to that theme's defaults (tested), and URL-driven matrix cells stay
+  deterministic (they ignore theme defaults).
+- `TextFx`/`TEXT_FX` gain `splitflap` (variants may select it for title or artist).
+- **Cost:** production JS 277.88 → 285.09 kB (gzip 91.14 → 93.54 kB, +2.4 kB).
+- **Test slips (mine, not product bugs):** my first board-reading selector read the wrong DOM level,
+  and two polling tests threw before the board's DOM existed (Playwright's `expect.poll` does not
+  retry a throwing callback); fixed, then 80/80 over `--repeat-each=5`.
+- **Not verified by eye beyond one screenshot:** I saw the settled board in the browser pane
+  ("FIXTURE-ON" tiles). I did not watch a flip animation or a page turn, and WebKit's look is
+  untested (only "runs, no console errors"). `@splitflap/core` is 0.1.x, released March 2026 — the
+  wrapper is the single place to swap it.
+- **Result (ran):** `npx tsc --noEmit` clean; `npx vitest run` 108 passed (16 new: paginate/pad/
+  alphabet/safety, effects validation, theme fx); `npx playwright test` green on the final full run
+  (Chromium + WebKit; new `e2e/flap.spec.ts`: 16 tests incl. glyph-alphabet sampling, page turn, AA,
+  window fit, emoji fallback, reduced motion, theme-default switching); `npm run build` OK incl.
+  `check-fixtures-excluded: OK`. Visual result: **ready for review**.
+
+## 2026-09-23 — Design round 2, step 4: text flowing around the reels (native CSS, not Pretext)
+
+Step 4 of the T5 plan. **Contract v5 / THEME_CONTRACT.md not touched yet** (step 7): the new `.mp-flow`
+part, `data-fx-flow` attribute and variant `effects.flow` exist in code but are undocumented. They are
+deliberately NOT in the contract test's `FX_ALL` yet, for the same reason — step 7 adds them together.
+
+**Decision (the spike the plan asked for): native `shape-outside`, no Pretext.** Measured, not assumed:
+- Cost of a reflow (change `--mp-progress`, force layout) in the embedded Chrome 152: **0.91 ms avg with
+  the flow layer vs 0.59 ms without** (p95 1.2 ms, max 2.1 ms) — i.e. the flow adds ~0.3 ms, against a
+  16 ms frame, and progress changes at most a few times per second. Playwright's own runs: ~0.6 ms
+  (Chromium), ~1.1–1.4 ms (WebKit). A committed test asserts < 8 ms to catch pathologies.
+- Since the reflow trigger is slow (progress ticks, not per-frame), Pretext's advantage — layout without
+  the DOM at thousands of calls per frame — has nothing to do here. It would also add ~15 kB gzip, and it
+  cannot do variable-font axes. **Not adopted.** If a future theme animates an obstacle every frame (a
+  bouncing shape), revisit.
+
+**What was built:**
+- `src/fx/Flow.tsx`: a decorative `.mp-flow` layer (`aria-hidden`, `pointer-events:none` also guard-locked,
+  clipped to the window, `z-index:-2`) whose text is the real title/artist/album repeated with `·`
+  separators — no invented words (test removes every real string and asserts only separators remain). Two
+  empty `<i>` elements are the exclusion shapes; the *theme* floats them and gives them `shape-outside`.
+- An **unthemed flow is invisible** (`color: transparent` in `fx.css`) so enabling it on a theme that
+  doesn't style it can never dump raw text behind that theme's content (tested on T2).
+- T5 styles it: faint (9% cream) uppercase bold type; the two floats carry `shape-outside: circle()` sized
+  from the same progress-driven variables as the reels (`--t5-reel-l/r`, and a new shared `--t5-reel-cx/cy`
+  that both the reel positions and the flow now derive from, so they cannot drift apart). The wrap
+  therefore reflows live as the tape unspools. T5's `theme.json` `fx` now defaults `flow: true` too.
+- `FxSettings.flow`, `data-fx-flow`, variant `effects.flow` (validated as a boolean like shapes/waveform),
+  harness checkbox + `?fx=flow`.
+
+**Verification that the tests are not vacuous (mutation-checked):** my first geometry test — "no line
+fragment touches a reel" — passed *with the circle removed*, because the floated **box** is itself an
+exclusion and already covers the circle. Added a test that text tucks into the box corners (which only the
+circle allows) at the largest reel size, and confirmed in the browser that with `shape-outside:none` the
+lines stop at the box edge (min x 104 vs 82 with the circle). That test carries its own mutation check.
+- **Real WebKit finding:** WebKit does not re-run float line layout when only `shape-outside` changes on an
+  already laid-out float (line positions were identical before/after), which made that mutation check pass
+  wrongly there. The test now forces a fresh layout of the layer first; 48/48 over `--repeat-each=3`.
+  (Width/size changes — what progress drives — do re-layout in WebKit; the live-reflow test passes there.)
+- Contrast: 9% is not arbitrary. At 14% the worst-case blended backdrop put `--mp-muted` at ~4.2:1
+  (< AA); 9% gives ~4.85:1. A test blends the real backdrop with the flow's own alpha and checks every T5
+  text part is ≥ 4.5:1.
+
+**Looked at (browser pane):** the flow renders behind the card and visibly parts around both reels, and the
+left reel's neighbours tuck in as it grows at progress 0. The synthetic fixture's 22-character hyphenated
+"word" makes the backdrop ragged; real titles will wrap more evenly. WebKit's *look* is unchecked beyond the
+geometry tests.
+- **Result (ran):** `npx tsc --noEmit` clean; `npx vitest run` 108 passed; `npx playwright test` green on the
+  final full run (new `e2e/flow.spec.ts`, 16 cases × 2 engines: layer contract, wraps-and-tucks, live
+  reflow, cost, AA, unthemed-invisible, harness/variant); `npm run build` OK incl.
+  `check-fixtures-excluded: OK` (285.53 kB JS / 93.70 kB gzip, +0.16 kB gzip for this step).
+- Addendum: under the full suite's parallel load one WebKit run of the cost test measured 3.2 ms avg (still
+  well under the 8 ms ceiling); the quiet-machine numbers above are the representative ones.
+
+## 2026-09-23 — Design round 2, step 5: track-change morph (View Transitions, T5 "cassette swap")
+
+Step 5 of the T5 plan. **Contract v5 / THEME_CONTRACT.md not touched yet** (step 7): `data-fx-morph`,
+variant `effects.morph`, and the theme-owned `view-transition-name` convention are undocumented until then.
+
+- `src/fx/useTrackTransition.ts`: when the track identity (`title::artist`) changes, the Player keeps
+  rendering the OLD `{nowPlaying, positionMs}` until the browser has captured it, then swaps inside
+  `document.startViewTransition(() => { apply; flushSync(rerender) })` (the new DOM must exist before the
+  callback returns). Everything that is *not* a track change — position ticks, play/pause, capabilities —
+  passes straight through with zero added latency (tested: no transition and status updates at once).
+  Off / unsupported / `prefers-reduced-motion` → the new value is applied immediately (tested). Rapid
+  successive changes settle on the last one and never flip back (tested); a pending guard avoids double-starts.
+- Opt-in `morph` in `FxSettings` / variants (`effects.morph`, boolean, validated like the others) /
+  harness checkbox / `?fx=morph`; T5's theme.json `fx` now `{ title: splitflap, flow, morph }`.
+- **T5 style ("cassette swap"):** T5 names its card (`view-transition-name: mp-card`, only when
+  `data-fx-morph` is on). The old deck tilts and slides out left, the new one slides in from the right with a
+  small overshoot. The document-level pseudo-elements are scoped to this theme with `html:has(.mp-root[...])`,
+  and the `root` group's default cross-fade is disabled so only the card animates.
+- **The artwork-fade grey area I flagged: avoided rather than accepted.** Both keyframes are pure
+  transform (translate + rotate) — **no opacity anywhere**, so the artwork is never faded by the browser's
+  default cross-dissolve either. A test asserts neither `t5-deck-*` keyframe contains `opacity` and that
+  `.mp-artwork`'s computed opacity stays 1 (guard intact). Caveat that remains: a theme that opts into
+  `morph` but names nothing gets the browser's *default* root cross-fade of the whole page, which does fade
+  everything (artwork included) — only T5 opts in today, and a future theme should style its own transition.
+- **Verified by actually watching it (not just counting calls):** the embedded browser pane is hidden, and a
+  hidden document skips view transitions, so it can't show this. I drove Playwright's Chromium instead, slowed
+  the animation, and looked at stills: at ~0.5 s the old card (old artwork, old flow text) is still in place
+  while the new card's edge enters from the right; at ~1.5 s the old card is tilting out left and the new
+  card, with the new title's flow text, is in place. Both Playwright engines expose `startViewTransition` and run
+  `t5-deck-out` / `t5-deck-in` (asserted, non-vacuously, via the spied call and `getAnimations()`); WebKit's
+  *appearance* is not looked at, and this is Playwright's WebKit build, not WKWebView on a Mac.
+- **Also seen, unrelated to this step:** the flap board's `textContent` doubles the letters (upper + lower
+  halves); it is `aria-hidden` and the exact copy sits in the hidden span, as tested in step 3.
+- Cost: `react-dom`'s `flushSync` (already a dependency) — no new package. JS 285.53 → see build line.
+- **Result (ran):** `npx tsc --noEmit` clean; `npx vitest run` 108 passed; `npx playwright test` 558 passed
+  (Chromium + WebKit; new `e2e/morph.spec.ts`, 7 cases × 2 engines: one transition per track change +
+  cassette animations run, pass-through for non-track changes, no-morph theme, reduced motion, unsupported
+  fallback, rapid changes, no-opacity/guard); `npm run build` OK incl. `check-fixtures-excluded: OK`.
+  Visual result: **ready for review**.
+
+## 2026-09-23 — Design round 2, step 6: physics debris (Matter.js), lazy-loaded
+
+Step 6 of the T5 plan. **Contract v5 / THEME_CONTRACT.md not touched yet** (step 7): the `.mp-debris` part,
+`data-fx-debris` and variant `effects.debris` exist in code but are undocumented until then.
+
+- On a track change, the PREVIOUS title's letters drop out of the card, tumble, pile on the card's floor, fade and
+  are destroyed after 2.8 s. **Decorative only:** the new title is always the normal static real text; the layer
+  is `aria-hidden`, `pointer-events:none` (also guard-locked), clipped to the window, `z-index:-1` (behind the
+  card's content, so the badge and controls always stay on top). Only characters of the replaced title are ever
+  used (test: every debris letter is in the old title, and a letter that exists only in the old title — `k` —
+  appears while one that exists only in the new title never does).
+- **Bounded and self-cleaning:** ≤ 32 bodies (pure `layoutDebris` caps visible glyphs; whitespace advances the
+  row but is never a body). Each spill creates its own Matter engine and destroys it afterwards
+  (`Composite.clear` + `Engine.clear` + DOM removal); a newer spill or unmount cancels the running one at once
+  (tested: cutting a spill mid-way replaces A's letters with B's, never a mixture, and the layer still ends
+  empty). Fixed 60 Hz step with a 50 ms clamp so a stalled frame can't cause a huge jump. Physics is seeded from
+  the old title (`mulberry32(hash)`), so the same title always tumbles the same way.
+- **Matter.js is lazy-loaded** (`await import("matter-js")`, MIT, 0.20.0): a separate chunk, **83.77 kB / 26.23 kB
+  gzip, fetched only on the first spill**; a test asserts it is NOT requested before the first track change.
+  Main bundle 285.53→290.45 kB / 93.70→95.60 kB gzip (+1.9 kB gzip for the component itself). Users who never
+  enable the effect pay nothing for the engine.
+- Timing: in T5 (which has the morph on) the spill starts 650 ms after the swap so it happens as the new card
+  lands; without the morph it starts at once. Skipped when the document is hidden and under reduced motion.
+- `FxSettings.debris` / variant `effects.debris` (boolean) / harness checkbox / `?fx=debris`; T5 `fx` default is
+  now `{ title: splitflap, flow, morph, debris }`.
+- Files: `src/fx/Debris.tsx` (Matter + DOM), `src/fx/debrisLayout.ts` (pure, 7 tests). **Naming trap hit:** I first
+  called the pure module `debris.ts` next to `Debris.tsx` — on Windows' case-insensitive filesystem TypeScript
+  rejected it as the same file (TS1149). Renamed to `debrisLayout.ts`.
+- **Second environment trap, worth remembering:** after that rename the long-running Vite dev server kept serving
+  the stale `/src/fx/Debris.ts` module path (error: "does not provide an export named 'Debris'") and every e2e
+  test failed to render the harness. A dev-server restart fixed it; it was not a product bug. Playwright's config
+  *reuses* a running dev server, so a stale one silently poisons the whole e2e run.
+- **Looked at:** in Playwright's Chromium, mid-spill stills show the old title's letters ("FIXTURE-ONLY-DEV-
+  BUILD Track Title") tumbled into a pile on the card's floor with the badge visible above them; the new card's
+  flap board, flow backdrop and controls are untouched. WebKit's appearance is not looked at (tests only).
+- Honest limits: the spill starts from an *approximation* of where the old title sat (canvas-measured glyph row
+  centred in the title box — for the flap title that is not the tile grid), and the pile is randomised physics,
+  not a designed composition. The old card in the cassette-swap has already left by the time letters spill.
+- **Result (ran):** `npx tsc --noEmit` clean; `npx vitest run` 115 passed (7 new); `npx playwright test` 572 passed
+  (Chromium + WebKit; new `e2e/debris.spec.ts`, 7 cases × 2 engines, 42/42 over `--repeat-each=3`: old-title letters
+  only + contained + decorative, moves then cleans up fully, lazy chunk, mid-spill cut, same-title no-op,
+  no-effect theme, reduced motion); `npm run build` OK incl. `check-fixtures-excluded: OK`.
+  Visual result: **ready for review**.
+
+## 2026-09-23 — Design round 2, step 7: contract v5 + docs (T5 plan complete)
+
+Final step. Everything from steps 2–6 is now documented and versioned in one change, as CLAUDE.md requires.
+
+- `CONTRACT_VERSION` 4→5 (`src/theme/variant.ts`) and all five `theme.json` `contract` fields, plus the variant
+  JSON in `e2e/fx.spec.ts` / `e2e/flow.spec.ts` that hard-coded the number. Purely additive; nothing renamed or
+  removed, so a v4 theme/variant only needs its `contract` number bumped.
+- `docs/THEME_CONTRACT.md`: version/status/changelog; Root (`data-fx-flow|morph|debris`, `splitflap` value);
+  Theme tokens (`--mp-flap-bg|fg|edge`, incl. the AA requirement for the tile pair); Parts (`.mp-flow`,
+  `.mp-debris`, and `.mp-fx-filters` now naming the three artwork filter ids and their caveats); `theme.json`
+  field table (`fx`; stale example's `"contract": 1` → 5); **Effects** rewritten for v4+v5 (split-flap rules,
+  the flow backdrop, the track-change transition convention — app starts the view transition, the *theme* names
+  `.mp-window` and styles the pseudo-elements, transforms not opacity — and debris); Variants (`effects` example
+  and validation rules). `docs/PLAN.md`: D16 widened, T5 added to the theme roster. `docs/COPY.md`: labels for
+  split-flap / flow / morph / debris as `[NEEDS COPY]`.
+- **Tests now make the doc fail loudly (new `src/theme/contractDoc.test.ts`, 8 cases, no browser):** version line and
+  a changelog entry exist for `CONTRACT_VERSION`; a `data-fx-<key>` Root bullet exists for every key in
+  `EFFECT_KEYS`; every `TEXT_FX` value is on the `data-fx-title` bullet; every `ART_FILTER_IDS` id is on the
+  `.mp-fx-filters` part; the flap tokens and `--mp-beat` are documented; every top-level field of every shipped
+  `theme.json` has a row in the field table; and **every `--mp-*` custom property that `src/fx/*` or
+  `structure.css`/`guard.css` mention appears in the doc**. Mutation-checked: deleting the debris Root bullet,
+  misspelling `#mp-art-dither`, and renaming the `fx` field row each turned a different case red; the doc was then
+  restored. `e2e/contract.spec.ts` now renders one fixture with EVERY effect on (`shapes, waveform, flow, morph,
+  debris, ripple, typewriter`) so the Parts/Root comparisons include the v5 ones — it passed with `.mp-flow`,
+  `.mp-debris` and the four new attributes documented.
+- Regenerated the review sheets (`npm run review`, 192 captures): new `e2e/review/sheet-7-t5-kinetic.png` (all 22
+  fixtures × Chromium and WebKit). They are **static frames** built from URL-driven cells, so they show T5's body,
+  reels and controls but NOT the theme-default effects (flap, flow, morph, debris need the harness), and nothing that
+  moves. Looking at the sheet: WebKit renders the same layout with plain rounded corners (no `corner-shape`), as designed.
+- **Result (ran):** `npx tsc --noEmit` clean; `npx vitest run` 123 passed; `npx playwright test` 572 passed (Chromium +
+  WebKit); `npm run build` OK incl. `check-fixtures-excluded: OK` (main JS 290.65 kB / 95.65 kB gzip + a lazy
+  83.77 kB / 26.23 kB gzip Matter.js chunk fetched only on the first debris spill).
+
+### Design round 2 — status
+**Built and logged (steps 0–7):** S9 spike; T5 "Kinetic" tape deck (squircle body, progress-driven reels, keycap
+controls); live artwork treatments (duotone default; posterize, dither); split-flap title on `@splitflap/core` with a
+real-letters-only flip alphabet; real-text flow backdrop wrapped around the reels by native `shape-outside` (Pretext
+measured and rejected); cassette-swap view transition (transforms only, no fade); lazy Matter.js debris of the previous
+title; contract v5 + tests that keep the doc honest.
+**Still open / not done:** watching the *live motion* of flaps, reels, morph and debris in a real Tauri window (I saw
+stills and DOM/animation state, not a running window); WebKit's/WKWebView's look and view-transition behaviour on a real
+Mac; whether WebView2 on your machine is new enough for `corner-shape`/view transitions (this dev pane is Chrome 152);
+your call on the split-flap in-between-glyph reading (I took the conservative one); the typewriter-ellipsis limitation;
+no customizer UI/persistence or Rust theme loader (Phase 4/5) — effects are applied by the dev harness only;
+`@splitflap/core` is a 0.1.x library; T1–T4 have not been re-reviewed with the v4/v5 effects switched on.

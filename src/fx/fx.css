@@ -1,0 +1,119 @@
+/* App-provided effect layers (animated-assets plan; contract v4 pending — DECISIONS.md
+   2026-09-23). Opt-in via data-fx-* on .mp-root, never on by default. Structure/motion only;
+   colour falls back through theme tokens so any theme works without authoring anything.
+   --mp-beat is SIMULATED (src/fx/beat.ts), 0–1, written on .mp-shapes / .mp-waveform. */
+
+/* --- shapes: behind everything, inside the window's own box --- */
+.mp-root[data-fx-shapes] .mp-window {
+  position: relative;
+  isolation: isolate; /* so z-index:-1 stays inside the card, above its own background (T4 lesson) */
+}
+.mp-shapes {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.mp-shape {
+  fill: var(--mp-art-1, var(--mp-accent, currentColor));
+  opacity: 0.16; /* decorative only: low enough not to disturb text contrast on top */
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: scale(calc(1 + var(--mp-beat, 0) * 0.07 * var(--k, 1)));
+}
+.mp-shape-b { fill: var(--mp-art-2, var(--mp-accent, currentColor)); }
+.mp-shape-c { fill: var(--mp-art-3, var(--mp-accent, currentColor)); }
+.mp-shape-d { fill: var(--mp-art-2, var(--mp-accent, currentColor)); }
+.mp-shape-ring { fill: none; stroke: var(--mp-art-2, var(--mp-accent, currentColor)); stroke-width: 2.5; }
+.mp-shape-a > *, .mp-shape-b > *, .mp-shape-c > *, .mp-shape-d > * {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.mp-shape-a > * { animation: mp-shape-drift-a 14s ease-in-out infinite alternate; }
+.mp-shape-b > * { animation: mp-shape-drift-b 18s ease-in-out infinite alternate; }
+.mp-shape-c > * { animation: mp-shape-spin 22s linear infinite; }
+.mp-shape-d > * { animation: mp-shape-drift-b 16s ease-in-out infinite alternate-reverse, mp-shape-spin 30s linear infinite; }
+@keyframes mp-shape-drift-a { from { transform: translate(0, 0); } to { transform: translate(10px, 12px); } }
+@keyframes mp-shape-drift-b { from { transform: translate(0, 0); } to { transform: translate(-12px, 8px); } }
+@keyframes mp-shape-spin { to { transform: rotate(360deg); } }
+
+/* --- flow: a decorative real-text backdrop; the THEME supplies the type style and the shapes it
+   wraps around (T5 floats two circles). Behind everything, inside the window box, never interactive. --- */
+.mp-root[data-fx-flow] .mp-window {
+  position: relative;
+  isolation: isolate;
+}
+.mp-flow {
+  position: absolute;
+  inset: 0;
+  z-index: -2; /* below the shapes layer (-1) */
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  /* Invisible until a theme styles it (colour, size, the shapes to wrap around): an unthemed flow must
+     never show raw text behind another theme's content. */
+  color: transparent;
+  font-size: 14px;
+}
+.mp-flow > i {
+  display: block; /* the theme floats these and gives them shape-outside */
+}
+
+/* --- debris: the previous title's letters, simulated with Matter.js (Debris.tsx), inside the window box,
+   behind the card's content, never interactive. Empty (and free) except during a ~2.8 s spill. --- */
+.mp-root[data-fx-debris] .mp-window {
+  position: relative;
+  isolation: isolate;
+}
+.mp-debris {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* --- waveform: shares the progress/time rows, so the window keeps its declared size --- */
+.mp-waveform {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 12px;
+}
+.mp-wave-base,
+.mp-wave-fill {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.mp-wave-base path { fill: var(--mp-muted, currentColor); opacity: 0.45; }
+.mp-wave-fill path { fill: var(--mp-accent, currentColor); }
+.mp-wave-fill {
+  clip-path: inset(0 calc((1 - var(--mp-progress, 0)) * 100%) 0 0);
+  transform-origin: center;
+  transform: scaleY(calc(1 + var(--mp-beat, 0) * 0.1));
+}
+/* Default placement: replace the progress bar + time row in place (their space is kept, so no
+   theme's fixed native window size changes). Hidden on the compact pill; themes may override. */
+.mp-root[data-fx-waveform] .mp-progress,
+.mp-root[data-fx-waveform] .mp-time-current,
+.mp-root[data-fx-waveform] .mp-time-total { visibility: hidden; }
+.mp-root[data-layout="strip"] .mp-waveform { grid-area: progress / progress / time / time; align-self: stretch; }
+.mp-root[data-layout="card"] .mp-waveform { grid-area: progress / progress / time / progress; width: 100%; align-self: stretch; }
+.mp-root[data-layout="pill"] .mp-waveform { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  /* Explicit static state (not just the app-wide 0.001ms clamp, which would freeze shapes mid-drift). */
+  .mp-shape > *,
+  .mp-shape { animation: none; transform: none; }
+  .mp-wave-fill { transform: none; }
+}

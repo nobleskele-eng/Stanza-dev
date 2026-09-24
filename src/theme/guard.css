@@ -24,3 +24,11 @@
   mask: none !important;
   mix-blend-mode: normal !important;
 }
+
+/* Decorative effect layer never intercepts input (animated-assets plan). Interactive controls
+   may not sit over artwork; shapes sit behind everything and must never block a click. */
+.mp-shapes,
+.mp-flow,
+.mp-debris {
+  pointer-events: none !important;
+}

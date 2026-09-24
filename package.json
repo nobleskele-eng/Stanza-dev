@@ -13,14 +13,18 @@
     "review": "playwright test e2e/review.spec.ts && node scripts/review-sheet.mjs"
   },
   "dependencies": {
+    "@splitflap/core": "^0.1.1",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2",
+    "animejs": "^4.5.0",
+    "matter-js": "^0.20.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
     "@tauri-apps/cli": "^2",
+    "@types/matter-js": "^0.20.2",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^6.0.2",
