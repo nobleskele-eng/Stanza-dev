@@ -1659,3 +1659,49 @@ no customizer UI/persistence or Rust theme loader (Phase 4/5) — effects are ap
 - **Still open:** not run in a real Tauri window, so restart persistence in WebView2 is still unverified; no picker or
   customizer UI, so the only way to change the saved appearance is devtools/`localStorage`; storage is `localStorage`,
   not `<app data dir>/variants/` (see above).
+
+## 2026-09-26 — Slice 2: the production player in a real native window
+- **Was:** `main` still had the scaffold window (800×600, decorated, opaque, title `tauri-app`); every theme's `theme.json`
+  `window` size was unused; nothing let you drag the frameless window (S1's handler lived only on `spike/s1-window`).
+- **Now:** `tauri.conf.json` takes S1's learnings (`decorations: false`, `transparent`, `alwaysOnTop`, `shadow: false`
+  per D11/C9, not resizable/maximizable, `center`), title `Stanza` (COPY.md "App identity"), initial size 340×600 = the
+  default theme's. New `src/window/nativeWindow.ts`: `fitWindowToTheme` sets the window to the active theme's `window` in
+  **logical** px (so DPI scaling applies) and `installWindowDrag` is C8's handler (primary press anywhere on `.mp-root`
+  → `startDragging()`, except inside `button, input, a, [data-no-drag]`). Both are no-ops outside Tauri. Capabilities gain
+  `core:window:allow-start-dragging` and `core:window:allow-set-size`. `ThemeManifest` now types `window` (every shipped
+  theme already had it). No contract part/attribute/variable changed.
+- **Trap found and avoided:** `%APPDATA%\com.stanza.app\.window-state.json` still held the scaffold window
+  (`width: 812`, `decorated: true`). `tauri-plugin-window-state` restores *all* flags by default, which would have
+  brought back a decorated 812×600 window over the new config. It is now limited to `StateFlags::POSITION` (what Phase 2
+  added it for); size comes from the theme and frame from the config.
+- **Anchoring (took the non-design option):** the player stays at the window's top-left, as in the harness, the review
+  sheets and every e2e check. Consequence: T1's Collage (bleeds 96px past both sides of `.mp-window`) keeps its right-hand
+  peek inside the reserved 340px but its **left** peek is clipped by the window edge. This contradicts THEME_CONTRACT.md's
+  "reserving real margin … without being clipped once real native-window sizing is built" — needs your call: centre the
+  player in the window (moves every theme's smaller states), or give T1 its own left margin in `theme.css`.
+- **Surprise, needs a call — invisible click-blocking area:** the window is sized for the theme's *largest* state (the
+  contract requires it: the native window can't resize on hover). In the real exe the idle T1 card is ≈280×245 inside a
+  340×600 always-on-top window, so most of the window is transparent but still swallows clicks meant for what's
+  underneath. Options: (a) resize the window to the rendered `.mp-window` (ResizeObserver; conflicts with the "fits every
+  state, can't resize on hover" rule and T1's reserved margin); (b) toggle `setIgnoreCursorEvents` by pointer position
+  (S8 territory, unverified); (c) accept for now. Not fixed here.
+- **Automated (production bundle, Tauri IPC replaced by a recorder in `e2e/production.spec.ts`):** launch asks for
+  `set_size {Logical: 340×600}` (T1) and `320×490` for a saved T5; a press on the player starts a drag, while presses on a
+  button / range input / link / `[data-no-drag]` child / outside `.mp-root` / a right-click don't; in a plain browser
+  there are no errors. **Mutation-checked:** swapping height for width in `fitWindowToTheme` and disabling the no-drag
+  exclusion turned all three Tauri cases red; restored and re-run green.
+- **Real exe (ran):** `npm run tauri build -- --no-bundle` (2m 12s, no Rust warnings) → launched
+  `src-tauri/target/release/tauri-app.exe` and read the window via Win32: title `Stanza`, outer = client = 340×600 at
+  DPI 1.0 (no frame; `WS_CAPTION` bits are set but the non-client area is zero, and the capture shows no title bar),
+  topmost, no thick frame, position restored (234,234), stale saved size/decoration ignored, graceful exit. Screen capture:
+  rounded corners and everything outside the card show the desktop behind — transparency works; T1's ambient shadow shows
+  no hard cut-off at the window edge. WebView2's `Local Storage\leveldb\000003.log` contains `mp.appearance.v1` with
+  `t1-default`, written this run — the appearance does reach disk.
+- **Result (ran):** `npx tsc --noEmit` clean; `npx vitest run` 129 passed; `npx playwright test` 584 passed (Chromium +
+  WebKit, 12 new production runs); `npm run build` OK incl. `check-fixtures-excluded: OK` (run by the tauri build).
+- **Not verified:** dragging the real window (I did not inject mouse input into your desktop — needs your hand);
+  125/150% display scaling (this machine is at 100%); a *non-default* saved theme being read back after a restart (no
+  picker, and the release build has no devtools to seed one); multi-monitor. **macOS: untested** — and `transparent`
+  there also needs `macOSPrivateApi: true` (C6), not set. Still open from S4: CSP is `null` in `tauri.conf.json` and must
+  be set (only enforced in release builds). `productName` is still `tauri-app` (exe/installer name); the WebView2 data dir
+  follows the identifier `com.stanza.app`, so renaming it later won't lose saved appearances.

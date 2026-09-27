@@ -7,13 +7,14 @@ import "../themes/t2-artwork/theme.css";
 import "../themes/t3-pill/theme.css";
 import "../themes/t4-extreme/theme.css";
 import "../themes/t5-kinetic/theme.css";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { loadAppearance, saveAppearance } from "./theme/appearance";
 import { MANIFESTS } from "./theme/registry";
 import { variantToDom } from "./theme/variant";
 import { DevHarness } from "./dev/DevHarness";
 import { Player } from "./player/Player";
 import { IDLE_NOW_PLAYING } from "./types/player";
+import { fitWindowToTheme, installWindowDrag } from "./window/nativeWindow";
 
 function ProductionPlaceholder() {
   // Real Spotify/GSMTC adapter wiring is a later phase (docs/PLAN.md Phase 5+ /
@@ -25,6 +26,10 @@ function ProductionPlaceholder() {
     saveAppearance(window.localStorage, a); // normalises anything stale or invalid on disk
     return a;
   });
+  // The native window takes the active theme's declared size; the player sits at its top-left,
+  // as in the harness and every e2e check (docs/DECISIONS.md, Slice 2).
+  useEffect(() => fitWindowToTheme(MANIFESTS[appearance.theme].window), [appearance.theme]);
+  useEffect(() => installWindowDrag(), []);
   const dom = variantToDom(appearance.variant);
   return (
     <Player

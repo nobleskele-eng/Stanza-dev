@@ -19,6 +19,7 @@ const manifest: ThemeManifest = {
   contract: CONTRACT_VERSION,
   layout: "strip",
   layouts: ["card"],
+  window: { width: 400, height: 202 },
   controls: {
     "--mp-bg": { type: "color" },
     "--mp-fg": { type: "color" },

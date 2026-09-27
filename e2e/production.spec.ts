@@ -68,6 +68,91 @@ test("invalid stored appearance falls back to the default theme and is rewritten
   expect(stored.variant.contract).toBe(CONTRACT_VERSION);
 });
 
+// --- Native window (Slice 2). Tauri's IPC is replaced by a recorder, so these check what the bundle *asks*
+// the native window to do; whether Tauri then does it is checked by hand in the release exe (DECISIONS.md).
+type IpcCall = { cmd: string; args: Record<string, unknown> };
+
+async function fakeTauri(page: import("@playwright/test").Page) {
+  await page.addInitScript(() => {
+    const calls: { cmd: string; args: unknown }[] = [];
+    Object.assign(window, {
+      isTauri: true,
+      __ipcCalls: calls,
+      __TAURI_INTERNALS__: {
+        metadata: { currentWindow: { label: "main" }, currentWebview: { windowLabel: "main", label: "main" } },
+        invoke: (cmd: string, args: unknown) => {
+          calls.push({ cmd, args: JSON.parse(JSON.stringify(args ?? {})) });
+          return Promise.resolve(null);
+        },
+        transformCallback: () => 0,
+      },
+    });
+  });
+}
+
+const ipcCalls = (page: import("@playwright/test").Page, cmd: string) =>
+  page.evaluate((c) => (window as unknown as { __ipcCalls: IpcCall[] }).__ipcCalls.filter((x) => x.cmd === c), cmd);
+
+test("in Tauri, launch sizes the window to the default theme's declared window (logical px)", async ({ page }) => {
+  await fakeTauri(page);
+  await page.goto("/");
+  await expect(page.locator(".mp-root")).toHaveAttribute("data-theme", "t1-default");
+  await expect.poll(() => ipcCalls(page, "plugin:window|set_size")).toEqual([
+    { cmd: "plugin:window|set_size", args: { label: "main", value: { Logical: { width: 340, height: 600 } } } },
+  ]);
+});
+
+test("in Tauri, a saved theme sizes the window to that theme's declared window", async ({ page }) => {
+  await fakeTauri(page);
+  await page.goto("/");
+  await page.evaluate(
+    ([key, contract]) =>
+      localStorage.setItem(
+        key as string,
+        JSON.stringify({ theme: "t5-kinetic", variant: { theme: "t5-kinetic", contract, layout: "card", overrides: {}, hidden: [] } }),
+      ),
+    [APPEARANCE_STORAGE_KEY, CONTRACT_VERSION] as const,
+  );
+  await page.reload();
+  await expect(page.locator(".mp-root")).toHaveAttribute("data-theme", "t5-kinetic");
+  await expect
+    .poll(async () => (await ipcCalls(page, "plugin:window|set_size")).map((c) => c.args.value))
+    .toEqual([{ Logical: { width: 320, height: 490 } }]);
+});
+
+test("in Tauri, pressing the player drags the window; controls, right-clicks and outside the player don't", async ({ page }) => {
+  await fakeTauri(page);
+  await page.goto("/");
+  await expect(page.locator(".mp-window")).toBeVisible();
+  // The idle player has no controls, so put one of each excluded kind inside it (the rule is by selector).
+  await page.evaluate(() => {
+    const win = document.querySelector(".mp-window")!;
+    for (const html of ['<button id="t-btn">x</button>', '<input id="t-input" type="range">', '<a id="t-link" href="#">x</a>', '<div id="t-nodrag" data-no-drag><span id="t-nodrag-child">x</span></div>'])
+      win.insertAdjacentHTML("beforeend", html);
+  });
+  const press = (sel: string, button = 0) =>
+    page.evaluate(([s, b]) => document.querySelector(s as string)!.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: b as number })), [sel, button] as const);
+  const drags = async () => (await ipcCalls(page, "plugin:window|start_dragging")).length;
+
+  for (const sel of ["#t-btn", "#t-input", "#t-link", "#t-nodrag-child", "body"]) await press(sel);
+  await press(".mp-window", 2);
+  expect(await drags(), "no drag from controls, [data-no-drag], outside .mp-root, or a right-click").toBe(0);
+
+  await press(".mp-window");
+  await press(".mp-empty");
+  await expect.poll(drags, "a primary press on the player's own surface starts a drag").toBe(2);
+});
+
+test("outside Tauri (plain browser) the window code is inert: no errors on load or press", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
+  await page.goto("/");
+  await page.locator(".mp-window").dispatchEvent("mousedown", { button: 0 });
+  await expect(page.locator(".mp-root")).toHaveAttribute("data-theme", "t1-default");
+  expect(errors).toEqual([]);
+});
+
 test("html, body and #root have no background", async ({ page }) => {
   await page.goto("/");
   const bgs = await page.evaluate(() =>

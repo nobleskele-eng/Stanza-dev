@@ -38,6 +38,8 @@ export interface ThemeManifest {
   layout: Layout;
   /** Extra layouts the theme supports beyond `layout`. */
   layouts?: Layout[];
+  /** Native window size in logical px (THEME_CONTRACT.md field table); the production window is set to it. */
+  window: { width: number; height: number };
   controls?: Record<string, ControlSpec>;
   /** Effects the theme ships switched on (a variant still overrides). Same rules as `Variant.effects`. */
   fx?: Effects;
