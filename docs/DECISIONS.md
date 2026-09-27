@@ -1624,3 +1624,38 @@ Mac; whether WebView2 on your machine is new enough for `corner-shape`/view tran
 your call on the split-flap in-between-glyph reading (I took the conservative one); the typewriter-ellipsis limitation;
 no customizer UI/persistence or Rust theme loader (Phase 4/5) — effects are applied by the dev harness only;
 `@splitflap/core` is a 0.1.x library; T1–T4 have not been re-reviewed with the v4/v5 effects switched on.
+
+## 2026-09-23 — Slice 1: the real app applies and remembers a theme
+- **Was:** `App.tsx`'s production path hard-coded `layout="strip"`, `theme="t1-default"` (T1 has no strip CSS), and only the
+  dev harness applied effects. Overrides/hidden parts were never applied anywhere.
+- **Now:** `src/theme/registry.ts` (manifests, shared with the harness), `src/theme/appearance.ts` (pure
+  load/validate/save of `{theme, variant}`; invalid or stale data falls back to the theme's defaults; switching theme
+  clears overrides), `Player` takes `overrides` (inline custom properties) and `hidden` (`data-hide-<part>`), and
+  production `App` reads the saved appearance. No contract part/attribute changed.
+- **Storage choice:** webview `localStorage`, not `<app data dir>/variants/` yet (PLAN.md §4 says the latter). Chosen to avoid a new
+  Rust command/plugin for a slice with no UI; variant *files* for export/import come with the customizer. Not yet verified
+  to survive a restart in a real Tauri window (WebView2 persists localStorage per app; unconfirmed here).
+- **Surprise:** `e2e/production.spec.ts` "corner pixel fully transparent" now fails (alpha 7, Chromium and WebKit). It only
+  passed before because production rendered the unstyled `strip`; production now renders T1's card, whose window-level
+  `box-shadow: 0 20px 48px rgba(0,0,0,.35)` paints a faint blur at the transparent corner. Unresolved — needs a call:
+  drop that shadow, or relax the test to "no opaque rectangle".
+- **Resolved (user said "continue" without choosing; I took the non-design option):** kept T1's shadow, relaxed the
+  corner test from `=== 0` to `<= 24` (opaque rectangle = 255; measured 7). If you'd rather drop the shadow, revert that
+  test line and remove `box-shadow` at `themes/t1-default/theme.css:62`.
+- **Gap closed:** nothing proved the *production bundle* restores a saved appearance (unit tests only cover the pure
+  functions). `e2e/production.spec.ts` gains two cases: seeded T5 + `--mp-accent` override + hidden `album` → after
+  reload `.mp-root` has `data-theme="t5-kinetic"`, `data-layout="card"`, `data-hide-album`, the inline override and T5's
+  manifest `data-fx-title="splitflap"`; garbage in storage → T1 and the stored value rewritten as a valid current-contract
+  appearance. The storage key is written out in the test on purpose (changing it silently drops saved appearances).
+  **Mutation-checked:** with `HEAD`'s `App.tsx` swapped back in, both new cases fail (received `t1-default`; stored value
+  still unparseable), the two old ones pass; restored and re-run green.
+- **Surprise (not fixed here):** `main`'s `tauri.conf.json` is still the scaffold window (800×600, decorated, not
+  transparent, title `tauri-app`); the S1 window config lives on `spike/s1-window`. So every theme's `theme.json`
+  `window` size is still unused, and the transparent-corner tests only model the real window. Belongs to the spike merge /
+  Phase 4 "per-theme window resize", not this slice.
+- **Result (ran):** `npx tsc --noEmit` clean; `npx vitest run` 129 passed (6 new in `appearance.test.ts`); `npm run build`
+  OK incl. `check-fixtures-excluded: OK`; `npx playwright test` 572 passed (Chromium + WebKit, loaded before the two new
+  cases were added), then `npx playwright test e2e/production.spec.ts` 8 passed (both engines, incl. the new cases).
+- **Still open:** not run in a real Tauri window, so restart persistence in WebView2 is still unverified; no picker or
+  customizer UI, so the only way to change the saved appearance is devtools/`localStorage`; storage is `localStorage`,
+  not `<app data dir>/variants/` (see above).

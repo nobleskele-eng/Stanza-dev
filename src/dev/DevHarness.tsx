@@ -1,12 +1,8 @@
 import { useEffect, useState } from "react";
 import { MockAdapter } from "../adapters/mockAdapter";
 import type { TextFx } from "../fx/AnimatedText";
-import t1Json from "../../themes/t1-default/theme.json";
-import t2Json from "../../themes/t2-artwork/theme.json";
-import t3Json from "../../themes/t3-pill/theme.json";
-import t4Json from "../../themes/t4-extreme/theme.json";
-import t5Json from "../../themes/t5-kinetic/theme.json";
-import { emptyVariant, validateVariant, variantToDom, type ThemeManifest } from "../theme/variant";
+import { DEFAULT_THEME, MANIFESTS } from "../theme/registry";
+import { emptyVariant, validateVariant, variantToDom } from "../theme/variant";
 import { Player, type FxSettings, type Layout } from "../player/Player";
 import { PlayerStore, interpolatePositionMs } from "../store/playerStore";
 import type { NowPlaying } from "../types/player";
@@ -30,14 +26,6 @@ const THEMES = [
   { id: "t4-extreme", layout: "card" as Layout },
   { id: "t5-kinetic", layout: "card" as Layout },
 ];
-const DEFAULT_THEME = "t1-default";
-const MANIFESTS: Record<string, ThemeManifest> = {
-  "t1-default": t1Json as ThemeManifest,
-  "t2-artwork": t2Json as ThemeManifest,
-  "t3-pill": t3Json as ThemeManifest,
-  "t4-extreme": t4Json as ThemeManifest,
-  "t5-kinetic": t5Json as ThemeManifest,
-};
 
 /**
  * `?fixture=<name>&layout=<layout>&theme=<id>` renders exactly one fixture state with a

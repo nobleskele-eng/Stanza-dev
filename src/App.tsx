@@ -7,6 +7,10 @@ import "../themes/t2-artwork/theme.css";
 import "../themes/t3-pill/theme.css";
 import "../themes/t4-extreme/theme.css";
 import "../themes/t5-kinetic/theme.css";
+import { useState } from "react";
+import { loadAppearance, saveAppearance } from "./theme/appearance";
+import { MANIFESTS } from "./theme/registry";
+import { variantToDom } from "./theme/variant";
 import { DevHarness } from "./dev/DevHarness";
 import { Player } from "./player/Player";
 import { IDLE_NOW_PLAYING } from "./types/player";
@@ -15,7 +19,25 @@ function ProductionPlaceholder() {
   // Real Spotify/GSMTC adapter wiring is a later phase (docs/PLAN.md Phase 5+ /
   // the stranded spike/s2-gsmtc branch). The theme/DOM contract itself is done
   // (Phase 3) — rendered here idle, with no adapter feeding it yet.
-  return <Player nowPlaying={IDLE_NOW_PLAYING} positionMs={0} layout="strip" theme="t1-default" platform="windows" />;
+  // The active theme + variant persist across restarts (no picker UI yet: Phase 4).
+  const [appearance] = useState(() => {
+    const a = loadAppearance(window.localStorage, MANIFESTS);
+    saveAppearance(window.localStorage, a); // normalises anything stale or invalid on disk
+    return a;
+  });
+  const dom = variantToDom(appearance.variant);
+  return (
+    <Player
+      nowPlaying={IDLE_NOW_PLAYING}
+      positionMs={0}
+      layout={appearance.variant.layout}
+      theme={appearance.theme}
+      overrides={dom.properties}
+      hidden={appearance.variant.hidden}
+      fx={{ ...MANIFESTS[appearance.theme].fx, ...dom.effects }}
+      platform="windows"
+    />
+  );
 }
 
 function App() {

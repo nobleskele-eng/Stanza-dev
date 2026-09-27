@@ -37,6 +37,10 @@ interface PlayerProps {
   /** Active theme id (contract v2, DECISIONS.md 2026-09-22) — lets a theme scope its
    * CSS to itself via `[data-theme]`, needed once two themes can share one `layout`. */
   theme: string;
+  /** Variant token overrides, applied as inline custom properties on `.mp-root` (PLAN.md §4). */
+  overrides?: Record<string, string>;
+  /** Variant-hidden parts, as `data-hide-<part>` attributes on `.mp-root`. */
+  hidden?: readonly string[];
   platform: Platform;
   fx?: FxSettings;
   onPlayPause?: () => void;
@@ -55,6 +59,8 @@ export function Player({
   positionMs: positionMsProp,
   layout,
   theme,
+  overrides,
+  hidden,
   platform,
   fx,
   onPlayPause,
@@ -106,6 +112,7 @@ export function Player({
   );
 
   const rootStyle = {
+    ...overrides,
     "--mp-progress": progress,
     ...(artPalette && {
       "--mp-art-1": artPalette.art1,
@@ -137,6 +144,7 @@ export function Player({
       data-fx-debris={fx?.debris || undefined}
       data-fx-title={fx?.title}
       data-fx-artist={fx?.artist}
+      {...Object.fromEntries((hidden ?? []).map((p) => [`data-hide-${p}`, true]))}
       data-hover={hover || undefined}
       onPointerEnter={() => setHover(true)}
       onPointerLeave={() => setHover(false)}
