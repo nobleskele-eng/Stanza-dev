@@ -1705,3 +1705,82 @@ no customizer UI/persistence or Rust theme loader (Phase 4/5) — effects are ap
   there also needs `macOSPrivateApi: true` (C6), not set. Still open from S4: CSP is `null` in `tauri.conf.json` and must
   be set (only enforced in release builds). `productName` is still `tauri-app` (exe/installer name); the WebView2 data dir
   follows the identifier `com.stanza.app`, so renaming it later won't lose saved appearances.
+
+## 2026-09-27 — Slice 3: clicks pass through the transparent part of the window
+- **Was (Slice 2's open call):** the window is sized for the theme's largest state, so the idle T1 card (≈280×245)
+  sat in a 340×600 always-on-top window whose whole rectangle swallowed clicks meant for what was underneath.
+- **Choice (you said "continue" without picking; I took the only option with no design or contract change):** (b),
+  click-through by cursor position. (a) resize-to-fit breaks the contract's "the window fits every state" rule and T1's
+  reserved margin; (c) leaves the bug.
+- **Now:** new `src-tauri/src/hit_region.rs`. The command `set_hit_region` stores the player's boxes (logical px,
+  window-relative), and a thread polls every 30 ms. It calls `set_ignore_cursor_events(true)` only while the cursor is
+  outside every box, and only when that changes. With no region, an empty region, zero-area boxes or a bad scale factor,
+  it never ignores, so a frontend failure can't leave an unclickable window. Frontend: `installHitRegion` in
+  `src/window/nativeWindow.ts` reports the border boxes of `.mp-root` and `.mp-root > .mp-window`. It re-measures on a
+  ResizeObserver hit, an attribute change on either part (not their subtree, where effects write per-frame
+  `--mp-beat`), `transitionend`/`animationend`, and window resize, and sends only when the boxes changed.
+- **Why `.mp-root` ∪ `.mp-window`, not `.mp-window` alone:** `data-hover` comes from pointer enter/leave on `.mp-root`.
+  A hit area smaller than `.mp-root` could stop the webview's mouse events while the pointer is still inside
+  `.mp-root`, leaving `data-hover` stuck on. Bleed past the boxes (T1's Collage, shadows) is click-through.
+  THEME_CONTRACT.md gets a note after the field table. There is no version bump because no part, attribute or variable
+  name changed; the note documents app behaviour.
+- **Surprise: tao's ignore is `WS_EX_TRANSPARENT | WS_EX_LAYERED` with no `SetLayeredWindowAttributes` call.** On a
+  classic window that makes it invisible. With WebView2 content it doesn't: captures show the card drawn in both states.
+  `GetLayeredWindowAttributes` reported no attributes on the first toggle and `alpha=255, LWA_ALPHA` on later ones.
+  Something sets them, presumably WebView2 or DWM; I didn't investigate.
+- **Surprise: polling through Tauri's getters cost ~1% of a core.** `cursor_position`, `inner_position` and
+  `scale_factor` each round-trip the main event loop. Idle CPU of the app process per 10 s:
+  - Tauri getters: 94 / 109 / 94 / 94 ms
+  - Slice 2 build (no poller): 0 ms, 8 runs (the timer resolution is ~16 ms)
+  - Windows syscalls on the poll thread (`GetCursorPos`, `ClientToScreen`, `GetDpiForWindow`; HWND fetched once): 0 to
+    47 ms over 7 runs of the final build, median 16 ms
+  The non-Windows path keeps the Tauri getters (**macOS untested**; its CPU cost there is unmeasured). New direct
+  dependency: `windows` 0.61 with four features tao already enables. `Cargo.lock` gains one line and nothing new is
+  compiled.
+- **Surprise (a bug in my own probe):** the first flicker measurement reported 0 difference, but it was invalid. In
+  Windows PowerShell `diff` is a built-in alias for `Compare-Object`, and aliases outrank functions, so my `Diff`
+  function never ran; the probe compared two Bitmap objects by type name. I renamed the function and re-ran it with a
+  control.
+- **Saved position moved without my probe moving it:** between two of my runs, the saved window position changed from
+  (234,234) to (2658,-300), probably a second monitor. Most likely you dragged the window while one of my CPU runs had
+  it on screen. Every probe put the window back where it launched before closing, so the saved position is whatever it
+  was at launch.
+- **Real exe (ran, final build):** `tauri build --no-bundle`, 0 warnings. The Win32 probe moves only the Stanza window,
+  never the cursor. It reads the cursor, puts the window so the cursor lands on a given local point, waits 400 ms, and
+  then reads the ex-style bits and `WindowFromPoint`:
+
+  | Cursor | Transparent + layered bits | `WindowFromPoint` |
+  |---|---|---|
+  | On transparent area (170,560) | both set | the app underneath (Spotify) |
+  | On card (140,120) | both clear | Stanza |
+  | Right of card (330,20) | both set | the app underneath (Spotify) |
+  | On card (20,20) | both clear | Stanza |
+
+  Flicker probe, run on the syscall build before the attribute watch was added (a frontend-only difference): 20 of
+  20 toggles observed. 60 frames captured right after the toggles differ from
+  the steady card by a mean of 0 RGB, while the control (card moved away) differs by 30.7. GDI captures land every
+  ~10–30 ms, so a flash shorter than a frame could be missed. The app exits cleanly with code 0.
+- **Automated:**
+  - `cargo test`: 4 unit tests of the hit math, covering edges, 125%/150% scaling, a monitor at negative x, and never
+    ignoring without a usable region.
+  - `e2e/production.spec.ts` (IPC recorder): the boxes are reported at launch and are smaller than T1's 340×600 window.
+    The region follows a grow, a shrink back, and an instant transform, and it is not re-sent while unchanged.
+  - **Mutation-checked, each restored afterwards:** disabling the ResizeObserver fails the growth test; never reporting
+    fails both tests; dropping the attribute watch fails the transform step.
+- **Result (ran):** `npx tsc --noEmit` clean; `npx vitest run` 129 passed; `cargo test` 4 passed; `cargo clippy
+  --all-targets` 0 warnings; `cargo fmt --check` clean; `npx playwright test` 588 passed (Chromium + WebKit, 4 new
+  runs); `npm run tauri build -- --no-bundle` OK, including `check-fixtures-excluded: OK`.
+- **Not verified:**
+  - Real mouse use: the ≤30 ms hover latency when entering the player, and a real click on the transparent area landing
+    in the app underneath. The probe shows Windows' hit test picks that app, but I injected no clicks.
+  - 125%/150% scaling and mixed-DPI monitors (unit-tested math only).
+  - macOS.
+  - The box is a rectangle, so the corners outside the card's radius (16–40 px depending on theme) still take clicks.
+- **Relation to S8 (PRIORITIZATION_PLAN.md):** this answers S8's hit-testing question for rectangles: clicks pass
+  through outside a region. It does so with cursor-polled ignore rather than `SetWindowRgn`, which would also clip
+  painting (shadows, the Collage). Arbitrary silhouettes remain open.
+- **Still open:**
+  - From Slice 2: T1's Collage is clipped on the left (your call: centre the player, or give T1 a margin); CSP is still
+    `null`; `productName` is still `tauri-app`.
+  - The theme picker is blocked on copy: every shipped `theme.json` `name` is `[NEEDS COPY]`, so a picker would show
+    five identical labels.

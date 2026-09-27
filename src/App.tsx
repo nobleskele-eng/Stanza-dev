@@ -14,7 +14,7 @@ import { variantToDom } from "./theme/variant";
 import { DevHarness } from "./dev/DevHarness";
 import { Player } from "./player/Player";
 import { IDLE_NOW_PLAYING } from "./types/player";
-import { fitWindowToTheme, installWindowDrag } from "./window/nativeWindow";
+import { fitWindowToTheme, installHitRegion, installWindowDrag } from "./window/nativeWindow";
 
 function ProductionPlaceholder() {
   // Real Spotify/GSMTC adapter wiring is a later phase (docs/PLAN.md Phase 5+ /
@@ -30,6 +30,8 @@ function ProductionPlaceholder() {
   // as in the harness and every e2e check (docs/DECISIONS.md, Slice 2).
   useEffect(() => fitWindowToTheme(MANIFESTS[appearance.theme].window), [appearance.theme]);
   useEffect(() => installWindowDrag(), []);
+  // Clicks pass through the transparent part of the window (docs/DECISIONS.md, Slice 3).
+  useEffect(() => installHitRegion(), []);
   const dom = variantToDom(appearance.variant);
   return (
     <Player

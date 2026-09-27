@@ -32,3 +32,9 @@ lto = true
 opt-level = 3
 panic = "abort"
 strip = true
+
+# Hit-region polling (src/hit_region.rs) reads the cursor and window origin with plain syscalls
+# instead of Tauri getters that each round-trip the main event loop. Same version and features
+# tao already builds, so nothing new is compiled.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_UI_HiDpi", "Win32_UI_WindowsAndMessaging"] }

@@ -143,6 +143,60 @@ test("in Tauri, pressing the player drags the window; controls, right-clicks and
   await expect.poll(drags, "a primary press on the player's own surface starts a drag").toBe(2);
 });
 
+// --- Click-through (Slice 3). Rust lets clicks through the window wherever the cursor is outside the boxes the
+// bundle reports; these check the reports. The Rust hit test has unit tests; the real window is probed via Win32.
+type HitRect = { x: number; y: number; width: number; height: number };
+const lastHitRegion = async (page: import("@playwright/test").Page) =>
+  ((await ipcCalls(page, "set_hit_region")).at(-1)?.args.rects ?? null) as HitRect[] | null;
+const playerBoxes = (page: import("@playwright/test").Page) =>
+  page.evaluate(() =>
+    [".mp-root", ".mp-window"].map((s) => {
+      const r = document.querySelector(s)!.getBoundingClientRect();
+      return { x: r.x, y: r.y, width: r.width, height: r.height };
+    }),
+  );
+
+test("in Tauri, the player's own boxes become the window's hit area, leaving the rest of the window click-through", async ({ page }) => {
+  await fakeTauri(page);
+  await page.goto("/");
+  await expect(page.locator(".mp-root")).toHaveAttribute("data-theme", "t1-default");
+  await expect.poll(() => lastHitRegion(page)).toEqual(await playerBoxes(page));
+
+  // The point of it: T1's declared window is 340x600, the idle card much smaller. Its Collage bleed and ambient
+  // shadow sit outside these boxes, so they never block clicks.
+  const region = (await lastHitRegion(page))!;
+  expect(Math.max(...region.map((r) => r.x + r.width))).toBeLessThan(340);
+  expect(Math.max(...region.map((r) => r.y + r.height))).toBeLessThan(600);
+  const calls = (await ipcCalls(page, "set_hit_region")).length;
+  await page.waitForTimeout(300);
+  expect((await ipcCalls(page, "set_hit_region")).length, "an unchanged player is not re-reported").toBe(calls);
+});
+
+// Production is idle-only until an adapter lands, and idle themes don't grow on hover (T3 reveals controls only
+// with a track), so this grows .mp-window directly: the same resize a hover-reveal or theme switch causes.
+test("in Tauri, the hit area follows the player when it grows and shrinks back", async ({ page }) => {
+  await fakeTauri(page);
+  await page.goto("/");
+  await expect(page.locator(".mp-root")).toHaveAttribute("data-theme", "t1-default");
+  await expect.poll(() => lastHitRegion(page)).toEqual(await playerBoxes(page));
+  const idle = (await lastHitRegion(page))!;
+
+  await page.locator(".mp-window").evaluate((el) => ((el as HTMLElement).style.paddingBottom = "120px"));
+  const grown = await playerBoxes(page);
+  expect(grown[1].height).toBeGreaterThan(idle[1].height + 50);
+  await expect.poll(() => lastHitRegion(page)).toEqual(grown);
+
+  await page.locator(".mp-window").evaluate((el) => ((el as HTMLElement).style.paddingBottom = ""));
+  await expect.poll(() => lastHitRegion(page)).toEqual(idle);
+
+  // A transform switched on instantly (no resize, no transition, as a [data-hover] rule might) is caught by
+  // watching the parts' own attributes.
+  await page.locator(".mp-window").evaluate((el) => Object.assign((el as HTMLElement).style, { transition: "none", transform: "translateX(30px)" }));
+  const moved = await playerBoxes(page);
+  expect(moved[1].x).toBeCloseTo(idle[1].x + 30, 0);
+  await expect.poll(() => lastHitRegion(page)).toEqual(moved);
+});
+
 test("outside Tauri (plain browser) the window code is inert: no errors on load or press", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));

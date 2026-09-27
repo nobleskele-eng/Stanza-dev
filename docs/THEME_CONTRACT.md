@@ -203,6 +203,13 @@ customization layer.
 | `fx` | effects object, optional | Effects this theme ships switched **on**, using the same keys and values as a variant's `effects` (`shapes`, `waveform`, `flow`, `morph`, `debris`: `true`; `title`, `artist`: `typewriter \| ripple \| liquid \| splitflap`). A variant still overrides it, and switching theme resets to the new theme's own. Validated with the variant effect rules; nothing but the dev harness applies it yet (no theme loader exists) | `src/theme/variant.test.ts` (every shipped `theme.json`) |
 | `controls` | map, optional | `{ "<token>": { "type": "color \| length \| number \| font", "min"?, "max"? } }`. Only these tokens are customizer-editable. App-provided variables are never editable even if listed | variant validator |
 
+**Where the real window takes clicks (app behaviour, not a new name; no version bump).** In the native
+window only the player's own boxes take clicks: the border boxes of `.mp-root` and `.mp-window` (transforms
+included). Everywhere else in the declared `window`, clicks pass through to whatever is underneath: the
+transparent margin, and anything that bleeds past those boxes (`t1-default`'s Collage, shadows, glows). So a
+theme must keep every interactive part inside `.mp-window` (the grid items already are) and must not rely on
+hover or clicks over bleed. See docs/DECISIONS.md, Slice 3.
+
 Unknown fields: *planned* to be ignored by the Phase 4 loader (nothing reads `theme.json` at runtime yet). Copy fields hold `[NEEDS COPY]` rather than invented text.
 
 ---

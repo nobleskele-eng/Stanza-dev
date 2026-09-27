@@ -1,3 +1,5 @@
+mod hit_region;
+
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -16,7 +18,12 @@ pub fn run() {
                 .with_state_flags(tauri_plugin_window_state::StateFlags::POSITION)
                 .build(),
         )
-        .invoke_handler(tauri::generate_handler![greet])
+        .manage(hit_region::HitRegion::default())
+        .setup(|app| {
+            hit_region::spawn_poller(app.handle().clone(), "main");
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![greet, hit_region::set_hit_region])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
