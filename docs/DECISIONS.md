@@ -1879,3 +1879,47 @@ no customizer UI/persistence or Rust theme loader (Phase 4/5) — effects are ap
   - 125%/150% scaling, and macOS (the popup-blocks-until-closed assumption is also untested there).
   - Screen readers (see above).
   - Whether a swap ever shows a clipped frame: the order of operations is tested, but no frame capture was taken.
+
+## 2026-09-27 — Slice 5: a real content security policy, and the app is named Stanza
+- **Was:** `csp: null` (open since S4; any page script could load anything), and the product was still the scaffold's
+  `tauri-app` (exe name, Task Manager description, future installer name).
+- **CSP now** (`tauri.conf.json` `app.security.csp`), the S4 spike's policy tightened to what the app loads today:
+  `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'
+  ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; form-action 'none'`.
+  - **`img-src data:` is required, not a leftover.** The always-rendered `.mp-fx-filters` dither filter loads a
+    canvas-generated `data:` PNG through `feImage` (`src/fx/artFilter.ts`). Removing it makes the e2e test fail with
+    `img-src data`.
+  - **`connect-src ipc: http://ipc.localhost`** is Tauri's IPC.
+  - **Dropped from S4's policy:** `blob:` and `asset:`. They were for the runtime theme loader, which isn't on `main`
+    yet. The asset protocol isn't enabled either, and S4 wrote `https://asset.localhost` where Tauri v2 on Windows
+    serves `http://`, which needs checking when the loader lands.
+  - **Scan:** nothing in `src/` sets `style=` through markup, injects `<style>`, or uses eval/`new Function`.
+    anime.js, Matter.js and `@splitflap/core` don't either (splitflap only clears `innerHTML`). React, anime.js and the
+    effects write styles through the CSSOM, which `style-src 'self'` allows.
+- **Rename:** `productName` "Stanza" (COPY.md's approved app name). The Cargo package becomes `stanza` (the exe is now
+  `stanza.exe`), with lib `stanza_lib`, and the npm package becomes `stanza`.
+  - The Tauri schema recommends renaming the package over `mainBinaryName`, and that also covers `tauri dev`.
+  - `productName` sets the exe's ProductName and FileDescription, which is what Task Manager shows.
+  - The identifier stays `com.stanza.app`, so WebView2 storage (the saved appearance) and the window-state file are
+    untouched.
+  - The old `target/release/tauri-app.exe` is left over from earlier builds and is stale.
+- **Real exe (ran):** **pending.** When I went to run it, your own `tauri-app.exe` (the Slice 4 build, opened from Explorer at
+  20:34) was running. A second instance would share its WebView2 profile, and with it the saved theme, so I didn't start
+  one. The checks run once you close yours, and the results are added below. What I did check without launching:
+  `stanza.exe`'s version info reads ProductName "Stanza", FileDescription "Stanza", CompanyName "stanza", 0.1.0 (the old
+  exe reads "tauri-app").
+- **Automated:** `e2e/production.spec.ts` serves the production bundle with the header read from `tauri.conf.json`,
+  walks all five themes through the (fake-IPC) menu, and asserts no `securitypolicyviolation`. A canary remote image
+  must then be blocked, so an unenforced policy can't pass it. It passes on both engines. Mutation-checked: dropping
+  `data:` from `img-src` fails it (`img-src data`).
+- **Result (ran):** `npx tsc --noEmit` clean; `npx vitest run` 132 passed; `cargo test` 4 passed; `cargo clippy --all-targets`
+  0 warnings; `cargo fmt --check` clean; `npx playwright test` 600 passed (Chromium + WebKit, 2 new runs); `npm run tauri
+  build -- --no-bundle` OK with 0 warnings, including `check-fixtures-excluded: OK`, producing `stanza.exe`.
+- **Not covered:** a real track isn't possible yet (no adapter), so these paths haven't run under the CSP in any
+  build:
+  - loading artwork into `<img>` plus palette extraction on a canvas
+  - flow, split-flap and debris with real text; the lazy Matter.js chunk
+  - the morph view transition
+  The scan above found nothing they would trip, and the lazy chunk is a same-origin script. Re-run the CSP e2e check
+  once an adapter feeds tracks: GSMTC thumbnails will likely arrive as `data:`/`blob:` URLs or through the asset
+  protocol, and `img-src` will need whichever it is. **macOS untested.**

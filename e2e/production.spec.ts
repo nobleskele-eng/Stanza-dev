@@ -349,6 +349,39 @@ test("in Tauri, 20 theme swaps through the menu: every swap lands, no errors, at
   expect(errors).toEqual([]);
 });
 
+// --- Content security policy (Slice 5). Tauri sends tauri.conf.json's CSP as a header in release builds only (S4: not
+// in `tauri dev`), so this serves the production bundle with that same header and fails on anything it blocks.
+const CSP = (JSON.parse(readFileSync(new URL("../src-tauri/tauri.conf.json", import.meta.url), "utf8")) as { app: { security: { csp: string } } }).app
+  .security.csp;
+
+test("the production bundle runs under the shipped CSP: nothing it loads is blocked, in any theme; a remote image is", async ({ page }) => {
+  await fakeTauri(page);
+  await page.route(
+    (url) => url.pathname === "/" || url.pathname.endsWith(".html"),
+    async (route) => {
+      const response = await route.fetch();
+      await route.fulfill({ response, headers: { ...response.headers(), "content-security-policy": CSP } });
+    },
+  );
+  await page.addInitScript(() => {
+    const seen: string[] = [];
+    Object.assign(window, { __cspViolations: seen });
+    window.addEventListener("securitypolicyviolation", (e) => seen.push(`${e.violatedDirective} ${e.blockedURI}`), true);
+  });
+  const violations = () => page.evaluate(() => (window as unknown as { __cspViolations: string[] }).__cspViolations);
+
+  const response = await page.goto("/");
+  expect(response!.headers()["content-security-policy"]).toBe(CSP);
+  await expect(page.locator(".mp-root")).toHaveAttribute("data-theme", "t1-default");
+  for (const id of [...THEME_IDS.slice(1), "t1-default"]) await pickTheme(page, id);
+  await page.waitForTimeout(300);
+  expect(await violations(), "the app's own scripts, styles, filters (incl. the data: dither tile) and IPC").toEqual([]);
+
+  // Canary: proves the policy is really being enforced here, so the empty list above means something.
+  await page.evaluate(() => document.body.append(Object.assign(new Image(), { src: "https://example.invalid/canary.png" })));
+  await expect.poll(violations).toEqual([expect.stringMatching(/^img-src https:\/\/example\.invalid\/canary\.png$/)]);
+});
+
 test("outside Tauri (plain browser) right-click keeps the browser's own menu and opens nothing", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => window.addEventListener("contextmenu", (e) => ((window as unknown as { __prevented: boolean }).__prevented = e.defaultPrevented)));
