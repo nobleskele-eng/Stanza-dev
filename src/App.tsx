@@ -7,31 +7,63 @@ import "../themes/t2-artwork/theme.css";
 import "../themes/t3-pill/theme.css";
 import "../themes/t4-extreme/theme.css";
 import "../themes/t5-kinetic/theme.css";
-import { useEffect, useState } from "react";
-import { loadAppearance, saveAppearance } from "./theme/appearance";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { loadAppearance, saveAppearance, selectTheme } from "./theme/appearance";
 import { MANIFESTS } from "./theme/registry";
 import { variantToDom } from "./theme/variant";
 import { DevHarness } from "./dev/DevHarness";
 import { Player } from "./player/Player";
 import { IDLE_NOW_PLAYING } from "./types/player";
 import { fitWindowToTheme, installHitRegion, installWindowDrag } from "./window/nativeWindow";
+import { installThemeMenu } from "./window/themeMenu";
 
 function ProductionPlaceholder() {
   // Real Spotify/GSMTC adapter wiring is a later phase (docs/PLAN.md Phase 5+ /
   // the stranded spike/s2-gsmtc branch). The theme/DOM contract itself is done
   // (Phase 3) — rendered here idle, with no adapter feeding it yet.
-  // The active theme + variant persist across restarts (no picker UI yet: Phase 4).
-  const [appearance] = useState(() => {
+  // The active theme + variant persist across restarts; right-click picks the theme (Slice 4).
+  const [appearance, setAppearance] = useState(() => {
     const a = loadAppearance(window.localStorage, MANIFESTS);
     saveAppearance(window.localStorage, a); // normalises anything stale or invalid on disk
     return a;
   });
+  const active = useRef(appearance.theme);
+  // Last size asked of the native window, so a switch that already grew it to the new size isn't repeated.
+  const sizedTo = useRef("");
+  const sizeWindow = useCallback((size: { width: number; height: number }) => {
+    const key = `${size.width}x${size.height}`;
+    if (key === sizedTo.current) return Promise.resolve();
+    sizedTo.current = key;
+    return fitWindowToTheme(size);
+  }, []);
   // The native window takes the active theme's declared size; the player sits at its top-left,
   // as in the harness and every e2e check (docs/DECISIONS.md, Slice 2).
-  useEffect(() => fitWindowToTheme(MANIFESTS[appearance.theme].window), [appearance.theme]);
+  useEffect(() => {
+    void sizeWindow(MANIFESTS[appearance.theme].window);
+  }, [appearance.theme, sizeWindow]);
   useEffect(() => installWindowDrag(), []);
   // Clicks pass through the transparent part of the window (docs/DECISIONS.md, Slice 3).
   useEffect(() => installHitRegion(), []);
+
+  // Theme picker (Slice 4). Switching clears the old theme's overrides (selectTheme) and is saved at once.
+  // The window first grows to fit both themes so neither is clipped while React swaps them; the effect
+  // above then sets the new theme's exact size.
+  const pickTheme = useCallback(
+    (id: string) => {
+      const from = active.current;
+      if (id === from || !MANIFESTS[id]) return;
+      active.current = id;
+      const next = selectTheme(MANIFESTS, id);
+      saveAppearance(window.localStorage, next);
+      const a = MANIFESTS[from].window;
+      const b = MANIFESTS[id].window;
+      void sizeWindow({ width: Math.max(a.width, b.width), height: Math.max(a.height, b.height) }).then(() =>
+        setAppearance(next),
+      );
+    },
+    [sizeWindow],
+  );
+  useEffect(() => installThemeMenu(MANIFESTS, () => active.current, pickTheme), [pickTheme]);
   const dom = variantToDom(appearance.variant);
   return (
     <Player

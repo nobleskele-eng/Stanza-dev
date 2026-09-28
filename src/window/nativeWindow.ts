@@ -8,10 +8,10 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 /** Pressing inside one of these never starts a window drag (C8). */
 const NO_DRAG_SELECTOR = "button, input, a, [data-no-drag]";
 
-/** Set the native window to a theme's declared `window` size (logical px, so DPI scaling applies). */
-export function fitWindowToTheme(size: { width: number; height: number }): void {
-  if (!isTauri()) return;
-  getCurrentWindow()
+/** Set the native window to a theme's declared `window` size (logical px, so DPI scaling applies). Never rejects. */
+export function fitWindowToTheme(size: { width: number; height: number }): Promise<void> {
+  if (!isTauri()) return Promise.resolve();
+  return getCurrentWindow()
     .setSize(new LogicalSize(size.width, size.height))
     .catch((e) => console.error("setSize failed", e));
 }

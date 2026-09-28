@@ -192,7 +192,7 @@ customization layer.
 | Field | Type | Meaning | Checked |
 |---|---|---|---|
 | `id` | string | Unique id; equals the folder name under `themes/`. Variants bind to it | variant validator (theme match); folder-name match *planned* (Phase 4 loader) |
-| `name`, `author` | string | Display strings. Copy: `[NEEDS COPY]` until you write them | — |
+| `name`, `author` | string | Display strings. The theme picker (right-click menu) shows `name`, or `[NEEDS COPY]` if it is missing or blank, never the id. First-party names are placeholders tracked in docs/COPY.md "Theme names"; `author` is still `[NEEDS COPY]` and unused | `src/theme/registry.test.ts` (first-party `name` = COPY.md), `src/window/themeMenu.test.ts` |
 | `version` | semver string | The theme's own version | *planned* |
 | `contract` | integer | The contract version the theme was written against; must equal this file's version | variant validator |
 | `layout` | `pill \| card \| strip` | The default layout | variant validator |

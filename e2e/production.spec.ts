@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import { CONTRACT_VERSION } from "../src/theme/variant";
 
@@ -70,21 +71,43 @@ test("invalid stored appearance falls back to the default theme and is rewritten
 
 // --- Native window (Slice 2). Tauri's IPC is replaced by a recorder, so these check what the bundle *asks*
 // the native window to do; whether Tauri then does it is checked by hand in the release exe (DECISIONS.md).
-type IpcCall = { cmd: string; args: Record<string, unknown> };
+// `theme` = the player's data-theme at the moment of the call (to check what happens before vs after a theme swap).
+type IpcCall = { cmd: string; args: Record<string, unknown>; theme: string | null };
 
 async function fakeTauri(page: import("@playwright/test").Page) {
   await page.addInitScript(() => {
-    const calls: { cmd: string; args: unknown }[] = [];
+    const calls: { cmd: string; args: unknown; theme: string | null }[] = [];
+    const callbacks = new Map<number, (raw: unknown) => void>();
+    let nextCallback = 1;
+    let nextRid = 100;
+    let closeOpenMenu: (() => void) | null = null;
     Object.assign(window, {
       isTauri: true,
       __ipcCalls: calls,
+      // Deliver a message on a Channel the way Rust does, e.g. a native menu item's action firing.
+      __fireChannel: (channel: string, message: unknown) =>
+        callbacks.get(Number(channel.replace("__CHANNEL__:", "")))?.({ index: 0, message }),
+      // Like Tauri's, `popup` resolves only when the native menu closes; this closes it.
+      __closeMenu: () => {
+        const close = closeOpenMenu;
+        closeOpenMenu = null;
+        close?.();
+      },
       __TAURI_INTERNALS__: {
         metadata: { currentWindow: { label: "main" }, currentWebview: { windowLabel: "main", label: "main" } },
         invoke: (cmd: string, args: unknown) => {
-          calls.push({ cmd, args: JSON.parse(JSON.stringify(args ?? {})) });
+          const theme = document.querySelector(".mp-root")?.getAttribute("data-theme") ?? null;
+          calls.push({ cmd, args: JSON.parse(JSON.stringify(args ?? {})), theme });
+          // Resource-creating commands answer [rid, id]; everything else resolves to nothing.
+          if (cmd === "plugin:menu|new") return Promise.resolve([nextRid, `menu-${nextRid++}`]);
+          if (cmd === "plugin:menu|popup") return new Promise((resolve) => (closeOpenMenu = () => resolve(null)));
           return Promise.resolve(null);
         },
-        transformCallback: () => 0,
+        transformCallback: (cb: (raw: unknown) => void) => {
+          callbacks.set(nextCallback, cb);
+          return nextCallback++;
+        },
+        unregisterCallback: (id: number) => callbacks.delete(id),
       },
     });
   });
@@ -98,7 +121,7 @@ test("in Tauri, launch sizes the window to the default theme's declared window (
   await page.goto("/");
   await expect(page.locator(".mp-root")).toHaveAttribute("data-theme", "t1-default");
   await expect.poll(() => ipcCalls(page, "plugin:window|set_size")).toEqual([
-    { cmd: "plugin:window|set_size", args: { label: "main", value: { Logical: { width: 340, height: 600 } } } },
+    { cmd: "plugin:window|set_size", args: { label: "main", value: { Logical: { width: 340, height: 600 } } }, theme: "t1-default" },
   ]);
 });
 
@@ -195,6 +218,142 @@ test("in Tauri, the hit area follows the player when it grows and shrinks back",
   const moved = await playerBoxes(page);
   expect(moved[1].x).toBeCloseTo(idle[1].x + 30, 0);
   await expect.poll(() => lastHitRegion(page)).toEqual(moved);
+});
+
+// --- Theme picker (Slice 4): right-click opens a native menu, created and shown over IPC. Picking an item is
+// simulated by firing its action channel, as Rust does when the user clicks it.
+const THEME_IDS = ["t1-default", "t2-artwork", "t3-pill", "t4-extreme", "t5-kinetic"]; // registry order
+const themeJson = (id: string) =>
+  JSON.parse(readFileSync(new URL(`../themes/${id}/theme.json`, import.meta.url), "utf8")) as {
+    name: string;
+    window: { width: number; height: number };
+  };
+type MenuItemArg = { text: string; checked: boolean; handler: string };
+const lastMenuItems = async (page: import("@playwright/test").Page) =>
+  ((await ipcCalls(page, "plugin:menu|new")).at(-1)?.args.options as { items: MenuItemArg[] } | undefined)?.items;
+async function openThemeMenu(page: import("@playwright/test").Page) {
+  const before = (await ipcCalls(page, "plugin:menu|popup")).length;
+  const box = (await page.locator(".mp-window").boundingBox())!;
+  await page.mouse.click(box.x + 20, box.y + 20, { button: "right" });
+  await expect.poll(async () => (await ipcCalls(page, "plugin:menu|popup")).length).toBe(before + 1);
+  return lastMenuItems(page);
+}
+const closeMenu = (page: import("@playwright/test").Page) =>
+  page.evaluate(() => (window as unknown as { __closeMenu: () => void }).__closeMenu());
+async function pickTheme(page: import("@playwright/test").Page, id: string) {
+  const items = (await openThemeMenu(page))!;
+  const item = items.find((i) => i.text === themeJson(id).name)!;
+  await page.evaluate(([h]) => (window as unknown as { __fireChannel: (c: string, m: unknown) => void }).__fireChannel(h, "item"), [item.handler]);
+  await closeMenu(page); // clicking an item closes the native menu
+  await expect(page.locator(".mp-root")).toHaveAttribute("data-theme", id);
+}
+
+// Regression (found in the real exe): Tauri's `popup` holds the webview's resource table until the menu closes, and
+// `new`/`close` need it on the main thread, so sending either while a menu is open deadlocks the app.
+test("in Tauri, nothing touches menu resources while a menu is open, and the old menu is closed before the next is made", async ({ page }) => {
+  await fakeTauri(page);
+  await page.goto("/");
+  await expect(page.locator(".mp-root")).toHaveAttribute("data-theme", "t1-default");
+  const cmds = () => page.evaluate(() => (window as unknown as { __ipcCalls: IpcCall[] }).__ipcCalls.map((c) => c.cmd).filter((c) => /menu\||resources\|/.test(c)));
+
+  await openThemeMenu(page); // menu 1 is open: its popup has not returned
+  const box = (await page.locator(".mp-window").boundingBox())!;
+  await page.mouse.click(box.x + 30, box.y + 30, { button: "right" });
+  await page.keyboard.press("Shift+F10");
+  await page.waitForTimeout(200);
+  expect(await cmds(), "extra requests while a menu is open are dropped").toEqual(["plugin:menu|new", "plugin:menu|popup"]);
+
+  await closeMenu(page);
+  await openThemeMenu(page);
+  expect(await cmds(), "close (awaited) -> new -> popup, never interleaved").toEqual([
+    "plugin:menu|new",
+    "plugin:menu|popup",
+    "plugin:resources|close",
+    "plugin:menu|new",
+    "plugin:menu|popup",
+  ]);
+  expect((await ipcCalls(page, "plugin:resources|close"))[0].args.rid).toBe(100);
+});
+
+test("in Tauri, right-click opens a native menu of every theme by name, the active one checked, at the click point", async ({ page }) => {
+  await fakeTauri(page);
+  await page.goto("/");
+  await expect(page.locator(".mp-root")).toHaveAttribute("data-theme", "t1-default");
+  await page.evaluate(() => window.addEventListener("contextmenu", (e) => ((window as unknown as { __prevented: boolean }).__prevented = e.defaultPrevented)));
+
+  const items = (await openThemeMenu(page))!;
+  expect(items.map((i) => i.text)).toEqual(THEME_IDS.map((id) => themeJson(id).name));
+  expect(items.map((i) => i.checked)).toEqual([true, false, false, false, false]);
+  expect(items.map((i) => i.text)).not.toContain("[NEEDS COPY]");
+  const box = (await page.locator(".mp-window").boundingBox())!;
+  expect((await ipcCalls(page, "plugin:menu|popup")).at(-1)!.args.at).toEqual({ Logical: { x: box.x + 20, y: box.y + 20 } });
+  expect(await page.evaluate(() => (window as unknown as { __prevented: boolean }).__prevented), "the webview's own menu is suppressed").toBe(true);
+});
+
+test("in Tauri, picking a theme switches it, clears the old overrides, saves it and resizes the window (growing first)", async ({ page }) => {
+  await fakeTauri(page);
+  await page.goto("/");
+  await page.evaluate(
+    ([key, contract]) =>
+      localStorage.setItem(
+        key as string,
+        JSON.stringify({ theme: "t1-default", variant: { theme: "t1-default", contract, layout: "card", overrides: { "--mp-accent": "#123456" }, hidden: ["album"] } }),
+      ),
+    [APPEARANCE_STORAGE_KEY, CONTRACT_VERSION] as const,
+  );
+  await page.reload();
+  const root = page.locator(".mp-root");
+  await expect(root).toHaveAttribute("data-hide-album");
+  const sizesFrom = async (n: number) =>
+    (await ipcCalls(page, "plugin:window|set_size")).slice(n).map((c) => ({ size: c.args.value, during: c.theme }));
+  await expect.poll(async () => (await ipcCalls(page, "plugin:window|set_size")).length).toBe(1);
+
+  // Smaller theme: no pre-grow, one exact resize once the new theme is on screen.
+  let n = (await ipcCalls(page, "plugin:window|set_size")).length;
+  await pickTheme(page, "t3-pill");
+  await expect(root).toHaveAttribute("data-layout", "pill");
+  await expect(root).not.toHaveAttribute("data-hide-album");
+  expect(await root.evaluate((el) => (el as HTMLElement).style.getPropertyValue("--mp-accent"))).toBe("");
+  const stored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!), APPEARANCE_STORAGE_KEY);
+  expect(stored).toMatchObject({ theme: "t3-pill", variant: { theme: "t3-pill", layout: "pill", overrides: {}, hidden: [] } });
+  await expect.poll(() => sizesFrom(n)).toEqual([{ size: { Logical: { width: 248, height: 86 } }, during: "t3-pill" }]);
+
+  // The menu now checks the new theme, and the previous menu resource was released.
+  const items = (await openThemeMenu(page))!;
+  expect(items.filter((i) => i.checked).map((i) => i.text)).toEqual([themeJson("t3-pill").name]);
+  expect((await ipcCalls(page, "plugin:resources|close")).map((c) => c.args.rid)).toEqual([100]); // the fake's first rid
+  await closeMenu(page); // dismissed without a pick
+
+  // T5 (320x490) -> T4 (282x529): neither contains the other, so the window first grows to 320x529 while T5 is
+  // still showing, then takes T4's exact size after T4 renders. Neither theme is ever clipped.
+  await pickTheme(page, "t5-kinetic");
+  n = (await ipcCalls(page, "plugin:window|set_size")).length;
+  await pickTheme(page, "t4-extreme");
+  await expect.poll(() => sizesFrom(n)).toEqual([
+    { size: { Logical: { width: 320, height: 529 } }, during: "t5-kinetic" },
+    { size: { Logical: { width: 282, height: 529 } }, during: "t4-extreme" },
+  ]);
+});
+
+test("in Tauri, 20 theme swaps through the menu: every swap lands, no errors, at most one live menu", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
+  await fakeTauri(page);
+  await page.goto("/");
+  await expect(page.locator(".mp-root")).toHaveAttribute("data-theme", "t1-default");
+  for (let i = 1; i <= 20; i++) await pickTheme(page, THEME_IDS[i % THEME_IDS.length]);
+  const live = (await ipcCalls(page, "plugin:menu|new")).length - (await ipcCalls(page, "plugin:resources|close")).length;
+  expect(live).toBe(1);
+  await expect(page.locator(".mp-root")).toHaveAttribute("data-theme", THEME_IDS[20 % THEME_IDS.length]);
+  expect(errors).toEqual([]);
+});
+
+test("outside Tauri (plain browser) right-click keeps the browser's own menu and opens nothing", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => window.addEventListener("contextmenu", (e) => ((window as unknown as { __prevented: boolean }).__prevented = e.defaultPrevented)));
+  await page.locator(".mp-window").click({ button: "right" });
+  expect(await page.evaluate(() => (window as unknown as { __prevented: boolean }).__prevented)).toBe(false);
 });
 
 test("outside Tauri (plain browser) the window code is inert: no errors on load or press", async ({ page }) => {

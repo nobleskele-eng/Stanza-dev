@@ -1784,3 +1784,98 @@ no customizer UI/persistence or Rust theme loader (Phase 4/5) — effects are ap
     `null`; `productName` is still `tauri-app`.
   - The theme picker is blocked on copy: every shipped `theme.json` `name` is `[NEEDS COPY]`, so a picker would show
     five identical labels.
+
+## 2026-09-27 — Slice 4: theme picker (right-click menu) and placeholder theme names
+- **Names (doc conflict, your instruction wins):** you said "name the themes anything for now". CLAUDE.md says never
+  to generate displayed text, so I invented nothing and used the working names PLAN.md's roster and DECISIONS.md
+  already used: **Default** (T1's roster name, since you'd pushed back on "Ring + Depth"), **Glow Card**, **Micro
+  Pill**, **Extreme**, **Kinetic**.
+  - They are listed in COPY.md's new "Theme names (first-party)" section, marked as placeholders. Each theme.json
+    `name` must equal its entry, checked by `src/theme/registry.test.ts`.
+  - `author` is untouched: still `[NEEDS COPY]` and unused.
+  - THEME_CONTRACT.md's `name` row now says what shows it. No version bump, since no part, attribute or variable name
+    changed.
+- **Picker (first cut):** right-clicking the player (or Shift+F10 / the Menu key) opens a native menu at that point.
+  It is made with Tauri's JS menu API: check items listing every theme by `name`, the active one checked.
+  - The names are its only text, so it needs no other copy.
+  - Picking a theme calls `selectTheme`, which clears the old theme's overrides (PLAN.md), and saves at once.
+  - The window first grows to the union of the old and new sizes, so neither theme is clipped while React swaps them.
+    After the new theme renders it takes its exact size, and a size already requested isn't requested again.
+  - Outside Tauri the browser's own context menu is left alone.
+  - PLAN.md Phase 4 asks for a "theme picker with previews". Previews wait for a settings window, which needs copy for
+    its chrome.
+- **Judgement call:** right-clicking on the artwork opens the menu over the artwork box. CLAUDE.md's rule is about
+  interactive controls sitting on or over the artwork, and `e2e/contract.spec.ts` checks DOM controls. A transient OS
+  menu the user summoned isn't one, and that check still passes. Flagging it in case you read the rule more strictly.
+- **Surprise: a real deadlock, found only in the real exe, fixed.**
+  - **Symptom:** the second right-click after picking a theme hung the app, with its menu on screen. It happened twice.
+    The main thread sat in a lock wait, not in the menu's message loop.
+  - **Cause, from Tauri 2.11.5's source:**
+    - `plugin:menu|popup` is async. It holds the webview's resource table (`webview.resources_table()`) while
+      `popup_inner` runs the modal menu on the main thread, and waits for it to close.
+    - `plugin:resources|close` and `plugin:menu|new` are synchronous commands. Tauri runs those on the main thread, and
+      they need the same table.
+    - My first version closed the previous menu without awaiting it, racing the new popup. When the popup won, `close`
+      landed on the main thread inside the modal loop and waited on a lock held by the thread waiting on the main thread.
+  - **Fix (`src/window/themeMenu.ts`):** strictly one step at a time. Each request awaits the previous menu's close,
+    then creates the menu, then shows it. Requests arriving while one is in flight are dropped (`popup` resolves only
+    when the menu closes), and nothing touches the resource table while a menu is open.
+  - **Regression test:** in the e2e fake, `popup` now stays pending until the test closes the menu, as Tauri's does. The
+    test asserts no resource commands while a menu is open, extra right-clicks dropped, and close → new → popup in that
+    order. Mutation-checked: the old `themeMenu.ts` fails exactly this test.
+  - **Why fake IPC missed it:** in the fake, `popup` resolved instantly. That is a limit of testing through fake IPC,
+    so the real-exe drive below is the check that counts.
+- **Surprise: UI Automation sees the menu as an empty Pane.** muda draws the items itself, so there's nothing to expose.
+  Screen readers probably can't read the theme names. **Open accessibility issue, not fixed.**
+- **Surprises in my own test harness (no product impact):**
+  - A WebView2 browser process can outlive `tauri-app.exe` when the app is closed with a menu open or killed. A new
+    instance launched with different WebView2 arguments then joins it, and starts slowly or fails. The driver now waits
+    for all Stanza processes to exit between launches.
+  - `$out` in my PowerShell probe collided with its own `-Out` parameter; PowerShell names are case-insensitive.
+  - An interrupted run left your saved theme as Micro Pill. The final run re-selected Default through the menu and
+    confirmed it after a restart.
+- **Real exe (ran), `tauri build --no-bundle` with 0 warnings:**
+  - **How it was driven:** launched with `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port`. Right-clicks
+    were dispatched into the page over CDP, which fires the real `contextmenu` event without moving the OS cursor. The
+    real native menu was read with Win32 (`MN_GETHMENU`, `GetMenuString`/`GetMenuState`) and driven with posted Down and
+    Enter keys to the menu window. Window sizes were read with `GetClientRect`.
+  - **Menu:** shows `Default ✓, Glow Card, Micro Pill, Extreme, Kinetic`, found 79–85 ms after the right-click.
+  - **Picking Micro Pill:** `data-theme="t3-pill"`, the pill layout, a **248×86** window, and saved to storage.
+  - **Second right-click (the case that deadlocked before):** the menu opens with Micro Pill checked, and Escape closes
+    it.
+  - **Restart:** Micro Pill comes back at 248×86. This is the first real check that a *non-default* saved theme
+    survives a restart, open since Slice 1.
+  - **20 swaps** cycling all five themes: every one landed at its theme's exact window size, with no page errors.
+  - **Exits:** the app closes in 45–55 ms.
+  - **Memory (PLAN.md Phase 4 gate "roughly flat"):** private memory is summed over the app and its six WebView2 processes; the JS heap is measured after a forced GC.
+
+    | | Private memory | JS heap |
+    |---|---|---|
+    | Launch | 171.0 MB | 2.66 MB |
+    | Every theme visited once | 198.6 MB | 3.09 MB |
+    | After 20 more swaps | 205.5 MB | 3.45 MB |
+    | After 40 more swaps | 203.4 MB | 3.53 MB |
+
+    - Visiting each theme the first time costs about 28 MB, mostly the GPU process (+22.6 MB).
+    - After that it plateaus: +6.9 MB over the next 20 swaps, then −2.1 MB over the 20 after that.
+    - DOM nodes (72–73) and event listeners (179) stay flat.
+    - The first run's single before/after (169.9 → 206.4 MB) was that one-time first-visit cost, not a leak.
+- **Automated:**
+  - `src/theme/registry.test.ts`: names match COPY.md; mutation-checked with a drifted name.
+  - `src/window/themeMenu.test.ts`: order, the checked item, and `[NEEDS COPY]` rather than the id for a missing name.
+  - `e2e/production.spec.ts` (IPC fake with real channel callbacks), 5 new tests: menu contents, position and
+    suppression of the webview's menu; the switch (clears overrides, saves, resizes smaller in one step, grows first
+    T5→T4); the deadlock regression; 20 swaps with at most one live menu; the browser menu untouched outside Tauri.
+  - **Mutation-checked, against the final code:** dropping the pre-grow fails the switch test; never releasing old
+    menus fails the regression, switch and 20-swap tests; the old racing release fails the regression test.
+- **Result (ran):** `npx tsc --noEmit` clean; `npx vitest run` 132 passed (3 new); `npx playwright test` 598 passed
+  (Chromium + WebKit, 10 new runs); `npm run tauri build -- --no-bundle` OK with 0 warnings, including
+  `check-fixtures-excluded: OK`. No Rust changed this slice.
+- **Not verified:**
+  - A real OS mouse right-click and a mouse click on an item. Both were driven through CDP and posted keys; the menu
+    itself is the real native one.
+  - Where the menu appears on screen: the click point is passed, but I didn't look at it.
+  - Shift+F10 in the real exe.
+  - 125%/150% scaling, and macOS (the popup-blocks-until-closed assumption is also untested there).
+  - Screen readers (see above).
+  - Whether a swap ever shows a clipped frame: the order of operations is tested, but no frame capture was taken.

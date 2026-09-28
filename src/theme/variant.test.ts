@@ -16,6 +16,7 @@ import {
 
 const manifest: ThemeManifest = {
   id: "test-theme",
+  name: "test-theme",
   contract: CONTRACT_VERSION,
   layout: "strip",
   layouts: ["card"],

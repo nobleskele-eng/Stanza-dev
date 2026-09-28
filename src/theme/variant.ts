@@ -34,6 +34,8 @@ export interface ControlSpec {
 /** The subset of theme.json the customizer needs. */
 export interface ThemeManifest {
   id: string;
+  /** Display name (the theme picker shows it); first-party names are tracked in docs/COPY.md. */
+  name: string;
   contract: number;
   layout: Layout;
   /** Extra layouts the theme supports beyond `layout`. */

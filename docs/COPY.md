@@ -11,6 +11,17 @@ file tracks.
 - **Name:** Stanza
 - **Tagline:** [NEEDS COPY] — draft: "a themeable desktop mini player… built typography-first"
 
+## Theme names (first-party)
+Placeholders, not approved copy: you said "name the themes anything for now" (2026-09-27), so these are
+the working names PLAN.md's roster and DECISIONS.md already used. Replace them freely. Each theme's
+`theme.json` `name` must match its entry (checked by `src/theme/registry.test.ts`); the theme picker
+shows `name`.
+- **Theme name — t1-default:** Default
+- **Theme name — t2-artwork:** Glow Card
+- **Theme name — t3-pill:** Micro Pill
+- **Theme name — t4-extreme:** Extreme
+- **Theme name — t5-kinetic:** Kinetic
+
 ## States
 - **Idle / nothing playing:** [NEEDS COPY]
 - **Spotify not running:** [NEEDS COPY]
