@@ -180,14 +180,16 @@ const playerBoxes = (page: import("@playwright/test").Page) =>
   );
 
 test("in Tauri, the player's own boxes become the window's hit area, leaving the rest of the window click-through", async ({ page }) => {
+  await page.setViewportSize({ width: 340, height: 600 }); // T1's declared window, as in the real app
   await fakeTauri(page);
   await page.goto("/");
   await expect(page.locator(".mp-root")).toHaveAttribute("data-theme", "t1-default");
   await expect.poll(() => lastHitRegion(page)).toEqual(await playerBoxes(page));
 
-  // The point of it: T1's declared window is 340x600, the idle card much smaller. Its Collage bleed and ambient
-  // shadow sit outside these boxes, so they never block clicks.
+  // The point of it: the idle card is much smaller than T1's 340x600 window. The margins beside and below it, the
+  // Collage bleed and the ambient shadow all sit outside these boxes, so they never block clicks.
   const region = (await lastHitRegion(page))!;
+  expect(Math.min(...region.map((r) => r.x))).toBeGreaterThan(0);
   expect(Math.max(...region.map((r) => r.x + r.width))).toBeLessThan(340);
   expect(Math.max(...region.map((r) => r.y + r.height))).toBeLessThan(600);
   const calls = (await ipcCalls(page, "set_hit_region")).length;
@@ -348,6 +350,44 @@ test("in Tauri, 20 theme swaps through the menu: every swap lands, no errors, at
   await expect(page.locator(".mp-root")).toHaveAttribute("data-theme", THEME_IDS[20 % THEME_IDS.length]);
   expect(errors).toEqual([]);
 });
+
+// --- Placement (Slice 6): in its declared window the player is centred side to side and pinned to the top. Widths
+// never change with state, heights do (T1 244-572 px), so vertical centring would make the card jump.
+for (const id of THEME_IDS) {
+  test(`in its real window size, ${id}'s player is centred horizontally and pinned to the top`, async ({ page }) => {
+    const { window: size, layout } = JSON.parse(readFileSync(new URL(`../themes/${id}/theme.json`, import.meta.url), "utf8")) as {
+      window: { width: number; height: number };
+      layout: string;
+    };
+    await page.setViewportSize(size);
+    await page.goto("/");
+    await page.evaluate(
+      ([key, contract, theme, lay]) =>
+        localStorage.setItem(key as string, JSON.stringify({ theme, variant: { theme, contract, layout: lay, overrides: {}, hidden: [] } })),
+      [APPEARANCE_STORAGE_KEY, CONTRACT_VERSION, id, layout] as const,
+    );
+    await page.reload();
+    await expect(page.locator(".mp-root")).toHaveAttribute("data-theme", id);
+    const box = (await page.locator(".mp-window").boundingBox())!;
+    expect(box.y, "top edge pinned").toBe(0);
+    expect(Math.abs(box.x - (size.width - box.width) / 2), "equal margin left and right").toBeLessThanOrEqual(0.5);
+
+    if (id === "t1-default") {
+      // The Collage layer (.mp-root::before/::after, 300 px wide) bleeds 96 px past each card edge; the window has
+      // 30 px to spare on each side, so both overflow the window by the same amount (it used to be 96 left, 36 right).
+      const overflow = await page.evaluate((vw) => {
+        const root = document.querySelector(".mp-root")!;
+        const x = root.getBoundingClientRect().x;
+        const edge = (p: string) => {
+          const cs = getComputedStyle(root, p);
+          return { left: x + parseFloat(cs.left), right: x + parseFloat(cs.left) + parseFloat(cs.width) };
+        };
+        return { left: -edge("::before").left, right: edge("::after").right - vw };
+      }, size.width);
+      expect(Math.abs(overflow.left - overflow.right), JSON.stringify(overflow)).toBeLessThanOrEqual(1);
+    }
+  });
+}
 
 // --- Content security policy (Slice 5). Tauri sends tauri.conf.json's CSP as a header in release builds only (S4: not
 // in `tauri dev`), so this serves the production bundle with that same header and fails on anything it blocks.

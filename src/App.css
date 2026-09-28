@@ -27,3 +27,14 @@ body,
   margin: 0;
   background: transparent;
 }
+
+/* Production only (the dev harness keeps its own layout). The native window is the theme's
+   declared size: the player is centred side to side, so a theme with spare width (T1: its
+   Collage bleeds past both card edges) gets the same margin on each side, and pinned to the
+   top, so a player whose height changes with its state never moves its top edge
+   (docs/DECISIONS.md, Slice 6). */
+.app-stage {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}

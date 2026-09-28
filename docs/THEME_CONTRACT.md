@@ -210,6 +210,12 @@ transparent margin, and anything that bleeds past those boxes (`t1-default`'s Co
 theme must keep every interactive part inside `.mp-window` (the grid items already are) and must not rely on
 hover or clicks over bleed. See docs/DECISIONS.md, Slice 3.
 
+**Where the player sits in the real window (app behaviour, no version bump).** Centred side to side and pinned
+to the top of the declared `window`. A theme whose widest state fills `window.width` sees no difference; one
+with spare width gets equal margin on both sides. Keep `.mp-window`'s width the same in every state, because
+a width change re-centres the card and moves its left edge; heights may vary freely, since the top edge never
+moves. See docs/DECISIONS.md, Slice 6.
+
 Unknown fields: *planned* to be ignored by the Phase 4 loader (nothing reads `theme.json` at runtime yet). Copy fields hold `[NEEDS COPY]` rather than invented text.
 
 ---
@@ -357,7 +363,9 @@ good at collage scale, and clipped text is the authentic reference aesthetic any
 a workaround. **`t1-default`'s `window` (340×600) is deliberately larger than `.mp-window`
 itself measures** — a documented exception to the `window` field's own "not needlessly
 larger" guidance (see the field table above), reserving real margin for this layer to peek
-past the card's edges without being clipped once real native-window sizing is built.
+past the card's edges. In the real window the card is centred, so the layer shows 30 px past
+each card edge and the rest of its 96 px bleed is clipped equally on both sides (Slice 6;
+checked by `e2e/production.spec.ts`).
 `e2e/contract.spec.ts`'s window-fit test excludes `t1-default` from the "filled by the
 largest state" check for exactly this reason (the ceiling/overflow check still applies to
 every theme unconditionally).

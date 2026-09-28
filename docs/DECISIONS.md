@@ -1923,3 +1923,38 @@ no customizer UI/persistence or Rust theme loader (Phase 4/5) — effects are ap
   The scan above found nothing they would trip, and the lazy chunk is a same-origin script. Re-run the CSP e2e check
   once an adapter feeds tracks: GSMTC thumbnails will likely arrive as `data:`/`blob:` URLs or through the asset
   protocol, and `img-src` will need whichever it is. **macOS untested.**
+
+## 2026-09-27 — Slice 6: the player is centred in its window (side to side), pinned to the top
+- **Was (Slice 2's open call):** the player sat at the window's top-left. T1's Collage layer bleeds 96 px past both
+  card edges, and T1's 340 px window leaves 60 px spare, so the bleed was clipped 96 px on the left and 36 px on the
+  right.
+- **Your call:** "center it".
+- **My reading, measured first.** Every theme's `.mp-window` width is constant across all 22 fixtures, idle and
+  hovered (T1 280, T2 280, T3 248, T4 282, T5 320). Heights vary a lot: T1 244–572, T2 186–507, T3 48–86 (hover),
+  T4 218–528, T5 194–484. So:
+  - **Horizontal centring:** never moves the card, gives T1 30 px on each side, and is a no-op for T2–T5, which fill
+    their width.
+  - **Vertical centring:** would move the card's top edge by up to 164 px (T1) whenever a track starts or stops, a
+    title wraps differently, or T3's hover-reveal opens.
+  I centred **side to side only** and kept the top pinned. If you did mean vertically too, it's one CSS line
+  (`align-items: center` plus a full-height `.app-stage`), and the jump above would come with it.
+- **Now:** production wraps the player in `.app-stage` (`src/App.css`: flex, `justify-content: center`,
+  `align-items: flex-start`). The dev harness and the review sheets keep their own layout. No contract part,
+  attribute or variable changed.
+  - THEME_CONTRACT.md has a new paragraph, "Where the player sits in the real window": keep `.mp-window`'s width
+    constant across states; heights may vary.
+  - T1's paragraph there now says what actually happens: 30 px shows past each card edge, and the rest is clipped
+    equally on both sides.
+  - The hit region needed nothing: it already reports the boxes wherever they are.
+- **Automated:**
+  - `e2e/production.spec.ts`, 5 new tests (one per theme): each at its declared window size, the card must be
+    centred (±0.5 px) with its top at 0.
+  - For T1 the Collage's left and right overflow must be equal (±1 px).
+  - The hit-area test now runs at T1's real 340×600 viewport and also requires margin on the left.
+  - **Mutation-checked:** with `justify-content: flex-start`, the T1 test and the hit-area test fail, and T2–T5 still
+    pass because they fill their width.
+- **Result (ran):** `npx tsc --noEmit` clean; `npx vitest run` 132 passed; `npx playwright test` 610 passed (Chromium +
+  WebKit, 10 new runs); `npm run tauri build -- --no-bundle` OK with 0 warnings, including `check-fixtures-excluded:
+  OK`.
+- **Not yet run in the real exe:** your own old `tauri-app.exe` is still open (see Slice 5). The pending real-exe drive
+  now also measures T1's placement and takes a capture; the results will be added here.

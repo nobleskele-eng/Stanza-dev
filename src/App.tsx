@@ -36,8 +36,8 @@ function ProductionPlaceholder() {
     sizedTo.current = key;
     return fitWindowToTheme(size);
   }, []);
-  // The native window takes the active theme's declared size; the player sits at its top-left,
-  // as in the harness and every e2e check (docs/DECISIONS.md, Slice 2).
+  // The native window takes the active theme's declared size. The player is centred side to side
+  // and pinned to the top (.app-stage; docs/DECISIONS.md, Slice 6).
   useEffect(() => {
     void sizeWindow(MANIFESTS[appearance.theme].window);
   }, [appearance.theme, sizeWindow]);
@@ -66,16 +66,18 @@ function ProductionPlaceholder() {
   useEffect(() => installThemeMenu(MANIFESTS, () => active.current, pickTheme), [pickTheme]);
   const dom = variantToDom(appearance.variant);
   return (
-    <Player
-      nowPlaying={IDLE_NOW_PLAYING}
-      positionMs={0}
-      layout={appearance.variant.layout}
-      theme={appearance.theme}
-      overrides={dom.properties}
-      hidden={appearance.variant.hidden}
-      fx={{ ...MANIFESTS[appearance.theme].fx, ...dom.effects }}
-      platform="windows"
-    />
+    <div className="app-stage">
+      <Player
+        nowPlaying={IDLE_NOW_PLAYING}
+        positionMs={0}
+        layout={appearance.variant.layout}
+        theme={appearance.theme}
+        overrides={dom.properties}
+        hidden={appearance.variant.hidden}
+        fx={{ ...MANIFESTS[appearance.theme].fx, ...dom.effects }}
+        platform="windows"
+      />
+    </div>
   );
 }
 
