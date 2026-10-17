@@ -149,7 +149,7 @@ placeable with `grid-area`): `.mp-artwork`, `.mp-meta`, `.mp-progress`, `.mp-tim
 - `.mp-fx-filters` — a hidden 0×0 `<svg>` of filter definitions: the ripple/liquid text effects and, since v5, three **artwork treatments** a theme applies with `filter: url(#…)` on `.mp-artwork` (D10 allows `filter`): `#mp-art-duotone` (shadows→highlights recoloured from the track's palette; the default choice, works in every engine tried), `#mp-art-posterize` (four-level bands) and `#mp-art-dither` (ordered Bayer dither, recoloured to the duotone — relies on `feImage` inside an HTML filter, unverified in WKWebView). The colours are computed by the app from `--mp-art-*` (SVG attributes cannot read CSS variables), so a track with no palette gets plain greyscale. Always rendered, in `.mp-root` outside `.mp-window` (not a grid item). Never restyle or `display:none` it — that disables the filters.
 - `.mp-flow` — **opt-in** (`data-fx-flow`): a decorative backdrop made of the real title/artist/album repeated with `·` separators; `aria-hidden`, `pointer-events: none` (guard-locked), `z-index: -2`, absolutely positioned and clipped inside `.mp-window` (**not** a grid item). It contains two empty `<i>` elements that a theme floats left/right and gives `shape-outside` so the text wraps around them (T5: two circles sized from `--mp-progress`, so the wrap reflows live). **Invisible until a theme styles it** (`color: transparent` by default) — the theme supplies colour, size and the shapes. Keep its alpha low enough that text on top stays AA against the worst-case blended backdrop (`e2e/flow.spec.ts` computes it for T5).
 - `.mp-debris` — **opt-in** (`data-fx-debris`): decorative layer, `aria-hidden`, `pointer-events: none` (guard-locked), `z-index: -1`, clipped inside `.mp-window`, **empty except during a ~2.8 s spill**. When the title changes, the *previous* title's letters (at most 32, real characters only) fall, tumble and pile up (Matter.js, loaded lazily on the first spill), then fade and are destroyed. Never the readable copy; skipped under reduced motion. Themes cannot restyle the letters beyond the inherited font and `--mp-fg`.
-- `.mp-empty` — replaces the track block when `data-status="idle"`
+- `.mp-empty` — replaces the track block when `data-status="idle"` (the idle copy), and when `data-status="unavailable"` with no known track (the "Spotify not running" copy). Themes tell the two apart by `data-status`.
 - `.mp-error` — replaces the track block when `data-status="error"`; shows the error detail
 
 ### Which parts exist in which state
@@ -158,7 +158,7 @@ placeable with `grid-area`): `.mp-artwork`, `.mp-meta`, `.mp-progress`, `.mp-tim
 | `idle` | `.mp-empty`, `.mp-source-badge` |
 | `error` | `.mp-error`, `.mp-source-badge` |
 | `playing`, `paused` | the full track block (artwork, meta, progress, times, controls, and the conditional parts above) + badge |
-| `unavailable` | the track block if a track is known, otherwise **only** the badge |
+| `unavailable` | the track block if a track is known, otherwise `.mp-empty` ("Spotify not running" copy) + badge |
 
 A theme must look complete in every row, and with every conditional part absent.
 
@@ -419,7 +419,8 @@ runtime (`src/fx/`: anime.js for text, `@splitflap/core` for the flap board, Mat
 Deliberately absent from contract v1. Adding any of them is a contract change.
 - **Shuffle / repeat / seek controls.** `data-cap-shuffle`, `data-cap-repeat` and `data-cap-seek`
   are emitted (a theme can react to them) but there are no shuffle/repeat buttons and
-  `.mp-progress` is not interactive.
+  `.mp-progress` is not interactive. The app seeks from the keyboard instead (←/→, 5 s, while its
+  window has focus and `data-cap-seek` is set): app behaviour, not a part.
 - **Lyrics button** (S6, foreground-Spotify) and **genre-based fonts** (S7): a future
   `data-genre` attribute or `--mp-font-genre` variable is a candidate, decided when those
   spikes land. Not defined here.

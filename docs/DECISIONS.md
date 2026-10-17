@@ -2136,3 +2136,101 @@ independent source: **Spotify's own main-window title** ("Artist - Title" while 
   - 125%/150% scaling.
   - macOS.
   - R2's drift check (5 minutes of progress against Spotify).
+
+## 2026-10-17 — M1 R2: not-running state, keyboard seek, drift measured, a track-change glitch fixed
+**Your two calls (asked first, since both touch the contract's edges):** seek from the **keyboard only**, and show **a
+message** when Spotify isn't running.
+- **Not running:** no GSMTC session → `data-status="unavailable"` with no track (`NOT_RUNNING` in
+  `src/adapters/spotifyFeed.ts`). The player renders `.mp-empty` with COPY.md's "Spotify not running" (new
+  `COPY_LABELS.notRunning`). It shows `[NEEDS COPY]` until you write that line; I wrote none.
+  - **Contract:** THEME_CONTRACT.md's per-state table and `.mp-empty` bullet now say `unavailable` with no track
+    renders `.mp-empty`. It used to be "only the badge".
+  - **No version bump:** no part, attribute or variable name changed, and themes already style `.mp-empty`. A theme
+    can tell the two states apart by `data-status`.
+  - **New fixture:** "Spotify not running (unavailable, no track)". It has no text of its own, and the whole matrix
+    (5 themes × 2 engines: AA contrast, window fit, grid placement, review captures) now covers the state.
+- **Keyboard seek:** `src/player/seekKeys.ts`. While the window has focus, ←/→ seek 5 s from the *interpolated*
+  position, clamped to the track.
+  - **When it doesn't seek:** with a modifier key; in a field that uses arrows itself (the volume slider, text
+    fields); without `data-cap-seek`; with no track playing or paused.
+  - **Holding a key:** repeats at most every 150 ms.
+  - **Optimistic:** `PlayerStore.seek` shows the target at once, so quick presses build on each other before
+    Spotify confirms; Spotify's next report replaces it.
+  - THEME_CONTRACT.md's "Not in v1" seek bullet says this is app behaviour, not a part. `.mp-progress` stays
+    non-interactive (T1's ring surrounds the artwork, where no control may go).
+- **Automated:**
+  - **Vitest:** 146 passed (6 new): the `seekTargetForKey` rules, optimistic and clamped `PlayerStore.seek`,
+    `NOT_RUNNING`.
+  - **`cargo test`:** 12 passed (1 new: `awaits_media`).
+  - **`npx playwright test`:** 650 passed (both engines). New in `e2e/production.spec.ts`: not running at launch
+    shows `[NEEDS COPY]` + badge and no track parts; Spotify closing → unavailable, reopening → the track; ←/→ send
+    `spotify_seek` with 47 000 → 52 000 → 47 000 and the time shows 0:47 before Spotify confirms; clamps at 0 and at
+    the end, and seeks from the interpolated position while playing; no seek with Ctrl/Alt, in a range input,
+    without the cap, or when unavailable.
+  - **Mutation-checked:** removing the optimistic update, the field guard and the not-running message failed exactly
+    the four matching tests; restored.
+- **Real exe, with your OK for seek, pause/resume and quit/reopen** (driven over CDP; Stanza's own buttons and keys,
+  except two direct `spotify_seek` calls to reach a track end):
+  - **Seek:** → landed **102 ms** from its target and ← (to 0) within **104 ms**.
+    - A second → aimed 4 s before the end put Spotify on the next track.
+    - It reproduced twice more: any seek within ~6 s of the end jumps to the next track. **That's Spotify's own
+      behaviour**, likely crossfade/automix (not checked in your settings).
+  - **Pause/resume via Stanza:** both took effect in ~75 ms, and the shown position jumped only 273 ms across the
+    resume.
+  - **The resume guard is not needed for Spotify:** it refreshes `LastUpdatedTime` while paused (about every few
+    seconds) and on resume. The guard stays, as harmless insurance for other apps (any-app mode).
+  - **Drift gate (passed):** Spotify re-reports its position about every **4.5 s** while playing; each report is the
+    truth. Over **5 minutes untouched** (68 reports, 3 natural track changes):
+    - Stanza's prediction error just before each report: median **0 ms**, 95th percentile **1 ms**, max
+      **198 ms**.
+    - On screen: median 188 ms, max 237 ms, which is the 250 ms tick.
+    - A first 5-minute run reported a 146 s "max". That was my probe keying tracks by title/artist *lengths*, so
+      consecutive tracks with equal lengths looked like one. Adding the duration removed it, and the re-run above is
+      the result.
+  - **Quit/reopen gate (passed):**
+    - Quitting Spotify (a close request was enough): playing → idle → **unavailable** within 0.8 s.
+    - Starting it again: ~11 s later, once Spotify registered with Windows, Stanza **recovered by itself** to the
+      same track, paused. I resumed it with Stanza's play button (116 ms), since it had been playing.
+- **Surprise, fixed: a track-change glitch.**
+  - **Found:** traced at a track change, Spotify sends the *new* track's timeline (position 0, new duration) **~200 ms
+    before** its title and artwork. So for ~200 ms Stanza showed the old title and artwork at 0:00 with the new
+    track's length.
+  - **Fix (`awaits_media`, `MEDIA_WAIT` = 400 ms in `src-tauri/src/spotify`):** a burst whose duration changed
+    without a media change waits up to 400 ms for the media, then publishes once. Seeks and pauses keep the duration
+    and are never held.
+  - **Re-traced on 2 real track changes:** zero mixed events. Title, artwork, position and duration now arrive in one
+    event.
+  - **Known gap:** a new track with *exactly* the previous track's duration isn't detected, and would still show the
+    ~200 ms glitch.
+- **Surprise, NOT fixed (needs your call): CPU of endless animations.** All measured in the real exe, total for the
+  app plus its WebView2 processes:
+  - **The paused play-icon pulse:** paused with the pulse running cost **2,125 ms per 10 s (~20% of a core)**.
+    Paused with the pulse switched off (over CDP, through the CSSOM) cost **0 ms**. The pulse is `mp-icon-idle` from
+    `structure.css`, so **every theme** pays it whenever playback is paused, and a mini player is often left paused.
+  - **Other animations, while playing:**
+
+    | Animation | CPU per 10 s |
+    |---|---|
+    | None (T1) | 170–480 ms (noisy) |
+    | A tiny smooth endless transform | ~1,190 ms |
+    | The same, stepped once a second | ~520 ms (≈ none) |
+
+  - **Conclusion:** in this transparent window, smooth endless animation is expensive and stepped animation is
+    nearly free.
+  - **Same class, not yet measured:** T4's marquee, T5's reels, the beat-driven effects.
+  - PLAN.md's companion section now says movement is stepped (pixel-art style), and the risk register has both
+    rows.
+  - **Options for the pulse:** pulse a few times after pausing and then rest; step it at a low rate; or drop it.
+- **Also seen:** a diagnostic `<style>` tag I injected was blocked by the CSP (`style-src 'self'`). More evidence the
+  shipped policy is enforced.
+- **Result (ran):** `npx tsc --noEmit` clean; `npx vitest run` 146 passed; `cargo test` 12 passed; `cargo clippy
+  --all-targets` 0 warnings; `cargo fmt --check` clean; `npx playwright test` 650 passed (run before the Rust-only
+  media-wait fix; no TS changed after it); `npm run tauri build -- --no-bundle` OK with 0 warnings, including
+  `check-fixtures-excluded: OK`.
+- **Not verified:**
+  - The paused-CPU baseline with the pulse *fixed* (it isn't fixed).
+  - Keyboard seek with a real keyboard: keys came over CDP, and real OS focus behaviour wasn't checked.
+  - The 250 ms vs 1 s position tick: the playing CPU was low enough not to need it.
+  - The Store build of Spotify.
+  - 125%/150% scaling.
+  - macOS.

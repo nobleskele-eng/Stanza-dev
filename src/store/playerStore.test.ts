@@ -152,6 +152,43 @@ describe("PlayerStore source switching (D9: one source at a time)", () => {
     expect(spotify.adapter.connect).toHaveBeenCalledTimes(2);
   });
 
+  it("seek() asks the adapter for a clamped position and shows it at once (optimistic)", () => {
+    const store = new PlayerStore();
+    const spotify = makeAdapter("spotify");
+    store.registerAdapter(spotify.adapter);
+    store.switchSource("spotify");
+    spotify.push(playingAt(10_000, 1_000, 60_000));
+    const seen: NowPlaying[] = [];
+    store.subscribe((np) => seen.push(np));
+
+    store.seek(30_000, 5_000);
+    expect(spotify.adapter.seek).toHaveBeenLastCalledWith(30_000);
+    expect(store.getSnapshot()).toMatchObject({ positionMs: 30_000, positionUpdatedAt: 5_000 });
+    expect(seen).toHaveLength(1);
+
+    store.seek(90_000, 6_000);
+    expect(spotify.adapter.seek).toHaveBeenLastCalledWith(60_000);
+    store.seek(-5, 7_000);
+    expect(spotify.adapter.seek).toHaveBeenLastCalledWith(0);
+    expect(store.getSnapshot().positionMs).toBe(0);
+
+    // The source's own update replaces the optimistic position.
+    spotify.push(playingAt(1_234, 8_000, 60_000));
+    expect(store.getSnapshot().positionMs).toBe(1_234);
+  });
+
+  it("seek() without a track still asks the adapter but changes nothing shown; without a source it does nothing", () => {
+    const store = new PlayerStore();
+    store.seek(1_000); // no adapter: no throw
+    const spotify = makeAdapter("spotify");
+    store.registerAdapter(spotify.adapter);
+    store.switchSource("spotify");
+    const before = store.getSnapshot();
+    store.seek(1_000);
+    expect(spotify.adapter.seek).toHaveBeenCalledWith(1_000);
+    expect(store.getSnapshot()).toBe(before);
+  });
+
   it("throws for an unregistered source instead of silently doing nothing", () => {
     const store = new PlayerStore();
     expect(() => store.switchSource("soundcloud")).toThrow(/soundcloud/);

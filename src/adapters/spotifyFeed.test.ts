@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { IDLE_NOW_PLAYING } from "../types/player";
-import { SpotifyFeed, toNowPlaying, type SpotifyState } from "./spotifyFeed";
+import { NOT_RUNNING, SpotifyFeed, toNowPlaying, type SpotifyState } from "./spotifyFeed";
 
 const ART_A = "data:image/png;base64,AAAA";
 const ART_B = "data:image/jpeg;base64,BBBB";
@@ -39,8 +39,10 @@ describe("toNowPlaying", () => {
     });
   });
 
-  it("shows idle with no session, a stopped session, or nothing loaded", () => {
-    expect(toNowPlaying(state({ session: false }), ART_A)).toBe(IDLE_NOW_PLAYING);
+  it("no session is 'not running' (unavailable, no track); a stopped session or nothing loaded is idle", () => {
+    expect(toNowPlaying(state({ session: false }), ART_A)).toBe(NOT_RUNNING);
+    expect(NOT_RUNNING).toMatchObject({ source: "spotify", status: "unavailable" });
+    expect(NOT_RUNNING.track).toBeUndefined();
     expect(toNowPlaying(state({ status: "idle" }), ART_A)).toBe(IDLE_NOW_PLAYING);
     expect(toNowPlaying(state({ title: "" }), ART_A)).toBe(IDLE_NOW_PLAYING);
   });

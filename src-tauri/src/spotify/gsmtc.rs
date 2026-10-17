@@ -8,7 +8,7 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::mpsc::{Receiver, Sender};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use tauri::{AppHandle, Emitter, Manager};
 use windows::core::{Result as WinResult, HSTRING};
@@ -17,6 +17,7 @@ use windows::Media::Control::{
     GlobalSystemMediaTransportControlsSession as Session,
     GlobalSystemMediaTransportControlsSessionManager as SessionManager,
     GlobalSystemMediaTransportControlsSessionPlaybackStatus as PlaybackStatus,
+    GlobalSystemMediaTransportControlsSessionTimelineProperties as TimelineProperties,
 };
 use windows::Storage::Streams::{
     Buffer, DataReader, IRandomAccessStreamReference, InputStreamOptions,
@@ -24,8 +25,8 @@ use windows::Storage::Streams::{
 use windows::Win32::System::WinRT::{RoInitialize, RO_INIT_MULTITHREADED};
 
 use super::{
-    artwork_data_url, is_spotify, map_status, position_updated_at, resume_anchor, ticks_to_ms,
-    Control, Msg, RawStatus, Spotify, SpotifyState, STATE_EVENT,
+    artwork_data_url, awaits_media, is_spotify, map_status, position_updated_at, resume_anchor,
+    ticks_to_ms, Control, Msg, RawStatus, Spotify, SpotifyState, MEDIA_WAIT, STATE_EVENT,
 };
 
 /// Larger thumbnails are ignored (Spotify's are 300x300 PNGs of ~240 kB, DECISIONS.md M1 R1).
@@ -94,14 +95,21 @@ fn run(app: AppHandle, tx: Sender<Msg>, rx: Receiver<Msg>) {
         // A track change fires several events together: read and publish once for the whole burst.
         let mut dirty = Dirty::default();
         for msg in std::iter::once(first).chain(rx.try_iter()) {
-            match msg {
-                Msg::SessionsChanged => dirty.sessions = true,
-                Msg::MediaChanged => dirty.media = true,
-                Msg::PlaybackChanged | Msg::TimelineChanged => dirty.playback = true,
-                Msg::Control(control, reply) => {
-                    let _ = reply.send(worker.control(control));
+            worker.absorb(msg, &mut dirty);
+        }
+        // A new track's timeline comes ~200 ms before its title and artwork: hold it for them.
+        if worker.awaits_media(&dirty) {
+            let deadline = Instant::now() + MEDIA_WAIT;
+            while !dirty.media {
+                let Some(left) = deadline.checked_duration_since(Instant::now()) else {
+                    break;
+                };
+                match rx.recv_timeout(left) {
+                    Ok(msg) => worker.absorb(msg, &mut dirty),
+                    Err(_) => break,
                 }
             }
+            dirty.media = true; // re-read either way: the title may be there before its event
         }
         worker.refresh(dirty);
     }
@@ -127,6 +135,35 @@ struct Worker {
 }
 
 impl Worker {
+    fn absorb(&self, msg: Msg, dirty: &mut Dirty) {
+        match msg {
+            Msg::SessionsChanged => dirty.sessions = true,
+            Msg::MediaChanged => dirty.media = true,
+            Msg::PlaybackChanged | Msg::TimelineChanged => dirty.playback = true,
+            Msg::Control(control, reply) => {
+                let _ = reply.send(self.control(control));
+            }
+        }
+    }
+
+    /// Whether this burst is a new track's timeline arriving without its media (see `awaits_media`).
+    fn awaits_media(&self, dirty: &Dirty) -> bool {
+        if dirty.sessions || !dirty.playback {
+            return false;
+        }
+        let Some(attached) = &self.attached else {
+            return false;
+        };
+        let Ok(timeline) = attached.session.GetTimelineProperties() else {
+            return false;
+        };
+        awaits_media(
+            dirty.media,
+            self.state.duration_ms,
+            timeline_duration_ms(&timeline),
+        )
+    }
+
     fn refresh(&mut self, mut dirty: Dirty) {
         if dirty.sessions && self.rescan() {
             dirty.media = true;
@@ -293,13 +330,20 @@ fn read_playback(session: &Session, next: &mut SpotifyState) {
         .unwrap_or(false);
 }
 
+fn span_ms(r: WinResult<TimeSpan>) -> i64 {
+    r.map(|t| ticks_to_ms(t.Duration)).unwrap_or(0)
+}
+
+fn timeline_duration_ms(timeline: &TimelineProperties) -> i64 {
+    (span_ms(timeline.EndTime()) - span_ms(timeline.StartTime())).max(0)
+}
+
 fn read_timeline(session: &Session, next: &mut SpotifyState) {
     let Ok(timeline) = session.GetTimelineProperties() else {
         return;
     };
-    let ms = |r: WinResult<TimeSpan>| r.map(|t| ticks_to_ms(t.Duration)).unwrap_or(0);
-    next.position_ms = ms(timeline.Position()).max(0);
-    next.duration_ms = (ms(timeline.EndTime()) - ms(timeline.StartTime())).max(0);
+    next.position_ms = span_ms(timeline.Position()).max(0);
+    next.duration_ms = timeline_duration_ms(&timeline);
     let updated = timeline
         .LastUpdatedTime()
         .map(|d| d.UniversalTime)

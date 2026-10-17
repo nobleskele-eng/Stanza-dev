@@ -154,6 +154,8 @@ export function Player({
       <FxFilters palette={artPalette} />
       <div className="mp-window">
         {status === "idle" && <div className="mp-empty">{copy("idle")}</div>}
+        {/* No session to read (Spotify not running): the same empty-state part, its own copy. */}
+        {status === "unavailable" && !track && <div className="mp-empty">{copy("notRunning")}</div>}
 
         {status === "error" && (
           <div className="mp-error">{error?.detail ?? copy("errorFallback")}</div>

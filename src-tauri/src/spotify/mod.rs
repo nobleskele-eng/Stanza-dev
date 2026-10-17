@@ -202,6 +202,24 @@ pub(crate) fn position_updated_at(universal_ticks: i64, now_ms: i64) -> i64 {
     }
 }
 
+/// How long a new track's timeline waits for its title and artwork (see `awaits_media`).
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) const MEDIA_WAIT: Duration = Duration::from_millis(400);
+
+/// Spotify reports a new track's timeline (new position, new duration) ~200 ms before its title
+/// and artwork (measured in the real exe, DECISIONS.md M1 R2). Published alone it would show the
+/// old title at the new track's position, so a burst whose duration changed without a media change
+/// waits up to `MEDIA_WAIT` for the media. A seek or pause keeps the duration and is never held;
+/// nor is the first read (nothing published yet).
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn awaits_media(
+    media_changed: bool,
+    published_duration_ms: i64,
+    duration_ms: i64,
+) -> bool {
+    !media_changed && published_duration_ms != 0 && duration_ms != published_duration_ms
+}
+
 /// How much older than "now" a resume's timeline may be before it is treated as stale.
 const RESUME_SLACK_MS: i64 = 1_000;
 
@@ -299,6 +317,26 @@ mod tests {
         );
         assert_eq!(position_updated_at(0, now), now, "never set");
         assert_eq!(position_updated_at(UNIX_EPOCH_TICKS, now), now);
+    }
+
+    #[test]
+    fn a_new_tracks_timeline_waits_for_its_media_and_nothing_else_does() {
+        assert!(
+            awaits_media(false, 125_901, 216_280),
+            "new duration, no title yet: wait"
+        );
+        assert!(
+            !awaits_media(true, 125_901, 216_280),
+            "title came in the same burst"
+        );
+        assert!(
+            !awaits_media(false, 125_901, 125_901),
+            "seek or pause: same duration"
+        );
+        assert!(
+            !awaits_media(false, 0, 216_280),
+            "first read: nothing published yet"
+        );
     }
 
     #[test]

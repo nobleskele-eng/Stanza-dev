@@ -17,6 +17,7 @@ import { MANIFESTS } from "./theme/registry";
 import { variantToDom } from "./theme/variant";
 import { DevHarness } from "./dev/DevHarness";
 import { Player } from "./player/Player";
+import { installSeekKeys } from "./player/seekKeys";
 import { fitWindowToTheme, installHitRegion, installWindowDrag } from "./window/nativeWindow";
 import { installThemeMenu } from "./window/themeMenu";
 
@@ -30,7 +31,12 @@ function useSpotify(): PlayerStore | null {
     if (!store) return;
     store.registerAdapter(new SpotifyAdapter());
     store.switchSource("spotify");
-    return () => store.stop();
+    // ←/→ seek 5 s (M1 R2); no visible seek control exists in the v1 contract.
+    const removeKeys = installSeekKeys(() => store.getSnapshot(), (ms) => store.seek(ms));
+    return () => {
+      removeKeys();
+      store.stop();
+    };
   }, [store]);
   return store;
 }

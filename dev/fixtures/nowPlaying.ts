@@ -82,6 +82,15 @@ export const fixtures: Record<string, NowPlaying> = {
     caps: NO_CAPS,
   },
 
+  // No Spotify session (M1 R2): the empty-state part with the "Spotify not running" copy. No text of its own.
+  "Spotify not running (unavailable, no track)": {
+    source: "spotify",
+    status: "unavailable",
+    positionMs: 0,
+    positionUpdatedAt: Date.now(),
+    caps: NO_CAPS,
+  },
+
   error: {
     source: "spotify",
     status: "error",

@@ -24,6 +24,7 @@ export function parseCopy(markdown: string): Map<string, string> {
 /** Code-side names for the COPY.md labels the UI uses. Add a key here when the UI needs a new string. */
 export const COPY_LABELS = {
   idle: "Idle / nothing playing",
+  notRunning: "Spotify not running",
   errorFallback: "Generic error (no detail available)",
   sourceBadge: "Source badge wording",
   previous: "Previous button label",

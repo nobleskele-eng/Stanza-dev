@@ -472,8 +472,93 @@ test("in Tauri, Spotify events update the player; older ones are ignored; artwor
   await expect(page.locator("img.mp-artwork"), "a track without artwork shows the placeholder, not the old image").toHaveCount(0);
 
   await emitSpotify(page, spotifyState({ seq: 6, session: false })); // Spotify closed
-  await expect(root).toHaveAttribute("data-status", "idle");
+  await expect(root).toHaveAttribute("data-status", "unavailable");
   await expect(page.locator(".mp-empty")).toBeVisible();
+
+  await emitSpotify(page, spotifyState({ seq: 7 })); // ...and reopened
+  await expect(root).toHaveAttribute("data-status", "playing");
+  await expect(page.locator(".mp-title")).toContainText(TYPICAL.title);
+});
+
+test("in Tauri, Spotify not running shows the unavailable state: the empty-state part with its own copy, and the badge", async ({ page }) => {
+  await fakeTauri(page, { spotify: spotifyState({ session: false, title: "", artist: "", album: "", artworkId: 0, artwork: null }) });
+  await page.goto("/");
+  const root = page.locator(".mp-root");
+  await expect(root).toHaveAttribute("data-status", "unavailable");
+  // COPY.md's "Spotify not running" is still [NEEDS COPY], and that is what must show (never invented text).
+  await expect(page.locator(".mp-empty")).toHaveText("[NEEDS COPY]");
+  await expect(page.locator(".mp-source-badge")).toBeVisible();
+  await expect(page.locator(".mp-controls, .mp-artwork, .mp-title")).toHaveCount(0);
+});
+
+// --- Keyboard seek (M1 R2): ←/→ move 5 s while the window has focus; no visible seek control (contract "Not in v1").
+const seekCalls = async (page: import("@playwright/test").Page) =>
+  (await ipcCalls(page, "spotify_seek")).map((c) => c.args.positionMs as number);
+
+test("in Tauri, → and ← seek 5 s from the live position, shown at once, and quick presses build on each other", async ({ page }) => {
+  await fakeTauri(page, { spotify: spotifyState({ status: "paused", positionMs: 42_000 }) });
+  await page.goto("/");
+  await expect(page.locator(".mp-root")).toHaveAttribute("data-status", "paused");
+  const time = page.locator(".mp-time-current");
+  await expect(time).toHaveText("0:42");
+
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(() => seekCalls(page)).toEqual([47_000]);
+  await expect(time, "optimistic: before Spotify confirms").toHaveText("0:47");
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(() => seekCalls(page)).toEqual([47_000, 52_000]);
+  await page.keyboard.press("ArrowLeft");
+  await expect.poll(() => seekCalls(page)).toEqual([47_000, 52_000, 47_000]);
+  await expect(time).toHaveText("0:47");
+
+  // Spotify's own report wins over the optimistic value.
+  await emitSpotify(page, spotifyState({ seq: 4, status: "paused", positionMs: 46_500, artwork: null }));
+  await expect(time).toHaveText("0:46");
+});
+
+test("in Tauri, seeking stops at the track's start and end, and plays from the interpolated position", async ({ page }) => {
+  await fakeTauri(page, { spotify: spotifyState({ status: "paused", positionMs: 2_000 }) });
+  await page.goto("/");
+  await expect(page.locator(".mp-root")).toHaveAttribute("data-status", "paused");
+  await page.keyboard.press("ArrowLeft");
+  await expect.poll(() => seekCalls(page)).toEqual([0]);
+
+  const end = TYPICAL.durationMs!;
+  await emitSpotify(page, spotifyState({ seq: 4, status: "paused", positionMs: end - 1_000, artwork: null }));
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(() => seekCalls(page)).toEqual([0, end]);
+
+  // Playing: the step is taken from where the track is now, not from Spotify's last report.
+  const now = await page.evaluate(() => Date.now());
+  await emitSpotify(page, spotifyState({ seq: 5, positionMs: 10_000, positionUpdatedAt: now - 3_000, artwork: null }));
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(async () => (await seekCalls(page)).length).toBe(3);
+  const target = (await seekCalls(page))[2];
+  expect(target).toBeGreaterThanOrEqual(18_000);
+  expect(target).toBeLessThan(19_500);
+});
+
+test("in Tauri, arrows don't seek with a modifier, inside a field, without the seek capability, or with nothing playing", async ({ page }) => {
+  await fakeTauri(page, { spotify: spotifyState({ status: "paused" }) });
+  await page.goto("/");
+  await expect(page.locator(".mp-root")).toHaveAttribute("data-status", "paused");
+  await page.keyboard.press("Control+ArrowRight");
+  await page.keyboard.press("Alt+ArrowLeft");
+  await page.keyboard.press("ArrowUp");
+  // A field that uses arrows itself (the volume slider is one; Spotify has none yet, so add one).
+  await page.evaluate(() => document.querySelector(".mp-window")!.insertAdjacentHTML("beforeend", '<input id="t-range" type="range">'));
+  await page.locator("#t-range").focus();
+  await page.keyboard.press("ArrowRight");
+  await page.locator("#t-range").blur();
+
+  await emitSpotify(page, spotifyState({ seq: 4, status: "paused", canSeek: false, artwork: null }));
+  await expect(page.locator(".mp-root")).not.toHaveAttribute("data-cap-seek", /.*/);
+  await page.keyboard.press("ArrowRight");
+  await emitSpotify(page, spotifyState({ seq: 5, session: false }));
+  await expect(page.locator(".mp-root")).toHaveAttribute("data-status", "unavailable");
+  await page.keyboard.press("ArrowRight");
+  await page.waitForTimeout(150);
+  expect(await seekCalls(page)).toEqual([]);
 });
 
 test("in Tauri, the transport buttons send Spotify's commands and never start a window drag", async ({ page }) => {

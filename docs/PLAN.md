@@ -355,7 +355,7 @@ Keep these in `docs/COPY.md`; code reads from there.
 - `src/companion/sprite.ts` (pure) merges runs into one `<path>` per colour with `shape-rendering: crispEdges`. Colours come from custom properties `--mp-pet-1..8`, so a palette skin is a variable swap.
 - **Scale:** one art pixel is always a whole number of device pixels: `round(2 × devicePixelRatio) / devicePixelRatio` logical px. At 125% and 150% scaling a fixed 2 px would give uneven pixels.
 - **Frames:** each animation is a horizontal strip inside an `overflow: hidden` box, flipped by CSS `steps(n)`.
-- **Movement:** CSS transitions on the pet's container. JS runs only when the state changes (every few seconds), never per frame.
+- **Movement:** stepped, not smooth: the pet moves one art pixel per frame at a low frame rate (pixel-art style), via CSS `steps()` on its container. JS runs only when the state changes (every few seconds), never per frame. **Why stepped (measured in the real exe, DECISIONS.md M1 R2):** in Stanza's transparent window any *smooth* endless animation costs ~10–20% of a CPU core, while the same animation stepped once a second costs about nothing. A pet that is always on screen must stay on the cheap side.
 
 ### Surfaces
 - Measured from `.mp-window`'s box. A ResizeObserver re-measures when the card's height changes with its state, or with T3's hover-reveal; the pet rides a moving edge.
@@ -523,7 +523,8 @@ Likelihoods are qualitative — there's no reliable base rate for any of these.
 | Scope creep (lyrics, visualiser, likes, pet care) | High | Med | §9 parking lot; companion scope fixed by §4b |
 | School workload stalls a half-built milestone | — | Med | One slice per turn; every slice leaves `main` working |
 | Companion pixel art looks uneven at 125%/150% scaling | Med | Med | Whole-device-pixel scale (§4b); checked in C0 |
-| An always-animating pet costs CPU/battery on an always-on-top window | Med | Med | CSS-only frames and movement, no per-frame JS; C0 CPU gate; paused/idle → sleep pose |
+| An always-animating pet costs CPU/battery on an always-on-top window | **High** (measured: smooth endless animation = 10–20% of a core here, M1 R2) | Med | Stepped low-rate frames and movement, no per-frame JS; C0 CPU gate; paused/idle → a still sleep pose |
+| Existing endless animations (the play-icon pulse while paused, from `structure.css`, so every theme; T4's marquee; T5's reels; the effect layers) cost CPU the same way | **Measured** for the pulse: ~20% of a core whenever paused | Med–High (an always-on app, often left paused) | A CPU-budget pass over every theme (see DECISIONS.md M1 R2); fixes are design calls |
 | The pet hides controls or the source badge | Low (by design) | High (usability, attribution) | No-go zones in the planner; e2e time-lapse over every theme |
 | Creature art too close to someone else's | Low | High | Original designs only; per-design originality check, logged |
 

@@ -23,14 +23,18 @@ export interface SpotifyState {
   canSeek: boolean;
 }
 
+/** No Spotify session (Spotify not running): `unavailable` with no track (THEME_CONTRACT.md per-state table). */
+export const NOT_RUNNING: NowPlaying = { ...IDLE_NOW_PLAYING, status: "unavailable" };
+
 /**
- * One state as the player shows it. No session, nothing loaded (empty title) and a stopped
- * session all show idle. A dedicated "Spotify not running" state is R2 (PLAN.md §5), with its
- * own copy. Shuffle/repeat stay off: the v1 contract has no controls for them, and volume needs
- * S5 (Core Audio). GSMTC always reports the album field, so `album` is on whenever there is one.
+ * One state as the player shows it. No session → not running; a session with nothing loaded
+ * (empty title) or stopped → idle. Shuffle/repeat stay off: the v1 contract has no controls for
+ * them, and volume needs S5 (Core Audio). GSMTC always reports the album field, so `album` is on
+ * whenever there is one.
  */
 export function toNowPlaying(state: SpotifyState, artwork: string | undefined): NowPlaying {
-  if (!state.session || state.status === "idle" || state.title === "") return IDLE_NOW_PLAYING;
+  if (!state.session) return NOT_RUNNING;
+  if (state.status === "idle" || state.title === "") return IDLE_NOW_PLAYING;
   return {
     source: "spotify",
     status: state.status,

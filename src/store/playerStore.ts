@@ -100,8 +100,20 @@ export class PlayerStore {
     this.activeAdapter?.previous();
   }
 
-  seek(ms: number): void {
-    this.activeAdapter?.seek(ms);
+  /**
+   * Seeks the active source, clamped to the track. The new position shows at once (optimistic),
+   * so quick repeated seeks build on each other before the source confirms; the source's next
+   * update replaces it either way.
+   */
+  seek(ms: number, now = Date.now()): void {
+    const adapter = this.activeAdapter;
+    if (!adapter) return;
+    const { track } = this.snapshot;
+    const target = Math.min(Math.max(0, ms), track?.durationMs ?? Infinity);
+    adapter.seek(target);
+    if (!track) return;
+    this.snapshot = { ...this.snapshot, positionMs: target, positionUpdatedAt: now };
+    for (const listener of this.listeners) listener(this.snapshot);
   }
 
   setVolume(level: number): void {
