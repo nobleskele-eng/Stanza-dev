@@ -2108,3 +2108,31 @@ no customizer UI/persistence or Rust theme loader (Phase 4/5) — effects are ap
   - The Microsoft Store build of Spotify (AUMID).
   - 125%/150% scaling.
   - macOS (untested).
+
+## 2026-10-17 — M1 R1 gate: 20 real track changes (passed)
+With your OK ("you can skip through 20 tracks in my Spotify"), the release `stanza.exe` was launched with a local CDP
+port, and **Stanza's own next button** was clicked 20 times over CDP. The OS cursor never moved. This tests the
+transport path to real Spotify as well as the display.
+
+After each click, the run waited for Stanza's track to change, gave it 1.2 s to settle, and then checked it against an
+independent source: **Spotify's own main-window title** ("Artist - Title" while playing), read through PowerShell.
+- **Changes:** 20/20 detected. Click → new track shown in 141–254 ms, median 197 ms.
+- **Metadata:** 20/20 correct.
+  - 18 matched Spotify's window title exactly.
+  - The other 2 had an `ë` in the title. The probe's PowerShell read decoded it with the console's OEM code page, so it
+    saw `�`. Every other character matched.
+  - Proof: a plain PowerShell read of `[char]0x00EB` returns `�`, and with `[Console]::OutputEncoding = UTF8` it
+    returns `ë`. A probe bug, not a Stanza one; the probe now reads UTF-8.
+- **Display:** 20/20 the displayed title and artist equal `data-title`/`data-artist`.
+- **Artwork:** 20/20 loaded (decoded, non-zero size) and changed from the previous track; 20/20 had a palette
+  extracted.
+- **Status and position:** 20/20 playing, with the time at 0:01 after each skip (position reset, interpolation
+  running).
+- Spotify was playing when the run started and was left playing, 20 tracks further on. Track names are not recorded
+  here.
+- **Still not verified:**
+  - The paused CPU baseline (it needs playback paused; your OK covered skipping only).
+  - The Microsoft Store build of Spotify.
+  - 125%/150% scaling.
+  - macOS.
+  - R2's drift check (5 minutes of progress against Spotify).
