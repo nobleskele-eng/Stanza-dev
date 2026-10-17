@@ -578,6 +578,27 @@ test("while playing, the player re-renders about once a second (the position tic
   for (let i = 1; i < secs.length; i++) expect(secs[i] - secs[i - 1]).toBe(1);
 });
 
+// --- The lyrics button (S6, contract v6): brings Spotify's own window forward through `spotify_show_window`.
+test("in Tauri, the lyrics button sits after next, asks Rust to bring Spotify forward, and never drags the window", async ({ page }) => {
+  await fakeTauri(page, { spotify: spotifyState() });
+  await page.goto("/");
+  const root = page.locator(".mp-root");
+  await expect(root).toHaveAttribute("data-cap-lyrics", "true");
+  const order = await page.locator(".mp-controls > button").evaluateAll((els) => els.map((e) => e.className));
+  expect(order).toEqual(["mp-btn-prev", "mp-btn-play", "mp-btn-next", "mp-btn-lyrics"]);
+  // Its name comes from COPY.md, still unwritten: [NEEDS COPY], never an invented label.
+  await expect(page.locator(".mp-btn-lyrics")).toHaveAttribute("aria-label", "[NEEDS COPY]");
+
+  await page.locator(".mp-btn-lyrics").click();
+  await expect.poll(async () => (await ipcCalls(page, "spotify_show_window")).length).toBe(1);
+  expect(await ipcCalls(page, "plugin:window|start_dragging")).toEqual([]);
+
+  // Spotify not running: no track, so no controls and no lyrics button.
+  await emitSpotify(page, spotifyState({ seq: 4, session: false }));
+  await expect(root).not.toHaveAttribute("data-cap-lyrics", /.*/);
+  await expect(page.locator(".mp-btn-lyrics")).toHaveCount(0);
+});
+
 // --- Spotify's own volume (S5, M1 R3): Core Audio's per-app level, through `spotify_volume` / `spotify:volume`.
 const emitVolume = (page: import("@playwright/test").Page, volume: SpotifyVolume) =>
   page.evaluate((v) => (window as unknown as { __emit: (e: string, p: unknown) => void }).__emit("spotify:volume", v), volume);

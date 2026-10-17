@@ -74,7 +74,7 @@ export function DevHarness() {
 function FullHarness() {
   const [fixtures, setFixtures] = useState<FixtureMap | null>(null);
   const [store] = useState(() => new PlayerStore());
-  const [adapter] = useState(() => new MockAdapter("spotify", { source: "spotify", status: "idle", positionMs: 0, positionUpdatedAt: Date.now(), caps: { seek: false, volume: false, shuffle: false, repeat: false, album: false } }));
+  const [adapter] = useState(() => new MockAdapter("spotify", { source: "spotify", status: "idle", positionMs: 0, positionUpdatedAt: Date.now(), caps: { seek: false, volume: false, shuffle: false, repeat: false, album: false, lyrics: false } }));
   const [snapshot, setSnapshot] = useState<NowPlaying>(store.getSnapshot());
   const [now, setNow] = useState(Date.now());
   const [theme, setTheme] = useState(DEFAULT_THEME);

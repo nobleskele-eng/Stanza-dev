@@ -55,6 +55,7 @@ function makeAdapter(source: "spotify" | "soundcloud") {
     setVolume: vi.fn(),
     toggleShuffle: vi.fn(),
     setRepeat: vi.fn(),
+    showLyrics: vi.fn(),
   };
   return {
     adapter,

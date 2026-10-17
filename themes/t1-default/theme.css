@@ -253,7 +253,8 @@
 }
 
 .mp-root[data-layout="card"][data-theme="t1-default"] .mp-btn-prev,
-.mp-root[data-layout="card"][data-theme="t1-default"] .mp-btn-next {
+.mp-root[data-layout="card"][data-theme="t1-default"] .mp-btn-next,
+.mp-root[data-layout="card"][data-theme="t1-default"] .mp-btn-lyrics {
   background: none;
   border: none;
   display: flex;

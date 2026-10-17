@@ -21,4 +21,6 @@ export interface PlayerAdapter {
   setVolume(level: number): void; // 0–1
   toggleShuffle(): void;
   setRepeat(mode: RepeatMode): void;
+  /** Bring the source's own app forward, where its lyrics are (only when `caps.lyrics`). */
+  showLyrics(): void;
 }

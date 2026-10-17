@@ -31,7 +31,7 @@ describe("toNowPlaying", () => {
       track: { title: "t", artist: "a", album: "al", artwork: ART_A, durationMs: 200_000 },
       positionMs: 1000,
       positionUpdatedAt: 5000,
-      caps: { seek: true, volume: false, shuffle: false, repeat: false, album: true },
+      caps: { seek: true, volume: false, shuffle: false, repeat: false, album: true, lyrics: true },
     });
     expect(toNowPlaying(state({ status: "paused", canSeek: false }), undefined)).toMatchObject({
       status: "paused",
@@ -129,5 +129,13 @@ describe("SpotifyFeed volume (S5)", () => {
     feed.reset();
     feed.accept(state({ seq: 1 }));
     expect(feed.acceptVolume({ available: true, level: 0.2 }, "pull")!.volume).toBe(0.2);
+  });
+});
+
+describe("lyrics capability (S6)", () => {
+  it("a Spotify track can always bring Spotify forward; idle and not-running show no button", () => {
+    expect(toNowPlaying(state({}), undefined).caps.lyrics).toBe(true);
+    expect(toNowPlaying(state({ status: "idle" }), undefined).caps.lyrics).toBe(false);
+    expect(toNowPlaying(state({ session: false }), undefined).caps.lyrics).toBe(false);
   });
 });

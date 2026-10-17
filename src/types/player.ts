@@ -11,6 +11,8 @@ export interface Capabilities {
   volume: boolean;
   shuffle: boolean;
   repeat: boolean;
+  /** The source's own app can be brought forward to show lyrics (the lyrics button, S6). */
+  lyrics: boolean;
   album: boolean;
 }
 
@@ -44,6 +46,7 @@ export const NO_CAPS: Capabilities = {
   volume: false,
   shuffle: false,
   repeat: false,
+  lyrics: false,
   album: false,
 };
 

@@ -36,6 +36,7 @@ pub fn run() {
             spotify::spotify_seek,
             spotify::spotify_volume,
             spotify::spotify_set_volume,
+            spotify::spotify_show_window,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

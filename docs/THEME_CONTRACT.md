@@ -1,9 +1,9 @@
 # Stanza — Theme Contract
 
-**Contract version: 5**
-**Status:** live at v5. v1 froze 2026-09-22 (every item in "Remaining before this
+**Contract version: 6**
+**Status:** live at v6. v1 froze 2026-09-22 (every item in "Remaining before this
 contract can be frozen" below was checked off); v2 and v3 followed the same day, v4 and v5 the day after,
-each in the same change as the code that needed it. Any further change to a part,
+v6 on 2026-10-17, each in the same change as the code that needed it. Any further change to a part,
 attribute or variable name is a version bump made in the same change as the code that
 needs it.
 
@@ -33,6 +33,12 @@ needs it.
   `debris` to **Variants**' `effects`. Documented the track-change transition convention (the app
   starts the view transition; a theme names `.mp-window` and styles the pseudo-elements). Nothing
   renamed or removed; every v4 theme and variant keeps working unchanged apart from its `contract` number.
+- **v6 (2026-10-17):** the lyrics button (S6, PLAN.md §5 M1 R3b). Added to **Root**: `data-cap-lyrics`. Added
+  part: `.mp-btn-lyrics`, the last button inside `.mp-controls`, rendered only with `data-cap-lyrics`. It brings
+  the source's own app forward (Spotify's window, where its lyrics view is); it does not show lyrics itself. A
+  theme that styles `.mp-btn-prev`/`.mp-btn-next` should style it the same way (every shipped theme groups it with
+  them). Nothing renamed or removed: a v5 theme keeps working apart from its `contract` number, though an unstyled
+  lyrics button would look like a plain browser button.
 
 This file is the source of truth for the class names, data attributes and CSS custom
 properties a Stanza theme may rely on. Most of it is checked by tests, not by hand:
@@ -62,6 +68,7 @@ See `docs/PLAN.md` §4 for rationale and the theme roster (T1–T5).
 - `data-cap-shuffle` — the source supports shuffle
 - `data-cap-repeat` — the source supports repeat
 - `data-cap-album` — the source provides an album; when absent `.mp-album` is not rendered
+- `data-cap-lyrics` — (v6) the source's own app can be brought forward to show its lyrics; when absent `.mp-btn-lyrics` is not rendered
 - `data-title` — the current track's title, verbatim, as a plain string. Only present when a
   track exists (same condition as the track block itself). `.mp-title` already renders this
   as real text — this attribute exists so a theme can read it in a *decorative* pseudo-element
@@ -133,10 +140,11 @@ placeable with `grid-area`): `.mp-artwork`, `.mp-meta`, `.mp-progress`, `.mp-tim
 - `.mp-progress-fill` — child of `.mp-progress`; size it with `calc(var(--mp-progress) * 100%)`
 - `.mp-time-current`
 - `.mp-time-total`
-- `.mp-controls` — wrapper for the three transport buttons
+- `.mp-controls` — wrapper for the three transport buttons (and, with `data-cap-lyrics`, the lyrics button after them)
 - `.mp-btn-prev` — each button contains one inline `<svg>` icon (`aria-hidden`, `1em`, `currentColor`); size and color it with `font-size`/`color` on the button
 - `.mp-btn-play` — icon swaps between play and pause with `data-status`
 - `.mp-btn-next`
+- `.mp-btn-lyrics` — (v6) last child of `.mp-controls`, only with `data-cap-lyrics`. Brings the source's own app forward (where its lyrics are); same inline-`<svg>` icon rules as the transport buttons (the icon is three short text lines). Style it like `.mp-btn-prev`/`.mp-btn-next`. Its accessible name is COPY.md's "Lyrics button label"
 - `.mp-volume-wrap` — exists because a rotated `<input type="range">` needs a non-rotated ancestor to reserve its final footprint (`transform` doesn't affect layout). Grid placement and hiding target the wrapper
 - `.mp-volume` — the `<input type="range">` inside the wrapper; theme-styled freely
 - `.mp-source-badge` — **required, always rendered, never hideable** (guard layer, D10/C13)
@@ -177,7 +185,7 @@ customization layer.
   "name": "[NEEDS COPY]",
   "author": "[NEEDS COPY]",
   "version": "1.0.0",
-  "contract": 5,
+  "contract": 6,
   "layout": "strip",
   "layouts": ["strip"],
   "window": { "width": 400, "height": 202 },
@@ -229,7 +237,7 @@ with none is auto-placed by the browser and lands in whichever cell is free.
 ### Shared DOM (all layouts)
 ```html
 <div class="mp-root" data-layout="…" data-theme="…" data-source="spotify" data-status="playing"
-     data-platform="windows" data-cap-seek data-cap-volume data-cap-album
+     data-platform="windows" data-cap-seek data-cap-volume data-cap-album data-cap-lyrics
      data-title="…" data-artist="…"
      style="--mp-progress: 0.2">            <!-- 0–1, set by the player -->
   <div class="mp-window">                   <!-- the grid; theme paints the card here -->
@@ -241,6 +249,7 @@ with none is auto-placed by the browser and lands in whichever cell is free.
     <div class="mp-time-current"></div><div class="mp-time-total"></div>
     <div class="mp-controls">
       <button class="mp-btn-prev"><svg/></button><button class="mp-btn-play"><svg/></button><button class="mp-btn-next"><svg/></button>
+      <button class="mp-btn-lyrics"><svg/></button>                         <!-- v6, only if data-cap-lyrics -->
     </div>
     <div class="mp-volume-wrap"><input class="mp-volume" type="range"></div>   <!-- only if data-cap-volume -->
     <a class="mp-link-out">…</a>                                                <!-- only with a permalink -->
@@ -424,9 +433,9 @@ Deliberately absent from contract v1. Adding any of them is a contract change.
   are emitted (a theme can react to them) but there are no shuffle/repeat buttons and
   `.mp-progress` is not interactive. The app seeks from the keyboard instead (←/→, 5 s, while its
   window has focus and `data-cap-seek` is set): app behaviour, not a part.
-- **Lyrics button** (S6, foreground-Spotify) and **genre-based fonts** (S7): a future
-  `data-genre` attribute or `--mp-font-genre` variable is a candidate, decided when those
-  spikes land. Not defined here.
+- **Genre-based fonts** (S7): a future `data-genre` attribute or `--mp-font-genre` variable is a
+  candidate, decided when that spike lands. Not defined here. (The lyrics button, listed here
+  until v5, is now `.mp-btn-lyrics`, v6.)
 - **Hover-reveal styling.** `data-hover` is emitted; T1 does not use it yet.
 
 ---
@@ -457,7 +466,7 @@ the same property can still win. The guarantee in this section is *planned* unti
 ## Variants (customizer, D14)
 A variant is one JSON file per saved look, in `<app data dir>/variants/`, tied to one theme:
 ```json
-{ "theme": "<theme id>", "contract": 4, "layout": "strip",
+{ "theme": "<theme id>", "contract": 6, "layout": "strip",
   "overrides": { "--mp-bg": "#101010", "--mp-radius-window": "12px" },
   "hidden": ["album", "volume"],
   "effects": { "shapes": true, "waveform": true, "flow": true, "morph": true, "debris": true, "title": "splitflap", "artist": "ripple" } }

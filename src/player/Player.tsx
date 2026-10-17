@@ -10,7 +10,7 @@ import { Waveform } from "../fx/Waveform";
 import { extractPaletteFromUrl, type ArtPalette } from "../theme/palette";
 import type { NowPlaying } from "../types/player";
 import { formatMs, progressFraction } from "./format";
-import { NextIcon, PauseIcon, PlayIcon, PrevIcon } from "./icons";
+import { LyricsIcon, NextIcon, PauseIcon, PlayIcon, PrevIcon } from "./icons";
 
 export type Layout = "pill" | "card" | "strip";
 export type Platform = "windows" | "macos";
@@ -48,6 +48,8 @@ interface PlayerProps {
   onPrevious?: () => void;
   /** The volume slider moved (0–1). Without it the slider shows the level but doesn't move. */
   onVolume?: (level: number) => void;
+  /** The lyrics button: bring the source's own app forward (S6). */
+  onLyrics?: () => void;
 }
 
 /**
@@ -69,6 +71,7 @@ export function Player({
   onNext,
   onPrevious,
   onVolume,
+  onLyrics,
 }: PlayerProps) {
   // Track changes may be held back one frame so the browser can capture the old card first (morph).
   const { nowPlaying, positionMs } = useTrackTransition(
@@ -138,6 +141,7 @@ export function Player({
       data-cap-shuffle={caps.shuffle || undefined}
       data-cap-repeat={caps.repeat || undefined}
       data-cap-album={caps.album || undefined}
+      data-cap-lyrics={caps.lyrics || undefined}
       data-title={hasTrack && track ? track.title : undefined}
       data-artist={hasTrack && track ? track.artist : undefined}
       data-fx-shapes={fx?.shapes || undefined}
@@ -213,6 +217,12 @@ export function Player({
               <button className="mp-btn-next" type="button" aria-label={copy("next")} onClick={onNext}>
                 <NextIcon />
               </button>
+              {/* Contract v6: brings the source's own app forward, where its lyrics view is (S6). */}
+              {caps.lyrics && (
+                <button className="mp-btn-lyrics" type="button" aria-label={copy("lyrics")} onClick={onLyrics}>
+                  <LyricsIcon />
+                </button>
+              )}
             </div>
 
             {caps.volume && (

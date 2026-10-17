@@ -383,7 +383,7 @@ Keep these in `docs/COPY.md`; code reads from there.
 ### Persistence, picker, contract, copy
 - **Saved setting:** the appearance (`src/theme/appearance.ts`) gains an app-wide `companion: { on, skin, palette }`. Unlike variant overrides, it survives theme switches. Validated; old saved data stays valid.
 - **Picker:** the right-click menu (`src/window/themeMenu.ts`) gains a Companion submenu, keeping Slice 4's one-step-at-a-time menu lifecycle (the deadlock fix). Settings-window options come in M3.
-- **Contract v6** lands with the first slice that puts companion parts in the production DOM (C2), not batched at the end: `.mp-companion` and its sprite part, `data-pet-state`, `data-pet-surface`, `--mp-pet-*`, and the `theme.json` `companion` field. Later slices update the doc in the same change.
+- **Contract v7** (v6 went to the lyrics button, M1 R3b) lands with the first slice that puts companion parts in the production DOM (C2), not batched at the end: `.mp-companion` and its sprite part, `data-pet-state`, `data-pet-surface`, `--mp-pet-*`, and the `theme.json` `companion` field. Later slices update the doc in the same change.
 - **Copy:** `docs/COPY.md` "Companion" section, all `[NEEDS COPY]` until you write it. No speech bubbles: emotes (heart, sleep) are pixel icons, not text.
 
 ### Designing the creature (together, as we go)
@@ -458,7 +458,7 @@ locally on `main` ("Slice N: …"), never pushed unless you ask. Hour ranges are
   **Gate:** idle CPU change within noise (≤ ~1% of a core), no flicker, hit test correct.
 - **C1 Renderer + skin format + lab:** `sprite.ts`, the validator and registry, a "test dummy" skin with every required animation, the dev-only Companion lab (every state × palette × scale, light and dark backdrops).
 - **D1 design round** (with you): three original concepts in the lab; you pick or mix.
-- **C2 Brain + top edge + contract v6:** idle, walk, sit, sleep, wake, reacting to playback, in the production player.
+- **C2 Brain + top edge + contract v7:** idle, walk, sit, sleep, wake, reacting to playback, in the production player.
 - **C3 All edges:** climbing the sides, hanging under the bottom, corner transitions, riding a moving edge; the production window margin and position shift.
 - **C4 Pick up and react:** drag, drop, fall, land, click reactions; the hit region includes the pet. Real-exe drag check.
 - **C5 Inner ledges:** `theme.json` `companion.shelf` for each theme that has room (some may have none).

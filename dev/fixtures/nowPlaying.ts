@@ -7,8 +7,8 @@ import type { NowPlaying } from "../../src/types/player";
 // (see scripts/check-fixtures-excluded.mjs).
 const MARK = "FIXTURE-ONLY-DEV-BUILD";
 
-const FULL_CAPS = { seek: true, volume: true, shuffle: true, repeat: true, album: true };
-const NO_CAPS = { seek: false, volume: false, shuffle: false, repeat: false, album: false };
+const FULL_CAPS = { seek: true, volume: true, shuffle: true, repeat: true, album: true, lyrics: true };
+const NO_CAPS = { seek: false, volume: false, shuffle: false, repeat: false, album: false, lyrics: false };
 
 // Flat-colour synthetic artwork for the very-light / very-dark rows of the matrix.
 function flatArtwork(color: string): string {
@@ -108,6 +108,7 @@ export const fixtures: Record<string, NowPlaying> = {
   "no volume": base({ caps: { ...FULL_CAPS, volume: false } }),
   "no shuffle": base({ caps: { ...FULL_CAPS, shuffle: false } }),
   "no repeat": base({ caps: { ...FULL_CAPS, repeat: false } }),
+  "no lyrics": base({ caps: { ...FULL_CAPS, lyrics: false } }),
   "with link-out (permalink)": base({
     track: { ...base({}).track!, permalink: `https://example.invalid/${MARK}` },
   }),

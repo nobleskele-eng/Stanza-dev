@@ -3,7 +3,7 @@
   "name": "Kinetic",
   "author": "[NEEDS COPY]",
   "version": "1.0.0",
-  "contract": 5,
+  "contract": 6,
   "layout": "card",
   "window": { "width": 320, "height": 490 },
   "colorMode": "artwork",

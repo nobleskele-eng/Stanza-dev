@@ -9,8 +9,7 @@ use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Emitter, Manager};
-use windows::core::{Interface, PWSTR};
-use windows::Win32::Foundation::CloseHandle;
+use windows::core::Interface;
 use windows::Win32::Media::Audio::{
     eRender, IAudioSessionControl2, IAudioSessionManager2, IMMDeviceEnumerator, ISimpleAudioVolume,
     MMDeviceEnumerator, DEVICE_STATE_ACTIVE,
@@ -18,10 +17,8 @@ use windows::Win32::Media::Audio::{
 use windows::Win32::System::Com::{
     CoCreateInstance, CoInitializeEx, CLSCTX_ALL, COINIT_MULTITHREADED,
 };
-use windows::Win32::System::Threading::{
-    OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
-};
 
+use super::process::process_path;
 use super::{is_spotify_exe, round_level, Spotify, SpotifyVolume, VolumeMsg, VOLUME_EVENT};
 
 /// How often the level is read back (a change made in the mixer appears within this).
@@ -169,23 +166,4 @@ fn spotify_sessions(enumerator: &IMMDeviceEnumerator) -> Vec<ISimpleAudioVolume>
         }
     }
     found
-}
-
-fn process_path(pid: u32) -> Option<String> {
-    let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) }.ok()?;
-    let mut buf = [0u16; 1024];
-    let mut len = buf.len() as u32;
-    let ok = unsafe {
-        QueryFullProcessImageNameW(
-            handle,
-            PROCESS_NAME_WIN32,
-            PWSTR(buf.as_mut_ptr()),
-            &mut len,
-        )
-    }
-    .is_ok();
-    unsafe {
-        let _ = CloseHandle(handle);
-    }
-    ok.then(|| String::from_utf16_lossy(&buf[..len as usize]))
 }

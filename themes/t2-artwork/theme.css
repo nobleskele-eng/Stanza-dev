@@ -111,7 +111,8 @@
 }
 
 .mp-root[data-layout="card"][data-theme="t2-artwork"] .mp-btn-prev,
-.mp-root[data-layout="card"][data-theme="t2-artwork"] .mp-btn-next {
+.mp-root[data-layout="card"][data-theme="t2-artwork"] .mp-btn-next,
+.mp-root[data-layout="card"][data-theme="t2-artwork"] .mp-btn-lyrics {
   background: none;
   border: none;
   display: flex;

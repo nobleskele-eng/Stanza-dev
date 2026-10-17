@@ -113,7 +113,8 @@
    Overridable: --mp-icon-press-scale, --mp-icon-idle-anim (set to `none` to disable). */
 .mp-btn-prev svg,
 .mp-btn-play svg,
-.mp-btn-next svg {
+.mp-btn-next svg,
+.mp-btn-lyrics svg {
   transition: transform 120ms ease-out;
 }
 .mp-btn-play svg {
@@ -121,7 +122,8 @@
 }
 .mp-btn-prev:active svg,
 .mp-btn-play:active svg,
-.mp-btn-next:active svg {
+.mp-btn-next:active svg,
+.mp-btn-lyrics:active svg {
   transform: scale(var(--mp-icon-press-scale, 0.8));
 }
 .mp-btn-prev:active svg { transform: translateX(-2px) scale(var(--mp-icon-press-scale, 0.8)); }
@@ -147,6 +149,7 @@
   .mp-btn-prev svg,
   .mp-btn-play svg,
   .mp-btn-next svg,
+  .mp-btn-lyrics svg,
   .mp-root[data-status="paused"] .mp-btn-play svg {
     animation: none;
     transition: none;

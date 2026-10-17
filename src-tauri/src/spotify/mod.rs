@@ -17,7 +17,11 @@
 #[cfg(windows)]
 mod gsmtc;
 #[cfg(windows)]
+mod process;
+#[cfg(windows)]
 mod volume;
+#[cfg(windows)]
+mod window;
 
 use std::sync::mpsc::{self, Sender};
 use std::sync::Mutex;
@@ -198,6 +202,29 @@ pub async fn spotify_seek(position_ms: i64, spotify: State<'_, Spotify>) -> Resu
     Ok(spotify.control(Control::Seek(position_ms.max(0))).await)
 }
 
+/// What the lyrics button's command did (S6). Only for logs and tests; the UI shows nothing for it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ShowWindowResult {
+    /// Spotify's window is now the foreground window (the normal case: Stanza was foreground).
+    Direct,
+    /// Same, after the attach-input fallback (Stanza wasn't foreground when asked).
+    Attached,
+    /// Found, restored if needed, but Windows kept another window in front.
+    Refused,
+    /// No Spotify main window (Spotify not running), or not Windows.
+    NotFound,
+}
+
+/// Brings Spotify's own window forward (the lyrics button, S6). Synchronous: a few cheap Win32 calls.
+#[tauri::command]
+pub fn spotify_show_window() -> ShowWindowResult {
+    #[cfg(windows)]
+    return window::show_spotify();
+    #[cfg(not(windows))]
+    ShowWindowResult::NotFound
+}
+
 #[tauri::command]
 pub fn spotify_volume(spotify: State<'_, Spotify>) -> SpotifyVolume {
     spotify.volume.lock().map(|v| *v).unwrap_or_default()
@@ -220,6 +247,35 @@ pub(crate) fn is_spotify_exe(path: &str) -> bool {
     path.rsplit(['\\', '/'])
         .next()
         .is_some_and(|file| file.eq_ignore_ascii_case("spotify.exe"))
+}
+
+/// One top-level window of a Spotify process, as `pick_main_window` sees it.
+#[cfg_attr(not(windows), allow(dead_code))]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct WindowInfo {
+    /// Class `Chrome_WidgetWin_*` (Spotify's UI is Chromium).
+    pub chromium: bool,
+    pub visible: bool,
+    pub minimized: bool,
+    /// Has a window title (the main window's is "Spotify Premium" or the track).
+    pub titled: bool,
+    /// Has an owner window (IME and popup windows do).
+    pub owned: bool,
+    /// `WS_EX_TOOLWINDOW` (helper windows).
+    pub tool: bool,
+}
+
+/// Spotify's main window among its top-level windows: an unowned, non-tool Chromium window with a
+/// title. On screen or minimised wins; otherwise a hidden one (Spotify closed to the tray). Seen on
+/// this machine (DECISIONS.md M1 R3b): one such window (`Chrome_WidgetWin_1`), next to hidden
+/// `Chrome_WidgetWin_0` tool windows, a tray window, a titled GDI+ helper and owned IME windows.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn pick_main_window(windows: &[WindowInfo]) -> Option<usize> {
+    let main = |w: &WindowInfo| w.chromium && w.titled && !w.owned && !w.tool;
+    windows
+        .iter()
+        .position(|w| main(w) && (w.visible || w.minimized))
+        .or_else(|| windows.iter().position(main))
 }
 
 /// A volume level clamped to 0–1 and rounded to 3 decimals, so float noise never counts as a change.
@@ -364,6 +420,84 @@ mod tests {
             r"C:\Program Files\Google\Chrome\chrome.exe"
         ));
         assert!(!is_spotify_exe(""));
+    }
+
+    #[test]
+    fn the_main_window_is_the_titled_unowned_chromium_window() {
+        let main = WindowInfo {
+            chromium: true,
+            titled: true,
+            visible: true,
+            ..Default::default()
+        };
+        // The set seen on the dev machine, main window minimised.
+        let seen = [
+            WindowInfo {
+                chromium: true,
+                tool: true,
+                ..Default::default()
+            },
+            WindowInfo {
+                chromium: true,
+                tool: true,
+                ..Default::default()
+            },
+            WindowInfo::default(), // Chrome_StatusTrayWindow
+            WindowInfo {
+                chromium: true,
+                ..Default::default()
+            }, // untitled Chrome_WidgetWin_0
+            WindowInfo {
+                titled: true,
+                ..Default::default()
+            }, // GDI+ Hook Window Class
+            WindowInfo {
+                minimized: true,
+                visible: true,
+                ..main
+            },
+            WindowInfo {
+                titled: true,
+                owned: true,
+                ..Default::default()
+            }, // IME
+        ];
+        assert_eq!(pick_main_window(&seen), Some(5));
+        // Closed to the tray: hidden, still titled -> still found.
+        let hidden = [WindowInfo {
+            visible: false,
+            ..main
+        }];
+        assert_eq!(pick_main_window(&hidden), Some(0));
+        // On screen beats hidden.
+        assert_eq!(
+            pick_main_window(&[
+                WindowInfo {
+                    visible: false,
+                    ..main
+                },
+                main
+            ]),
+            Some(1)
+        );
+        // Nothing that qualifies (owned, tool, untitled, not Chromium).
+        let none = [
+            WindowInfo {
+                owned: true,
+                ..main
+            },
+            WindowInfo { tool: true, ..main },
+            WindowInfo {
+                titled: false,
+                ..main
+            },
+            WindowInfo {
+                chromium: false,
+                ..main
+            },
+        ];
+        assert_eq!(pick_main_window(&none), None);
+        assert_eq!(pick_main_window(&[]), None);
     }
 
     #[test]

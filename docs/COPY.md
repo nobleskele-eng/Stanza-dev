@@ -74,6 +74,7 @@ no speech bubbles; its emotes are pixel icons, not text.
 - **Pause button label:** [NEEDS COPY]
 - **Next button label:** [NEEDS COPY]
 - **Volume slider label:** [NEEDS COPY]
+- **Lyrics button label:** [NEEDS COPY] — the button brings Spotify's own window forward (where its lyrics are); it doesn't show lyrics itself
 - **Link-out label:** [NEEDS COPY]
 
 ## Rules

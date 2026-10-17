@@ -109,6 +109,11 @@ export class SpotifyAdapter implements PlayerAdapter {
     // Same as toggleShuffle().
   }
 
+  /** The lyrics button (S6): Rust brings Spotify's own window forward. */
+  showLyrics(): void {
+    this.send("spotify_show_window");
+  }
+
   private flushVolume(): void {
     if (this.volumeInFlight || this.volumePending === null) return;
     const level = this.volumePending;

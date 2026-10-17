@@ -37,3 +37,12 @@ export const PauseIcon = () => (
     <rect x="9" y="2.5" width="3.5" height="11" />
   </svg>
 );
+
+/** The lyrics button (S6): three short lines of a verse, the last one shorter. Drawn for Stanza. */
+export const LyricsIcon = () => (
+  <svg {...svgProps}>
+    <rect x="2" y="3" width="12" height="2" rx="1" />
+    <rect x="2" y="7" width="9" height="2" rx="1" />
+    <rect x="2" y="11" width="6" height="2" rx="1" />
+  </svg>
+);

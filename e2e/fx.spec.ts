@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { CONTRACT_VERSION } from "../src/theme/variant";
 
 // Opt-in effect layers (shapes + waveform; animated-assets plan step 2). Contract v4 is not
 // bumped yet (DECISIONS.md 2026-09-23), so this only asserts the layers' own behaviour and that
@@ -175,20 +176,20 @@ test("a pasted variant switches effects on; invalid values are dropped with raw 
   const box = page.locator("textarea");
   const report = page.getByTestId("variant-report");
 
-  await box.fill(JSON.stringify({ theme: "t1-default", contract: 5, layout: "card", overrides: {}, hidden: [], effects: { waveform: true, shapes: true, title: "ripple" } }));
+  await box.fill(JSON.stringify({ theme: "t1-default", contract: CONTRACT_VERSION, layout: "card", overrides: {}, hidden: [], effects: { waveform: true, shapes: true, title: "ripple" } }));
   await page.getByRole("button", { name: "apply variant" }).click();
   await expect(report).toHaveText("ok");
   await expect(page.locator(".mp-root")).toHaveAttribute("data-fx-waveform", "true");
   await expect(page.locator(".mp-root")).toHaveAttribute("data-fx-title", "ripple");
   await expect(page.locator(".mp-shapes")).toBeAttached();
 
-  await box.fill(JSON.stringify({ theme: "t1-default", contract: 5, layout: "card", effects: { title: "url(x)", artist: "liquid" } }));
+  await box.fill(JSON.stringify({ theme: "t1-default", contract: CONTRACT_VERSION, layout: "card", effects: { title: "url(x)", artist: "liquid" } }));
   await page.getByRole("button", { name: "apply variant" }).click();
   await expect(report).toHaveText("effect-invalid@effects.title");
   await expect(page.locator(".mp-root")).toHaveAttribute("data-fx-artist", "liquid");
   await expect(page.locator(".mp-root")).not.toHaveAttribute("data-fx-title", /.*/);
 
-  await box.fill(JSON.stringify({ theme: "t2-artwork", contract: 5, layout: "card", effects: { shapes: true } }));
+  await box.fill(JSON.stringify({ theme: "t2-artwork", contract: CONTRACT_VERSION, layout: "card", effects: { shapes: true } }));
   await page.getByRole("button", { name: "apply variant" }).click();
   await expect(report).toHaveText("theme-mismatch@theme"); // wrong theme: nothing applied
   await expect(page.locator(".mp-root")).toHaveAttribute("data-fx-artist", "liquid"); // previous state kept

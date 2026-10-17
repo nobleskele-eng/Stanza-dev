@@ -6,7 +6,7 @@ test("every control shows a visible outline when keyboard-focused", async ({ pag
   await page.goto(`/?fixture=${encodeURIComponent("typical / all caps")}&layout=strip`);
   await expect(page.getByTestId("matrix-cell")).toBeVisible();
 
-  const controls = ["mp-btn-prev", "mp-btn-play", "mp-btn-next", "mp-volume"];
+  const controls = ["mp-btn-prev", "mp-btn-play", "mp-btn-next", "mp-btn-lyrics", "mp-volume"];
   await page.keyboard.press("Tab");
   for (const cls of controls) {
     const focused = await page.evaluate(() => {

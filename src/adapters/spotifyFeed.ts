@@ -57,7 +57,8 @@ export function toNowPlaying(state: SpotifyState, artwork: string | undefined, v
     },
     positionMs: Math.max(0, state.positionMs),
     positionUpdatedAt: state.positionUpdatedAt,
-    caps: { seek: state.canSeek, volume: hasVolume, shuffle: false, repeat: false, album: true },
+    // lyrics: the button brings Spotify's own window forward (S6), which a running session implies.
+    caps: { seek: state.canSeek, volume: hasVolume, shuffle: false, repeat: false, album: true, lyrics: true },
   };
 }
 

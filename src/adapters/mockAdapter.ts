@@ -60,4 +60,8 @@ export class MockAdapter implements PlayerAdapter {
   setRepeat(_mode: RepeatMode): void {
     // No-op in the mock; see toggleShuffle().
   }
+
+  showLyrics(): void {
+    // No app to bring forward in the browser.
+  }
 }

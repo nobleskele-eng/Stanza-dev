@@ -104,6 +104,7 @@ function ProductionApp() {
         onNext={() => store?.next()}
         onPrevious={() => store?.previous()}
         onVolume={(level) => store?.setVolume(level)}
+        onLyrics={() => store?.showLyrics()}
       />
     </div>
   );

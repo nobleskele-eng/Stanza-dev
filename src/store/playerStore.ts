@@ -134,4 +134,8 @@ export class PlayerStore {
   setRepeat(mode: Parameters<PlayerAdapter["setRepeat"]>[0]): void {
     this.activeAdapter?.setRepeat(mode);
   }
+
+  showLyrics(): void {
+    this.activeAdapter?.showLyrics();
+  }
 }

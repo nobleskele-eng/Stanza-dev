@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { CONTRACT_VERSION } from "../src/theme/variant";
 import { WCAG_AA_NORMAL, contrastRatio, parseColor, type Rgb } from "../src/theme/contrast";
 
 // Flow backdrop (design round 2, step 4): real text wrapped around T5's two tape reels by native CSS
@@ -187,7 +188,7 @@ test("flow: T5 ships it on by default in the harness, and a variant can switch i
   await page.getByLabel("typical / all caps").check();
   await page.getByLabel(/t5-kinetic/).check();
   await expect(page.locator(".mp-root")).toHaveAttribute("data-fx-flow", "true");
-  await page.locator("textarea").fill(JSON.stringify({ theme: "t5-kinetic", contract: 5, layout: "card", effects: { title: "typewriter" } }));
+  await page.locator("textarea").fill(JSON.stringify({ theme: "t5-kinetic", contract: CONTRACT_VERSION, layout: "card", effects: { title: "typewriter" } }));
   await page.getByRole("button", { name: "apply variant" }).click();
   await expect(page.getByTestId("variant-report")).toHaveText("ok");
   await expect(page.locator(".mp-root")).not.toHaveAttribute("data-fx-flow", /.*/); // the variant replaces the defaults

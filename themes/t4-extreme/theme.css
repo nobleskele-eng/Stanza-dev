@@ -167,7 +167,8 @@
 }
 
 .mp-root[data-layout="card"][data-theme="t4-extreme"] .mp-btn-prev,
-.mp-root[data-layout="card"][data-theme="t4-extreme"] .mp-btn-next {
+.mp-root[data-layout="card"][data-theme="t4-extreme"] .mp-btn-next,
+.mp-root[data-layout="card"][data-theme="t4-extreme"] .mp-btn-lyrics {
   background: none;
   border: none;
   display: flex;

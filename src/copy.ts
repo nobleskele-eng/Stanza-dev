@@ -32,6 +32,7 @@ export const COPY_LABELS = {
   pause: "Pause button label",
   next: "Next button label",
   volume: "Volume slider label",
+  lyrics: "Lyrics button label",
   linkOut: "Link-out label",
 } as const;
 

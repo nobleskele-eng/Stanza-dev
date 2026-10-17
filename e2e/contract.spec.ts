@@ -212,7 +212,7 @@ test("guard: opacity/transform/mask/mix-blend-mode still locked; crop/filter/ani
   expect(await page.locator(".mp-source-badge").evaluate((e) => getComputedStyle(e).opacity)).toBe("1");
 });
 
-const CONTROL_SELECTORS = [".mp-btn-prev", ".mp-btn-play", ".mp-btn-next", ".mp-volume-wrap", ".mp-link-out"];
+const CONTROL_SELECTORS = [".mp-btn-prev", ".mp-btn-play", ".mp-btn-next", ".mp-btn-lyrics", ".mp-volume-wrap", ".mp-link-out"];
 
 test("D10: interactive controls never overlap the artwork's bounding box", async ({ page }) => {
   // 4 themes × ~19 fixtures × a full page.goto() each is comfortably over the

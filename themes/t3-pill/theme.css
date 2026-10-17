@@ -173,7 +173,8 @@
   align-self: start;
 }
 .mp-root[data-layout="pill"][data-theme="t3-pill"] .mp-btn-prev,
-.mp-root[data-layout="pill"][data-theme="t3-pill"] .mp-btn-next {
+.mp-root[data-layout="pill"][data-theme="t3-pill"] .mp-btn-next,
+.mp-root[data-layout="pill"][data-theme="t3-pill"] .mp-btn-lyrics {
   background: none;
   border: none;
   display: flex;

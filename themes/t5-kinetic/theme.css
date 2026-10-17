@@ -202,6 +202,7 @@
 }
 .mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-btn-prev,
 .mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-btn-next,
+.mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-btn-lyrics,
 .mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-btn-play {
   display: flex;
   align-items: center;
@@ -226,6 +227,7 @@
 }
 .mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-btn-prev:active,
 .mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-btn-next:active,
+.mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-btn-lyrics:active,
 .mp-root[data-layout="card"][data-theme="t5-kinetic"] .mp-btn-play:active {
   border-bottom-width: 1px;
   transform: translateY(3px);

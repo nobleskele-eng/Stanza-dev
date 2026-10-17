@@ -2420,3 +2420,30 @@ in each of the five themes, and a copy slot.
   - Dragging the slider with a real mouse (CDP `fill` was used).
   - The Store build.
   - macOS (untested; there, volume would come from AppleScript in M5).
+
+## 2026-10-17 — M1 R3b: the lyrics button (S6), contract v6 — code done, real-exe check pending
+- **Your calls:** end of the controls row, styled like prev/next; a **text-lines** icon (three short lines, drawn for
+  Stanza).
+- **Rust: `src-tauri/src/spotify/window.rs`, command `spotify_show_window`.**
+  - It picks Spotify's main window with `pick_main_window` (pure, unit-tested): an unowned, non-tool,
+    titled `Chrome_WidgetWin_*` window, preferring one on screen or minimised.
+  - **Basis:** Spotify's real windows were listed read-only here (main = `Chrome_WidgetWin_1`, next to hidden tool,
+    tray, GDI+ and IME windows).
+  - **Bringing it forward:** it restores a minimised window or shows a hidden one, then `SetForegroundWindow`. If
+    Windows refuses, it falls back to briefly attaching input to the foreground thread. The result is
+    `direct | attached | refused | notFound`.
+  - **Shared helper:** `process_path` moved to `spotify/process.rs` (volume uses it too).
+- **Contract v6:** Root `data-cap-lyrics`, part `.mp-btn-lyrics` (last child of `.mp-controls`). `Capabilities.lyrics`
+  is on for every Spotify track. All five themes group the button with prev/next (T5 with its keycaps). COPY.md
+  gains "Lyrics button label" `[NEEDS COPY]`. The companion's contract becomes v7 (PLAN.md).
+- **Tests (ran):**
+  - `cargo test` 15 passed; clippy 0 warnings; fmt clean.
+  - `npx tsc --noEmit` clean; `npx vitest run` 156 passed.
+  - **`npx playwright test` 694 passed** (Chromium + WebKit). New: a "no lyrics" fixture across the matrix, the
+    button in the overlap and Tab-order checks, and a production test (order after next, `[NEEDS COPY]` name, click →
+    `spotify_show_window`, no window drag, hidden when Spotify isn't running).
+- **Looked at:** T1, T2 and T3 (hovered) in the dev harness; the button sits after next and matches prev/next. T4/T5
+  not looked at yet. Visual result: **ready for your review**.
+- **Not done:**
+  - The release build and the real-exe gate: Spotify minimised or behind other windows comes to the front reliably,
+    not just once. Bringing Spotify's window forward needs your OK first.
