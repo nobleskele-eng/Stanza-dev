@@ -381,9 +381,12 @@ runtime (`src/fx/`: anime.js for text, `@splitflap/core` for the flap board, Mat
 
 - **Icons (on for every theme, not opt-in).** The transport icons animate their inline `<svg>`
   (`src/theme/structure.css`): a press on `:active` (no remount), a pop-in when play↔pause swap,
-  and a looping pulse on the play icon **only while `data-status="paused"`**. Tunable with
-  `--mp-icon-press-scale` (default `0.8`) and `--mp-icon-idle-anim` (an `animation` value; set
-  `none` to disable). Reduced motion turns all of it off.
+  and a pulse on the play icon **only while `data-status="paused"`**: three pulses after each pause,
+  then still. Tunable with `--mp-icon-press-scale` (default `0.8`) and `--mp-icon-idle-anim` (an
+  `animation` value; set `none` to disable). Reduced motion turns all of it off. **Cost note for
+  theme authors:** in the real transparent window any *endless* smooth animation keeps the app at
+  roughly 10–20% of a CPU core for as long as it runs (measured, DECISIONS.md M1 R2); prefer
+  finite or low-rate stepped motion.
 - **Text effects** (`data-fx-title`, `data-fx-artist`): `typewriter` (letters revealed in turn),
   `ripple` (gentle continuous distortion), `liquid` (text resolves out of a blur on each track
   change — a coalesce-in, not an old→new morph), and (v5) `splitflap`. They animate the real text and

@@ -491,6 +491,28 @@ test("in Tauri, Spotify not running shows the unavailable state: the empty-state
   await expect(page.locator(".mp-controls, .mp-artwork, .mp-title")).toHaveCount(0);
 });
 
+// --- Paused pulse: an endless play-icon pulse kept the real window at ~20% of a CPU core while paused (DECISIONS.md
+// M1 R2), so it pulses 3 times per pause and then nothing on the page animates.
+test("paused, the play icon pulses 3 times and then nothing animates; every new pause pulses again", async ({ page }) => {
+  await fakeTauri(page, { spotify: spotifyState({ status: "paused", artwork: null, artworkId: 0 }) });
+  await page.goto("/");
+  await expect(page.locator(".mp-root")).toHaveAttribute("data-status", "paused");
+  const pulse = () =>
+    page.evaluate(() =>
+      document
+        .querySelector(".mp-btn-play svg")!
+        .getAnimations()
+        .map((a) => ({ name: (a as CSSAnimation).animationName, iterations: a.effect!.getComputedTiming().iterations, state: a.playState })),
+    );
+  expect(await pulse()).toContainEqual({ name: "mp-icon-idle", iterations: 3, state: "running" });
+  const running = () => page.evaluate(() => document.getAnimations().filter((a) => a.playState === "running").length);
+  await expect.poll(running, { timeout: 10_000, message: "3 × 2.4 s, then nothing running" }).toBe(0);
+
+  await emitSpotify(page, spotifyState({ seq: 4, status: "playing", artwork: null, artworkId: 0 }));
+  await emitSpotify(page, spotifyState({ seq: 5, status: "paused", artwork: null, artworkId: 0 }));
+  await expect.poll(pulse).toContainEqual({ name: "mp-icon-idle", iterations: 3, state: "running" });
+});
+
 // --- Keyboard seek (M1 R2): ←/→ move 5 s while the window has focus; no visible seek control (contract "Not in v1").
 const seekCalls = async (page: import("@playwright/test").Page) =>
   (await ipcCalls(page, "spotify_seek")).map((c) => c.args.positionMs as number);

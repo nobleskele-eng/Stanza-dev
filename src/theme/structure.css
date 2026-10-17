@@ -126,9 +126,12 @@
 }
 .mp-btn-prev:active svg { transform: translateX(-2px) scale(var(--mp-icon-press-scale, 0.8)); }
 .mp-btn-next:active svg { transform: translateX(2px) scale(var(--mp-icon-press-scale, 0.8)); }
-/* Idle: only when paused, so a playing track has no looping motion competing with the theme. */
+/* Idle: only when paused, so a playing track has no motion competing with the theme. Three pulses,
+   then still: an endless pulse cost ~20% of a CPU core for as long as playback stayed paused, in
+   the real transparent window (docs/DECISIONS.md, M1 R2). The svg remounts on every play<->pause
+   swap, so each pause gets its three pulses. */
 .mp-root[data-status="paused"] .mp-btn-play svg {
-  animation: mp-icon-in 180ms ease-out, var(--mp-icon-idle-anim, mp-icon-idle 2.4s ease-in-out 180ms infinite);
+  animation: mp-icon-in 180ms ease-out, var(--mp-icon-idle-anim, mp-icon-idle 2.4s ease-in-out 180ms 3);
 }
 @keyframes mp-icon-in {
   from { transform: scale(0.6); }

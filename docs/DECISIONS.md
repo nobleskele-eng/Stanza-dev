@@ -2234,3 +2234,48 @@ message** when Spotify isn't running.
   - The Store build of Spotify.
   - 125%/150% scaling.
   - macOS.
+
+## 2026-10-17 — Paused pulse: three times, then still; T4 and T5 animation CPU measured
+**Your call:** "make the paused play-icon pulse run 3 times after pausing and then hold still; then measure T4's
+marquee and T5's reels the same way."
+- **Pulse:** `structure.css`'s default `--mp-icon-idle-anim` is now `mp-icon-idle 2.4s ease-in-out 180ms 3` (was
+  `infinite`).
+  - The play icon's svg remounts on every play↔pause swap, so each pause gets its three pulses (about 7.4 s), then
+    nothing on the page animates.
+  - THEME_CONTRACT.md's **Effects → Icons** says so, and adds a cost note for theme authors (endless smooth animation
+    ≈ 10–20% of a core here). No version bump: no name changed, only a default value.
+- **Test:** `e2e/production.spec.ts`, Chromium + WebKit:
+  - paused → `mp-icon-idle` runs with 3 iterations;
+  - within 10 s `document.getAnimations()` has nothing running;
+  - playing → paused again restarts the pulse.
+  - **Mutation-checked:** with `infinite` restored, the test fails.
+  - The real-exe paused CPU wasn't re-measured, because that needs Spotify paused again. With nothing running, it is
+    the "pulse switched off" case measured in R2: **0 ms per 10 s**.
+- **Theme animation CPU** (real `stanza.exe`, Spotify playing, read-only toward Spotify). Themes were switched by
+  writing the saved appearance and reloading the webview, then restored. Your saved T1 appearance was put back
+  byte-identical and verified. CPU is for the app plus its WebView2 processes, per 10 s:
+
+  | Theme | Endless animations | Running | Endless ones paused (WAAPI) | Same, stepped ~6 fps |
+  |---|---|---|---|---|
+  | T1 | none | 156 | 328 | 266 |
+  | T4 | `mp-t4-marquee` (9 s) | **1,172** | 188 | 422 |
+  | T5 | `t5-spin` on both reels (2.6 s, 2.1 s) | **2,766** | **2,594** | 2,141 |
+
+  - **Noise:** T1's three numbers are pure noise (it has no endless animation), so ±~170 ms is noise.
+  - **T4:** the marquee costs ~1 s per 10 s (~10% of a core). Stepping it to ~6 fps keeps about a third of that.
+  - **T5 costs ~25% of a core while playing, and the reels are only part of it.** A second, cumulative run, switching
+    layers off one at a time:
+    - all layers: 2,562;
+    - reels paused: 1,641;
+    - + flow backdrop hidden: 1,906 (noise);
+    - + artwork duotone filter off: 1,781;
+    - + split-flap title hidden: 1,219.
+  - **T5 breakdown:** the reels are somewhere between ~0.2 s and ~0.9 s (the two runs disagree), and the split-flap
+    title (it pages every 3.2 s) ≈ 0.5 s. **About 1 s stays unexplained** with all four off.
+  - **Unverified guess** for that 1 s: the 250 ms position tick re-sizing T5's progress-driven reel packs, which
+    repaints large gradients four times a second. Testing it needs a build with a slower tick, or a paused
+    measurement.
+- **Not changed (design calls, yours):** T4's marquee and T5's reels/flap/tick. Options per animation: finite runs,
+  stepped low-rate motion, or a slower position tick for themes that draw progress expensively.
+- **Result (ran):** `npx vitest run` 146 passed; `npx playwright test` 652 passed (Chromium + WebKit, 2 new runs);
+  `npm run tauri build -- --no-bundle` OK with 0 warnings, including `check-fixtures-excluded: OK`. No Rust changed.
