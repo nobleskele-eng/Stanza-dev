@@ -2474,3 +2474,6 @@ in each of the five themes, and a copy slot.
 - **Result (ran, after the fix):** `cargo test` 15 passed; `cargo clippy --all-targets` 0 warnings; `cargo fmt
   --check` clean; `npm run tauri build -- --no-bundle` OK with 0 warnings, including `check-fixtures-excluded: OK`.
   The TS suites didn't change after the last full run: Vitest 156, Playwright 694.
+- **Real mouse click, by you (2026-10-17):** "works". You clicked the lyrics button in the release exe, and Spotify
+  came to the front. That was the one path the automated runs couldn't take (a real click activates Stanza first). The
+  S6 gate is closed.

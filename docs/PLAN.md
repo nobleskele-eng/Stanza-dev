@@ -422,7 +422,7 @@ locally on `main` ("Slice N: …"), never pushed unless you ask. Hour ranges are
 - **Production slices on `main`:** 1 theme applied + remembered · 2 real frameless transparent window · 3 click-through · 4 right-click theme picker · 5 CSP + named Stanza · 6 player centred side to side.
 - **M1 Real music (done 2026-10-17, DECISIONS.md M1 R1–R3b):** the GSMTC adapter on `main` (20-track gate passed), position drift ≤ 0.2 s over 5 min, keyboard seek, a "Spotify not running" state with recovery, Spotify's own volume through Core Audio, the lyrics button (contract v6), and a CPU pass (every theme 0.1–0.7 s of CPU per 10 s while playing). The Slice 5/6 real-exe checks passed along the way.
 - **Tests at last full run:** 156 unit (Vitest), 694 e2e (Playwright, Chromium + WebKit), `cargo test` 15.
-- **Open from M1:** a real mouse click on the lyrics button (automated runs can't activate the window the way a click does); `[NEEDS COPY]` labels; the Store build of Spotify; 125%/150% scaling.
+- **Open from M1:** `[NEEDS COPY]` labels; the Store build of Spotify; 125%/150% scaling.
 
 ### v1 phases → milestones
 
