@@ -3,9 +3,9 @@
 **Stanza** — a themeable desktop mini player for Spotify and SoundCloud, built typography-first: a stanza is a structural unit of text, not an image.
 *Repo description:* Themeable Spotify/SoundCloud mini player for Windows (and macOS) built with Tauri — the UI is carried by typography and motion, not album art.
 
-Version 2 · 2026-10-17 · Status: Phases 0–4 largely built (five themes, the effects layer, theme contract v5) and production
-slices 1–6 on `main`. **No real Spotify adapter on `main` yet**: the app only shows the idle state. Next: **M1 Real music**,
-then **M2 Companion** (§5). Version 1 (2026-09-11, "planning, nothing built yet") is in git history.
+Version 2 · 2026-10-17 · Status: Phases 0–4 largely built (five themes, the effects layer) and **M1 Real music done**:
+real Spotify tracks, transport, keyboard seek, its own volume and the lyrics button, in the real exe (theme contract v6).
+Next: **M2 Companion** (§5). Version 1 (2026-09-11, "planning, nothing built yet") is in git history.
 
 Section numbers §0–§11 are the same as in v1, because code comments and older `docs/DECISIONS.md` entries cite them. The
 companion is the new §4b. §5 now holds the status and the roadmap; the v1 phases are summarised there as history.
@@ -420,9 +420,9 @@ locally on `main` ("Slice N: …"), never pushed unless you ask. Hour ranges are
 ### Where we are (2026-10-17)
 - **Done:** Phase 0; spikes S1 (window), S2 (GSMTC), S4 (themes) — on their spike branches, learnings merged; Phase 2 core; Phase 3 design system + contract; Phase 4 themes T1–T5, the D16 effects layer, contract v5.
 - **Production slices on `main`:** 1 theme applied + remembered · 2 real frameless transparent window · 3 click-through · 4 right-click theme picker · 5 CSP + named Stanza · 6 player centred side to side.
-- **Tests at last full run (Slice 6):** 132 unit (Vitest), 610 e2e (Playwright, Chromium + WebKit), `cargo test` 4.
-- **Biggest gap:** no real Spotify adapter on `main` — the app shows idle only.
-- **Pending:** the Slice 5/6 real-exe check (CSP applied in the exe, saved data survives the rename, T1 centred) — waits until your own Stanza exe is closed.
+- **M1 Real music (done 2026-10-17, DECISIONS.md M1 R1–R3b):** the GSMTC adapter on `main` (20-track gate passed), position drift ≤ 0.2 s over 5 min, keyboard seek, a "Spotify not running" state with recovery, Spotify's own volume through Core Audio, the lyrics button (contract v6), and a CPU pass (every theme 0.1–0.7 s of CPU per 10 s while playing). The Slice 5/6 real-exe checks passed along the way.
+- **Tests at last full run:** 156 unit (Vitest), 694 e2e (Playwright, Chromium + WebKit), `cargo test` 15.
+- **Open from M1:** a real mouse click on the lyrics button (automated runs can't activate the window the way a click does); `[NEEDS COPY]` labels; the Store build of Spotify; 125%/150% scaling.
 
 ### v1 phases → milestones
 
