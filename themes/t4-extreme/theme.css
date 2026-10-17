@@ -104,7 +104,9 @@
   letter-spacing: -0.01em;
   color: var(--mp-fg);
   white-space: nowrap;
-  animation: mp-t4-marquee 9s linear infinite;
+  /* Stepped, ~6 frames a second (54 steps over 9 s): a smooth endless sweep kept the real window
+     at ~10% of a CPU core (DECISIONS.md, 2026-10-17 CPU pass), the stepped one at ~2%. */
+  animation: mp-t4-marquee 9s steps(54) infinite;
 }
 @keyframes mp-t4-marquee {
   from { transform: translateX(100%); }

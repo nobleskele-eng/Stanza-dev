@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { flapAlphabet, graphemes, isFlapSafe, padPage, paginate } from "./flap";
+import { FLAP_PAGE_CYCLES, flapAlphabet, flapPageAfter, graphemes, isFlapSafe, padPage, paginate } from "./flap";
 
 const strip = (s: string) => s.replace(/\s+/g, "");
 
@@ -87,5 +87,24 @@ describe("isFlapSafe", () => {
   it("upper-casing that changes length is fine because callers upper-case BEFORE paginating/padding", () => {
     expect(isFlapSafe("Straße", 10)).toBe(true); // shown as STRASSE, still 7 single-unit cells
     expect(paginate("Straße".toUpperCase(), 10)).toEqual(["STRASSE"]);
+  });
+});
+
+describe("flapPageAfter (paging is finite)", () => {
+  it("pages through every page twice, ends on the first page, then stops", () => {
+    const seen: (number | null)[] = [];
+    for (let flip = 1; flip <= 8; flip++) seen.push(flapPageAfter(flip, 3));
+    expect(seen).toEqual([1, 2, 0, 1, 2, 0, null, null]);
+    expect(FLAP_PAGE_CYCLES).toBe(2);
+  });
+
+  it("never pages a single-page title, and ignores a non-positive flip count", () => {
+    expect(flapPageAfter(1, 1)).toBeNull();
+    expect(flapPageAfter(1, 0)).toBeNull();
+    expect(flapPageAfter(0, 3)).toBeNull();
+  });
+
+  it("honours another cycle count", () => {
+    expect([1, 2, 3].map((f) => flapPageAfter(f, 2, 1))).toEqual([1, 0, null]);
   });
 });

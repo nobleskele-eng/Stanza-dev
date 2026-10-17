@@ -73,6 +73,29 @@ test("split-flap: a multi-page title moves on to its next page, using only its o
   for (const g of await page.evaluate(boardGlyphs)) expect(g === "" || allowed.has(g)).toBe(true);
 });
 
+// Endless paging re-ran the flip animation every 3.2 s for the whole track (DECISIONS.md, 2026-10-17 CPU pass), so a
+// long title pages through twice and then rests on its first page. The fake clock runs the ~26 s schedule in moments.
+test("split-flap: a multi-page title pages through twice, ends on its first page, and then stays there", async ({ page }) => {
+  await page.clock.install();
+  const fixture = "typical / all caps";
+  await page.goto(url(fixture));
+  await expect(page.locator(".mp-title[data-flap]")).toBeAttached();
+  const pages = paginate(TITLE_OF[fixture].toUpperCase(), COLS).map((p) => padPage(p, COLS));
+  // The board mounts a beat after the harness (later in WebKit); start once it first shows page 1.
+  for (let i = 0; i < 100 && (await page.evaluate(boardText)) !== pages[0]; i++) await page.clock.runFor(100);
+  // Then sample mid-interval: page turns come every 3.2 s from mount and a flip settles well within 1.5 s.
+  await page.clock.runFor(1500);
+  const shown = [await page.evaluate(boardText)];
+  for (let tick = 1; tick <= pages.length * 2 + 2; tick++) {
+    await page.clock.runFor(3200);
+    shown.push(await page.evaluate(boardText));
+  }
+  const expected = [pages[0]];
+  for (let tick = 1; tick <= pages.length * 2; tick++) expected.push(pages[tick % pages.length]);
+  expected.push(pages[0], pages[0]); // two more page intervals: no further flips
+  expect(shown).toEqual(expected);
+});
+
 test("split-flap: tile text has AA contrast against its tile", async ({ page }) => {
   await page.goto(url("typical / all caps"));
   await expect(page.locator(".mp-title[data-flap]")).toBeAttached();

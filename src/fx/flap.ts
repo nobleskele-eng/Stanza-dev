@@ -82,3 +82,17 @@ export function isFlapSafe(text: string, cols: number): boolean {
   const g = graphemes(upper);
   return g.every((c) => c.length === 1) && paginate(upper, cols).every((p) => graphemes(p).length <= cols);
 }
+
+/** How many times a title longer than one row pages through all its pages per track (then rests). */
+export const FLAP_PAGE_CYCLES = 2;
+
+/**
+ * Which page a multi-page title shows after its `flips`-th page turn, or null once paging is done.
+ * It pages through every page `cycles` times, ending back on the first page, and then rests: an
+ * endless page turn re-ran the board's flip animation every 3.2 s for the whole track, which kept
+ * the real window busy (docs/DECISIONS.md, 2026-10-17 CPU pass).
+ */
+export function flapPageAfter(flips: number, pages: number, cycles = FLAP_PAGE_CYCLES): number | null {
+  if (pages < 2 || flips < 1 || flips > pages * cycles) return null;
+  return flips % pages;
+}

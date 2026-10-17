@@ -89,7 +89,8 @@
      requirement (unlike the play button below, which pairs a background with text). */
   background: var(--mp-art-2, var(--mp-accent));
   border-radius: 2px;
-  transition: width var(--mp-motion-fast) linear;
+  /* No width transition: it re-ran a layout animation on every position tick (DECISIONS.md, 2026-10-17
+     CPU pass). At one tick a second the bar moves about a pixel, so there is nothing to smooth. */
 }
 
 .mp-root[data-layout="card"][data-theme="t2-artwork"] .mp-time-current,

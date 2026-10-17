@@ -2279,3 +2279,80 @@ marquee and T5's reels the same way."
   stepped low-rate motion, or a slower position tick for themes that draw progress expensively.
 - **Result (ran):** `npx vitest run` 146 passed; `npx playwright test` 652 passed (Chromium + WebKit, 2 new runs);
   `npm run tauri build -- --no-bundle` OK with 0 warnings, including `check-fixtures-excluded: OK`. No Rust changed.
+
+## 2026-10-17 — CPU pass: stepped marquee and reels, finite flap paging, a 1 s position tick
+**Your ask:** "step the marquee and reels at a low frame rate, pace the split-flap, and find T5's unexplained cost (try
+a slower position tick)."
+- **Finding T5's cost.** All in the real `stanza.exe` with Spotify playing, read-only toward Spotify.
+  - **Method:** timers patched from page load by an init script over CDP; reels paused through the Web Animations
+    API; CPU split by WebView2 process type; the renderer's `Performance.getMetrics`; any 10 s window containing a
+    track change discarded.
+  - **Results** (medians of 3 windows, CPU ms per 10 s):
+
+    | Config | Total | GPU | Renderer | Renderer task | Layouts |
+    |---|---|---|---|---|---|
+    | As shipped (250 ms tick) | 7,391 | 4,078 | 3,297 | 1,914 | 1,678 |
+    | Reels paused | 3,563 | 1,688 | 1,859 | 1,199 | 1,478 |
+    | Flap paging off | 3,516 | 1,984 | 1,500 | 911 | 1,409 |
+    | 1 s tick | 3,157 | 1,922 | 1,219 | 305 | 364 |
+    | 1 s tick + flap off + reels paused | 938 | 531 | 391 | 196 | 357 |
+
+  - **Not additive:** each source alone keeps the transparent window repainting, so removing one saves less than its
+    "share".
+  - **The rest:** even with all three off, about 36 layouts per second remained. A `requestAnimationFrame` census
+    showed no JS loop: only the hit region's ~2.5 frame requests a second, and the flap library's frame loop stops
+    when a flip ends. The cause was **a 150 ms `width` transition on `.mp-progress-fill`** in T5, and in T2, which I
+    found the same way. Every position tick (4 a second) started a layout animation, about 36 frames a second.
+  - **Why earlier runs disagreed (2.5 s vs 7.4 s):** these sources overlap differently from moment to moment (flap
+    pages, tick phase, track changes with morph + debris).
+- **Changes:**
+  - **Position tick (`src/store/usePlayback.ts`):** 250 ms → **once a second, timed to the moment the shown second
+    changes** (`msToNextSecond` + 15 ms slack), with a self-rescheduling `setTimeout`. Every theme gets one render a
+    second while playing; nothing runs while paused. Progress bars move about a pixel a second, so nothing visible
+    is lost; T1's ring steps once a second.
+  - **Progress-fill `width` transitions removed in T5 and T2.** T2 is outside what you asked for, but it is the same
+    cause, and at one tick a second the transition had nothing left to smooth. A signed-off theme's CSS changed:
+    **ready for your review**.
+  - **T4 marquee:** `9s steps(54) infinite`, about 6 frames a second (was `linear`). It now jumps in visible small
+    steps, a ticker look rather than a glide. **Ready for your review.**
+  - **T5 reels:** `steps(16)` on both (22.5° a step: ~6 fps on the 2.6 s reel, ~7.6 fps on the 2.1 s one). 22.5° is
+    well under half the hub's 60° spoke period, so the steps read as forward motion, not wagon-wheel flicker (13 steps
+    on the 2.1 s reel would have been 27.7°, close to the 30° ambiguity point). **Ready for your review.**
+  - **Split-flap:** a title longer than one row now pages through **twice per track** (`FLAP_PAGE_CYCLES = 2`,
+    `flapPageAfter` in `src/fx/flap.ts`), ends on its first page, and rests. It used to page every 3.2 s for the whole
+    track.
+    - **Reading of "pace":** I took the same "finite, then still" rule you chose for the pulse. A slower endless
+      cadence would be the other way.
+    - The accessible copy is unchanged (always the full title).
+- **After, as shipped** (same method, Spotify playing, CPU ms per 10 s, medians):
+
+  | Theme | Before | After | Layouts / 10 s |
+  |---|---|---|---|
+  | T1 | 156–328 | **126** (~1% of a core) | 12 |
+  | T2 | — | **79** | 19 |
+  | T3 | — | **79** | 14 |
+  | T4 | 1,172 | **328** (~3%) | 15 |
+  | T5 | 2,766–7,391 | **704** (~7%) | 14 (was 1,678) |
+
+  - Your saved T1 appearance was restored byte-identical after each run.
+- **Tests:**
+  - **Vitest:** 151 passed (5 new: `msToNextSecond`, `flapPageAfter`).
+  - **`e2e/production.spec.ts`, per theme:** with each theme's default effects and a playing track, every endless
+    animation's `animation-timing-function` is `steps(...)`, and no progress fill transitions its width. T4 must have
+    its marquee and T5 both reels, so neither check is vacuous.
+  - **The tick:** playing re-renders 3–5 times in 4 s (it was 16), and the m:ss label moves exactly one second per
+    render.
+  - **`e2e/flap.spec.ts`:** a 4-page title pages twice, ends on page 1 and stays there. Playwright's fake clock runs
+    the ~26 s schedule; 6/6 over `--repeat-each=3`. My first version sampled on a fixed grid and failed in WebKit,
+    where the board mounts later; it now waits for the board's first page.
+  - **Mutation-checked:** a smooth marquee fails T4's case; a ~250 ms tick fails the tick test; endless paging fails
+    the flap test. Restored. (One mutation attempt didn't typecheck, which stopped the build step; redone in a
+    type-clean way.)
+- **Result (ran):** `npx tsc --noEmit` clean; `npx vitest run` 151 passed; `npx playwright test` 666 passed (Chromium +
+  WebKit); `npm run tauri build -- --no-bundle` OK with 0 warnings, including `check-fixtures-excluded: OK`. No Rust
+  changed.
+- **Not checked:**
+  - **How the stepped marquee and reels look in motion:** I measured them but didn't watch them.
+  - The opt-in effects (shapes/waveform drive `--mp-beat` at ~30 fps; ripple/liquid text) were not measured; they
+    are off unless a variant turns them on.
+  - 125%/150% scaling.

@@ -513,6 +513,70 @@ test("paused, the play icon pulses 3 times and then nothing animates; every new 
   await expect.poll(pulse).toContainEqual({ name: "mp-icon-idle", iterations: 3, state: "running" });
 });
 
+// --- CPU pass (2026-10-17): in the real transparent window a smooth endless animation costs ~10–20% of a core and
+// a low-rate stepped one about nothing. Every theme, with its own default effects and a playing track.
+for (const id of THEME_IDS) {
+  test(`${id}: every endless animation is stepped, and no progress fill animates its width`, async ({ page }) => {
+    await fakeTauri(page, { spotify: spotifyState() });
+    await page.addInitScript(
+      ([key, contract, theme, layout]) =>
+        localStorage.setItem(key, JSON.stringify({ theme, variant: { theme, contract, layout, overrides: {}, hidden: [] } })),
+      [APPEARANCE_STORAGE_KEY, CONTRACT_VERSION, id, id === "t3-pill" ? "pill" : "card"] as const,
+    );
+    await page.goto("/");
+    await expect(page.locator(".mp-root")).toHaveAttribute("data-theme", id);
+    await expect(page.locator(".mp-root")).toHaveAttribute("data-status", "playing");
+    await page.waitForTimeout(1000); // entrance animations finish; endless ones keep running
+    const endless = await page.evaluate(() =>
+      document
+        .getAnimations()
+        .filter((a) => a.effect!.getComputedTiming().iterations === Infinity)
+        .map((a) => {
+          const effect = a.effect as KeyframeEffect;
+          const easing = getComputedStyle(effect.target!, effect.pseudoElement).animationTimingFunction;
+          return `${(a as CSSAnimation).animationName}${effect.pseudoElement ?? ""} ${easing}`;
+        }),
+    );
+    for (const a of endless) expect(a, "endless animations must be stepped").toMatch(/ steps\(/);
+    if (id === "t4-extreme") expect(endless.some((a) => a.startsWith("mp-t4-marquee"))).toBe(true);
+    if (id === "t5-kinetic") expect(endless.filter((a) => a.startsWith("t5-spin"))).toHaveLength(2);
+
+    const fill = await page.evaluate(() => {
+      const cs = getComputedStyle(document.querySelector(".mp-progress-fill")!);
+      return { property: cs.transitionProperty, duration: cs.transitionDuration };
+    });
+    const widthAnimated = fill.property.split(",").some((p, i) => /^(all|width)$/.test(p.trim()) && parseFloat(fill.duration.split(",")[i] ?? fill.duration) > 0);
+    expect(widthAnimated, `${id} progress fill transition: ${JSON.stringify(fill)}`).toBe(false);
+  });
+}
+
+test("while playing, the player re-renders about once a second (the position tick), on the second", async ({ page }) => {
+  await fakeTauri(page, { spotify: spotifyState({ positionMs: 10_400, positionUpdatedAt: Date.now() }) });
+  await page.goto("/");
+  await expect(page.locator(".mp-root")).toHaveAttribute("data-status", "playing");
+  await page.waitForTimeout(1200);
+  const changes = await page.evaluate(
+    () =>
+      new Promise<{ styleWrites: number; labels: string[] }>((resolve) => {
+        let styleWrites = 0;
+        const labels: string[] = [];
+        const root = document.querySelector(".mp-root")!;
+        const time = document.querySelector(".mp-time-current")!;
+        const mo = new MutationObserver((m) => (styleWrites += m.filter((r) => r.attributeName === "style").length));
+        mo.observe(root, { attributes: true });
+        const to = new MutationObserver(() => labels.push(time.textContent ?? ""));
+        to.observe(time, { childList: true, characterData: true, subtree: true });
+        setTimeout(() => (mo.disconnect(), to.disconnect(), resolve({ styleWrites, labels })), 4000);
+      }),
+  );
+  // 4 s at one tick a second: 4 (±1 for where the window starts). The old 250 ms tick gave 16.
+  expect(changes.styleWrites).toBeGreaterThanOrEqual(3);
+  expect(changes.styleWrites).toBeLessThanOrEqual(5);
+  // Every tick moves the m:ss label on by exactly one second.
+  const secs = changes.labels.map((l) => Number(l.split(":")[0]) * 60 + Number(l.split(":")[1]));
+  for (let i = 1; i < secs.length; i++) expect(secs[i] - secs[i - 1]).toBe(1);
+});
+
 // --- Keyboard seek (M1 R2): ←/→ move 5 s while the window has focus; no visible seek control (contract "Not in v1").
 const seekCalls = async (page: import("@playwright/test").Page) =>
   (await ipcCalls(page, "spotify_seek")).map((c) => c.args.positionMs as number);

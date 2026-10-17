@@ -1,6 +1,6 @@
 import { useEffect, useRef, type CSSProperties } from "react";
 import { SplitFlap } from "@splitflap/core";
-import { flapAlphabet, padPage, paginate } from "./flap";
+import { flapAlphabet, flapPageAfter, padPage, paginate } from "./flap";
 
 // Split-flap (Solari board) rendering of the REAL title/artist (design round 2, step 3).
 // @splitflap/core (MIT, zero deps, no sound). Constraints handled here rather than trusted to it:
@@ -66,14 +66,19 @@ export function SplitFlapText({ className, text }: { className: string; text: st
     });
     lastShown[kind] = pages[0];
 
+    // Long titles page through twice per track, then rest on the first page (flapPageAfter).
     let page = 0;
+    let flips = 0;
     const timer =
       pages.length > 1
         ? window.setInterval(() => {
+            const next = flapPageAfter(++flips, pages.length);
+            if (next === null) return window.clearInterval(timer);
             const previous = pages[page];
-            page = (page + 1) % pages.length;
+            page = next;
             board.setText(pages[page], previous);
             lastShown[kind] = pages[page];
+            if (flapPageAfter(flips + 1, pages.length) === null) window.clearInterval(timer);
           }, PAGE_MS)
         : undefined;
 
