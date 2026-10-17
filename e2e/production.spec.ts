@@ -1,5 +1,7 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
+import { fixtures } from "../dev/fixtures/nowPlaying";
+import type { SpotifyState } from "../src/adapters/spotifyFeed";
 import { CONTRACT_VERSION } from "../src/theme/variant";
 
 // Written out rather than imported (appearance.ts pulls theme.json files in via the registry). Changing the key
@@ -74,8 +76,9 @@ test("invalid stored appearance falls back to the default theme and is rewritten
 // `theme` = the player's data-theme at the moment of the call (to check what happens before vs after a theme swap).
 type IpcCall = { cmd: string; args: Record<string, unknown>; theme: string | null };
 
-async function fakeTauri(page: import("@playwright/test").Page) {
-  await page.addInitScript(() => {
+// `spotify` is what Rust's `spotify_state` answers (null = the worker never published, as with no Spotify).
+async function fakeTauri(page: import("@playwright/test").Page, opts: { spotify?: SpotifyState } = {}) {
+  await page.addInitScript((spotify: unknown) => {
     const calls: { cmd: string; args: unknown; theme: string | null }[] = [];
     const callbacks = new Map<number, (raw: unknown) => void>();
     let nextCallback = 1;
@@ -84,6 +87,14 @@ async function fakeTauri(page: import("@playwright/test").Page) {
     Object.assign(window, {
       isTauri: true,
       __ipcCalls: calls,
+      // Deliver an app event to every listener of it, the way Rust's `emit` does.
+      __emit: (event: string, payload: unknown) => {
+        for (const c of calls) {
+          const a = c.args as { event?: string; handler?: number };
+          if (c.cmd === "plugin:event|listen" && a.event === event) callbacks.get(a.handler!)?.({ event, id: 1, payload });
+        }
+      },
+      __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: () => {} },
       // Deliver a message on a Channel the way Rust does, e.g. a native menu item's action firing.
       __fireChannel: (channel: string, message: unknown) =>
         callbacks.get(Number(channel.replace("__CHANNEL__:", "")))?.({ index: 0, message }),
@@ -101,6 +112,8 @@ async function fakeTauri(page: import("@playwright/test").Page) {
           // Resource-creating commands answer [rid, id]; everything else resolves to nothing.
           if (cmd === "plugin:menu|new") return Promise.resolve([nextRid, `menu-${nextRid++}`]);
           if (cmd === "plugin:menu|popup") return new Promise((resolve) => (closeOpenMenu = () => resolve(null)));
+          if (cmd === "spotify_state") return Promise.resolve(spotify);
+          if (cmd.startsWith("spotify_")) return Promise.resolve(true);
           return Promise.resolve(null);
         },
         transformCallback: (cb: (raw: unknown) => void) => {
@@ -110,7 +123,7 @@ async function fakeTauri(page: import("@playwright/test").Page) {
         unregisterCallback: (id: number) => callbacks.delete(id),
       },
     });
-  });
+  }, opts.spotify ?? null);
 }
 
 const ipcCalls = (page: import("@playwright/test").Page, cmd: string) =>
@@ -389,13 +402,124 @@ for (const id of THEME_IDS) {
   });
 }
 
+// --- Real playback (M1 R1): the bundle follows Rust's Spotify state (src-tauri/src/spotify). GSMTC itself is checked
+// in the real exe; these check what the bundle does with the states and events Rust sends. Track text is fixture data.
+const TYPICAL = fixtures["typical / all caps"].track!;
+const OTHER = fixtures["CJK / accented characters"].track!;
+const ARTWORK = fixtures["colorful artwork (filter test)"].track!.artwork!;
+function spotifyState(over: Partial<SpotifyState> = {}): SpotifyState {
+  return {
+    seq: 3,
+    session: true,
+    status: "playing",
+    title: TYPICAL.title,
+    artist: TYPICAL.artist,
+    album: TYPICAL.album!,
+    artworkId: 1,
+    artwork: ARTWORK,
+    positionMs: 42_000,
+    durationMs: TYPICAL.durationMs!,
+    positionUpdatedAt: Date.now(),
+    canSeek: true,
+    ...over,
+  };
+}
+const emitSpotify = (page: import("@playwright/test").Page, state: SpotifyState) =>
+  page.evaluate((s) => (window as unknown as { __emit: (e: string, p: unknown) => void }).__emit("spotify:state", s), state);
+const ipcCmds = (page: import("@playwright/test").Page) =>
+  page.evaluate(() =>
+    (window as unknown as { __ipcCalls: IpcCall[] }).__ipcCalls.map((c) =>
+      c.cmd === "plugin:event|listen" ? `listen ${(c.args as { event: string }).event}` : c.cmd,
+    ),
+  );
+
+test("in Tauri, the player listens for Spotify's state, then pulls it, and shows the track with its artwork", async ({ page }) => {
+  await fakeTauri(page, { spotify: spotifyState() });
+  await page.goto("/");
+  const root = page.locator(".mp-root");
+  await expect(root).toHaveAttribute("data-status", "playing");
+  await expect(root).toHaveAttribute("data-source", "spotify");
+  await expect(root).toHaveAttribute("data-cap-seek", "true");
+  await expect(page.locator(".mp-title")).toContainText(TYPICAL.title);
+  await expect(page.locator(".mp-artist")).toContainText(TYPICAL.artist);
+  await expect(page.locator(".mp-album")).toContainText(TYPICAL.album!);
+  await expect(page.locator("img.mp-artwork")).toHaveAttribute("src", ARTWORK);
+  await expect(page.locator(".mp-time-total")).toHaveText("3:30");
+
+  // Listening first means no change can fall between the pull and the subscription.
+  const cmds = await ipcCmds(page);
+  expect(cmds).toContain("listen spotify:state");
+  expect(cmds.indexOf("listen spotify:state")).toBeLessThan(cmds.indexOf("spotify_state"));
+});
+
+test("in Tauri, Spotify events update the player; older ones are ignored; artwork survives events that omit it", async ({ page }) => {
+  await fakeTauri(page, { spotify: spotifyState({ seq: 3 }) });
+  await page.goto("/");
+  const root = page.locator(".mp-root");
+  await expect(root).toHaveAttribute("data-status", "playing");
+
+  await emitSpotify(page, spotifyState({ seq: 4, status: "paused", artwork: null })); // same image, not resent
+  await expect(root).toHaveAttribute("data-status", "paused");
+  await expect(page.locator("img.mp-artwork")).toHaveAttribute("src", ARTWORK);
+
+  await emitSpotify(page, spotifyState({ seq: 2, status: "playing" })); // older than what is showing
+  await page.waitForTimeout(150);
+  await expect(root).toHaveAttribute("data-status", "paused");
+
+  await emitSpotify(page, spotifyState({ seq: 5, title: OTHER.title, artist: OTHER.artist, artworkId: 0, artwork: null }));
+  await expect(page.locator(".mp-title")).toContainText(OTHER.title);
+  await expect(page.locator(".mp-artwork")).toHaveCount(1);
+  await expect(page.locator("img.mp-artwork"), "a track without artwork shows the placeholder, not the old image").toHaveCount(0);
+
+  await emitSpotify(page, spotifyState({ seq: 6, session: false })); // Spotify closed
+  await expect(root).toHaveAttribute("data-status", "idle");
+  await expect(page.locator(".mp-empty")).toBeVisible();
+});
+
+test("in Tauri, the transport buttons send Spotify's commands and never start a window drag", async ({ page }) => {
+  await fakeTauri(page, { spotify: spotifyState() });
+  await page.goto("/");
+  await expect(page.locator(".mp-root")).toHaveAttribute("data-status", "playing");
+  await page.locator(".mp-btn-play").click();
+  await page.locator(".mp-btn-next").click();
+  await page.locator(".mp-btn-prev").click();
+  await expect
+    .poll(async () => (await ipcCmds(page)).filter((c) => c.startsWith("spotify_") && c !== "spotify_state"))
+    .toEqual(["spotify_play_pause", "spotify_next", "spotify_previous"]);
+  expect(await ipcCalls(page, "plugin:window|start_dragging")).toEqual([]);
+});
+
+test("in Tauri, a playing track's time advances between Spotify updates (C10); a paused one holds still", async ({ page }) => {
+  await fakeTauri(page, { spotify: spotifyState({ positionMs: 10_000, positionUpdatedAt: Date.now() }) });
+  await page.goto("/");
+  const time = page.locator(".mp-time-current");
+  await expect.poll(() => time.textContent(), { timeout: 6000 }).toMatch(/^0:1[2-9]$/);
+
+  const now = await page.evaluate(() => Date.now());
+  await emitSpotify(page, spotifyState({ seq: 4, status: "paused", positionMs: 30_000, positionUpdatedAt: now - 60_000 }));
+  await expect(time).toHaveText("0:30");
+  await page.waitForTimeout(1200);
+  await expect(time).toHaveText("0:30");
+});
+
+test("in Tauri, no Spotify state yet (the worker never published) shows idle without errors", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
+  await fakeTauri(page);
+  await page.goto("/");
+  await expect(page.locator(".mp-root")).toHaveAttribute("data-status", "idle");
+  await expect.poll(async () => (await ipcCmds(page)).includes("spotify_state")).toBe(true);
+  expect(errors).toEqual([]);
+});
+
 // --- Content security policy (Slice 5). Tauri sends tauri.conf.json's CSP as a header in release builds only (S4: not
 // in `tauri dev`), so this serves the production bundle with that same header and fails on anything it blocks.
 const CSP = (JSON.parse(readFileSync(new URL("../src-tauri/tauri.conf.json", import.meta.url), "utf8")) as { app: { security: { csp: string } } }).app
   .security.csp;
 
-test("the production bundle runs under the shipped CSP: nothing it loads is blocked, in any theme; a remote image is", async ({ page }) => {
-  await fakeTauri(page);
+/** Serves the bundle with the shipped CSP header; returns a reader of the violations seen so far. */
+async function serveWithCsp(page: import("@playwright/test").Page) {
   await page.route(
     (url) => url.pathname === "/" || url.pathname.endsWith(".html"),
     async (route) => {
@@ -408,7 +532,40 @@ test("the production bundle runs under the shipped CSP: nothing it loads is bloc
     Object.assign(window, { __cspViolations: seen });
     window.addEventListener("securitypolicyviolation", (e) => seen.push(`${e.violatedDirective} ${e.blockedURI}`), true);
   });
-  const violations = () => page.evaluate(() => (window as unknown as { __cspViolations: string[] }).__cspViolations);
+  return () => page.evaluate(() => (window as unknown as { __cspViolations: string[] }).__cspViolations);
+}
+
+test("under the shipped CSP, a Spotify track (data: artwork, palette extraction, T5's effects, a track change) loads nothing blocked", async ({ page }) => {
+  await fakeTauri(page, { spotify: spotifyState() });
+  const violations = await serveWithCsp(page);
+  await page.addInitScript(
+    ([key, contract]) =>
+      localStorage.setItem(
+        key as string,
+        JSON.stringify({ theme: "t5-kinetic", variant: { theme: "t5-kinetic", contract, layout: "card", overrides: {}, hidden: [] } }),
+      ),
+    [APPEARANCE_STORAGE_KEY, CONTRACT_VERSION] as const,
+  );
+  await page.goto("/");
+  const root = page.locator(".mp-root");
+  await expect(root).toHaveAttribute("data-theme", "t5-kinetic");
+  await expect(root).toHaveAttribute("data-status", "playing");
+  // The palette comes from drawing the data: artwork on a canvas.
+  await expect.poll(() => root.evaluate((el) => (el as HTMLElement).style.getPropertyValue("--mp-art-1"))).not.toBe("");
+
+  // A track change runs T5's morph and debris (which lazy-loads Matter.js) with a new data: image.
+  const dark = fixtures["very dark artwork"].track!.artwork!;
+  await emitSpotify(page, spotifyState({ seq: 4, title: OTHER.title, artist: OTHER.artist, artworkId: 2, artwork: dark }));
+  await expect(page.locator("img.mp-artwork")).toHaveAttribute("src", dark);
+  const matterLoaded = () => page.evaluate(() => performance.getEntriesByType("resource").some((e) => /matter/i.test(e.name)));
+  await expect.poll(matterLoaded, { timeout: 5000 }).toBe(true);
+  await page.waitForTimeout(300);
+  expect(await violations()).toEqual([]);
+});
+
+test("the production bundle runs under the shipped CSP: nothing it loads is blocked, in any theme; a remote image is", async ({ page }) => {
+  await fakeTauri(page);
+  const violations = await serveWithCsp(page);
 
   const response = await page.goto("/");
   expect(response!.headers()["content-security-policy"]).toBe(CSP);

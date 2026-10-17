@@ -1,4 +1,5 @@
 mod hit_region;
+mod spotify;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -19,11 +20,21 @@ pub fn run() {
                 .build(),
         )
         .manage(hit_region::HitRegion::default())
+        .manage(spotify::Spotify::default())
         .setup(|app| {
             hit_region::spawn_poller(app.handle().clone(), "main");
+            spotify::start(app.handle());
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![greet, hit_region::set_hit_region])
+        .invoke_handler(tauri::generate_handler![
+            greet,
+            hit_region::set_hit_region,
+            spotify::spotify_state,
+            spotify::spotify_play_pause,
+            spotify::spotify_next,
+            spotify::spotify_previous,
+            spotify::spotify_seek,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

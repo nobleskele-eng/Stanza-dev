@@ -132,6 +132,26 @@ describe("PlayerStore source switching (D9: one source at a time)", () => {
     expect(adapter.connect).toHaveBeenCalledTimes(1);
   });
 
+  it("stop() disconnects the active adapter, ignores its late updates, goes idle and can reconnect", () => {
+    const store = new PlayerStore();
+    const spotify = makeAdapter("spotify");
+    store.registerAdapter(spotify.adapter);
+    const seen: NowPlaying[] = [];
+    store.subscribe((np) => seen.push(np));
+
+    store.switchSource("spotify");
+    store.stop();
+    spotify.push({ ...IDLE_NOW_PLAYING, source: "spotify", status: "paused" });
+
+    expect(spotify.adapter.disconnect).toHaveBeenCalledTimes(1);
+    expect(store.getActiveSource()).toBeNull();
+    expect(store.getSnapshot()).toBe(IDLE_NOW_PLAYING);
+    expect(seen.map((np) => np.status)).toEqual(["playing", "idle"]);
+
+    store.switchSource("spotify");
+    expect(spotify.adapter.connect).toHaveBeenCalledTimes(2);
+  });
+
   it("throws for an unregistered source instead of silently doing nothing", () => {
     const store = new PlayerStore();
     expect(() => store.switchSource("soundcloud")).toThrow(/soundcloud/);

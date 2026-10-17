@@ -67,6 +67,15 @@ export class PlayerStore {
     next.connect((nowPlaying) => this.handleAdapterUpdate(id, nowPlaying));
   }
 
+  /** Disconnects the active adapter (e.g. when the UI unmounts). The snapshot goes back to idle. */
+  stop(): void {
+    const active = this.activeAdapter;
+    this.activeSourceId = null;
+    active?.disconnect();
+    this.snapshot = IDLE_NOW_PLAYING;
+    for (const listener of this.listeners) listener(this.snapshot);
+  }
+
   private handleAdapterUpdate(sourceId: SourceId, nowPlaying: NowPlaying): void {
     // Guards against a disconnected adapter's callback firing after a switch —
     // the whole point of D9 is one audible source at a time.

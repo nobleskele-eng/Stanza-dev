@@ -2012,3 +2012,99 @@ no customizer UI/persistence or Rust theme loader (Phase 4/5) — effects are ap
 - **Untouched:** code, THEME_CONTRACT.md, CLAUDE.md.
 - **Not done:** the Slice 5/6 real-exe check is still pending (it needs your Stanza exe closed) and now rides on M1's
   first real-exe run.
+
+## 2026-10-17 — M1 R1: the real Spotify adapter on `main`
+- **Was:** the production app always rendered `IDLE_NOW_PLAYING`. GSMTC lived only on `spike/s2-gsmtc` (S2 passed
+  2026-09-16 and was never merged, by the "merge learnings, not code" rule).
+- **Now:**
+  - **Rust: new `src-tauri/src/spotify/`.**
+    - **`gsmtc.rs`:** one worker thread owns the GSMTC session manager and Spotify's session.
+      - Windows' change events and the frontend's commands both arrive as channel messages, so no WinRT call runs on
+        the main thread. The spike ran its commands there.
+      - A burst of events, such as a track change, is read and published once.
+    - **`mod.rs`:** the wire type, the commands (`spotify_state`, `spotify_play_pause`, `spotify_next`,
+      `spotify_previous`, `spotify_seek`) and the pure helpers.
+    - **Off Windows:** nothing starts, the state stays "no session" and every command answers false. **macOS
+      untested** (M5).
+  - **TS:**
+    - **`SpotifyAdapter`** (`src/adapters/spotifyAdapter.ts`) listens to `spotify:state` *first* and then pulls,
+      so no change can fall between the two.
+    - **`SpotifyFeed`** (`spotifyFeed.ts`, pure) orders pulls and events by `seq` and maps them to `NowPlaying`.
+    - **Production `App`:** builds a `PlayerStore` with the adapter (Tauri only; a plain browser stays idle),
+      re-interpolates the position every 250 ms while playing (C10; no timer when paused), and wires
+      play/pause, next and previous.
+    - **`PlayerStore.stop()`:** disconnects the adapter on unmount.
+- **Three spike bugs not carried over:**
+  1. It added a fresh set of event handlers on every session-list change and never removed any. Now the old
+     registrations are removed before a new session is followed.
+  2. When Spotify closed, it kept showing the last track. Now a missing session publishes "no session".
+  3. It re-read and re-encoded the artwork on every timeline event. Now artwork is read only on a media change, and
+     it gets an id (a new id only when the image bytes differ). An event carries the base64 only when the id
+     changed; a pull always carries it.
+- **Two things the spike got wrong about C10, fixed and unit-tested:**
+  - It stamped the position with "now" at read time. GSMTC's `LastUpdatedTime` is what the position is current as of,
+    so it is now converted from WinRT ticks, falling back to now when unset or in the future.
+  - **Resume guard:** on paused → playing with a timestamp older than 1 s, the position counts from now.
+    Otherwise, if Spotify resumes without refreshing its timeline, interpolation would jump ahead by the whole pause.
+    It applies only from *paused*, since a first read's old timestamp is genuine.
+  - Whether Spotify actually needs the guard is for R2 to measure.
+- **`Changing` (between tracks) keeps the previous status** instead of flashing idle.
+- **Decided without asking (no design change):**
+  - **No Spotify session, a stopped session or an empty title all show the existing idle state.** The contract's
+    `unavailable` state shows only the badge, and COPY.md's "Spotify not running" is still `[NEEDS COPY]`. The
+    dedicated state is R2.
+  - **Caps:** `album` on, `seek` from GSMTC, and `shuffle`/`repeat`/`volume` off. The v1 contract has no
+    shuffle/repeat controls, and volume is S5.
+- **D5 kept:** the AUMID is matched by "contains spotify" and logged on attach, never hardcoded.
+- **New dependencies:** `base64` (already in the lock file through Tauri). The `windows` crate gains the S2 spike's
+  WinRT features (Foundation, Media_Control, Storage_Streams, Win32_System_WinRT), which compiles more of that crate.
+- **Automated:**
+  - **`cargo test`:** 7 new tests: AUMID match, status mapping incl. `Changing`, TimeSpan → ms, `LastUpdatedTime` →
+    Unix ms, the resume guard, artwork mime sniffing (an unrecognised image → no artwork), the camelCase wire format.
+  - **Vitest:** 8 new: the `NowPlaying` mapping, `seq` ordering (a slow pull after an event is dropped), artwork
+    kept across events that omit it, a late pull still delivering the current image, `stop()`.
+  - **`e2e/production.spec.ts`:** the IPC fake now answers `spotify_state` and can emit events. 6 new tests × 2
+    engines:
+    - listen-then-pull and the track shown with artwork, album and duration;
+    - events update it, older ones are ignored, artwork survives, a track without artwork shows the placeholder,
+      and Spotify closing shows idle;
+    - the buttons send the commands and never start a window drag;
+    - the time advances while playing and holds while paused;
+    - no state yet → idle with no errors;
+    - under the shipped CSP: a T5 track with `data:` artwork, palette extraction, and a track change that runs morph
+      and lazy-loads Matter.js, with no violations.
+  - **Mutation-checked:** pulling before listening fails the ordering test, and an unwired next button fails the
+    transport test. Exactly those two failed; restored.
+- **Result (ran):** `npx tsc --noEmit` clean; `npx vitest run` 140 passed (8 new); `cargo test` 11 passed (7 new);
+  `cargo clippy --all-targets` 0 warnings; `cargo fmt --check` clean; `npx playwright test` 622 passed (Chromium +
+  WebKit, 12 new runs); `npm run tauri build -- --no-bundle` OK with 0 warnings, including `check-fixtures-excluded: OK`.
+- **Real exe (ran, read-only).** Your own Stanza wasn't running. I launched `stanza.exe` with a local CDP port and only
+  read the DOM; no control was pressed and Spotify's playback was never touched by me.
+  - **Spotify paused:** `data-status="paused"`, `data-source="spotify"`, `data-cap-seek`. Title, artist and album came
+    through (text not logged here). The artwork was a 300×300 **PNG** (not JPEG), and the palette was extracted from
+    it. Time 3:32 / 3:49.
+  - **Live change:** playback then started (from your side) on a different track. The player followed it: playing, new
+    artwork and palette, and the time advanced one second per second (0:04 → 0:07 over 3 s of samples).
+  - **Pending Slice 5/6 checks, now done:**
+    - The CSP is enforced in the exe: a remote canary image was blocked (`img-src`).
+    - T1 is centred: card x = 30 in the 340×600 window.
+    - The saved appearance survived the rename: `mp.appearance.v1` present, T1.
+  - **Artwork size, a surprise:** Spotify's GSMTC thumbnail is a PNG of about **200–240 kB** (316,802 and 276,470
+    base64 chars for the two tracks seen). That is far bigger than the "few dozen kB" assumed. Sending it only when
+    the image changes, not with every timeline event, matters more than expected.
+  - **CPU while playing:**
+    - **Whole app (T1), 10 s:** ≈ 300 ms (≈ 3% of one core), spread over the WebView2 renderer/GPU processes:
+      109 + 78 + 78 + 16 + 16 ms.
+    - **`stanza.exe` alone:** 0 ms in that window.
+    - **An earlier `stanza.exe`-only sample:** 391 ms. It most likely spanned the track change (artwork read +
+      ~240 kB emit).
+    - **No paused baseline yet:** it needs playback paused, which I won't do to your Spotify.
+    - **Follow-up for R2:** compare the 250 ms position tick against a 1 s tick.
+  - The app closed on a close request within 5 s, and its WebView2 processes were gone immediately after.
+- **Not verified:**
+  - **The M1 R1 gate itself:** 20 consecutive track changes with correct metadata. It means skipping tracks in your
+    Spotify, so it waits for your OK, or for you to skip while I watch.
+  - The transport buttons against real Spotify (only the fake IPC path is tested).
+  - The Microsoft Store build of Spotify (AUMID).
+  - 125%/150% scaling.
+  - macOS (untested).

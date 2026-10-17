@@ -7,20 +7,38 @@ import "../themes/t2-artwork/theme.css";
 import "../themes/t3-pill/theme.css";
 import "../themes/t4-extreme/theme.css";
 import "../themes/t5-kinetic/theme.css";
+import { isTauri } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { SpotifyAdapter } from "./adapters/spotifyAdapter";
+import { PlayerStore } from "./store/playerStore";
+import { useInterpolatedPosition, useStoreSnapshot } from "./store/usePlayback";
 import { loadAppearance, saveAppearance, selectTheme } from "./theme/appearance";
 import { MANIFESTS } from "./theme/registry";
 import { variantToDom } from "./theme/variant";
 import { DevHarness } from "./dev/DevHarness";
 import { Player } from "./player/Player";
-import { IDLE_NOW_PLAYING } from "./types/player";
 import { fitWindowToTheme, installHitRegion, installWindowDrag } from "./window/nativeWindow";
 import { installThemeMenu } from "./window/themeMenu";
 
-function ProductionPlaceholder() {
-  // Real Spotify/GSMTC adapter wiring is a later phase (docs/PLAN.md Phase 5+ /
-  // the stranded spike/s2-gsmtc branch). The theme/DOM contract itself is done
-  // (Phase 3) — rendered here idle, with no adapter feeding it yet.
+/**
+ * Real playback (PLAN.md §5, M1 R1): Spotify through the Rust GSMTC worker (src-tauri/src/spotify).
+ * Only inside Tauri; in a plain browser (vite preview, e2e without the IPC fake) the player stays idle.
+ */
+function useSpotify(): PlayerStore | null {
+  const [store] = useState(() => (isTauri() ? new PlayerStore() : null));
+  useEffect(() => {
+    if (!store) return;
+    store.registerAdapter(new SpotifyAdapter());
+    store.switchSource("spotify");
+    return () => store.stop();
+  }, [store]);
+  return store;
+}
+
+function ProductionApp() {
+  const store = useSpotify();
+  const nowPlaying = useStoreSnapshot(store);
+  const positionMs = useInterpolatedPosition(nowPlaying);
   // The active theme + variant persist across restarts; right-click picks the theme (Slice 4).
   const [appearance, setAppearance] = useState(() => {
     const a = loadAppearance(window.localStorage, MANIFESTS);
@@ -68,14 +86,17 @@ function ProductionPlaceholder() {
   return (
     <div className="app-stage">
       <Player
-        nowPlaying={IDLE_NOW_PLAYING}
-        positionMs={0}
+        nowPlaying={nowPlaying}
+        positionMs={positionMs}
         layout={appearance.variant.layout}
         theme={appearance.theme}
         overrides={dom.properties}
         hidden={appearance.variant.hidden}
         fx={{ ...MANIFESTS[appearance.theme].fx, ...dom.effects }}
         platform="windows"
+        onPlayPause={() => store?.playPause()}
+        onNext={() => store?.next()}
+        onPrevious={() => store?.previous()}
       />
     </div>
   );
@@ -89,7 +110,7 @@ function App() {
     // entirely. Verified by scripts/check-fixtures-excluded.mjs, not just assumed.
     return <DevHarness />;
   }
-  return <ProductionPlaceholder />;
+  return <ProductionApp />;
 }
 
 export default App;
