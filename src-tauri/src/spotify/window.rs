@@ -51,11 +51,15 @@ pub(super) fn show_spotify() -> ShowWindowResult {
         if attached {
             let _ = AttachThreadInput(this_thread, foreground_thread, false);
         }
-        if GetForegroundWindow() == hwnd {
-            ShowWindowResult::Attached
-        } else {
-            ShowWindowResult::Refused
+        // Windows can finish the switch a few ms after the call (seen in the real exe: the window came
+        // forward, but an immediate check said it hadn't). Only this rare path waits, briefly.
+        for _ in 0..10 {
+            if GetForegroundWindow() == hwnd {
+                return ShowWindowResult::Attached;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
         }
+        ShowWindowResult::Refused
     }
 }
 

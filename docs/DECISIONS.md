@@ -2447,3 +2447,30 @@ in each of the five themes, and a copy slot.
 - **Not done:**
   - The release build and the real-exe gate: Spotify minimised or behind other windows comes to the front reliably,
     not just once. Bringing Spotify's window forward needs your OK first.
+- **Follow-up, same day: looked at and checked in the real exe.**
+  - **T4 and T5 looked at:** in T4 the button is a muted icon after "next" like its prev/next; in T5 it is a fourth
+    dark keycap that fits the row. All five themes have now been looked at. **Ready for your review.**
+  - **Real exe (ran, with your OK to move Spotify's window).** Spotify's main window was read independently through
+    Win32 (same selection rule as `pick_main_window`), and its title was never logged. Start: Spotify minimised,
+    Discord in front.
+    - **Through Stanza's own button (CDP click), from minimised, 3 runs in a row:** Spotify restored and was the
+      foreground window each time.
+    - **From restored but behind another window (Discord), then from minimised once more:** Spotify was in front
+      each time. **The S6 gate passes for the button.**
+  - **Calling the command directly, from behind another window, to see which path it takes.** A CDP click doesn't
+    activate Stanza, so Windows' foreground lock applies and the attach-input fallback runs.
+    - **First pass:** `attached` and then `refused`. In the `refused` run Spotify *was* in front a moment later:
+      Windows finished the switch after the immediate check.
+    - **Fix:** the fallback path now re-checks for up to 100 ms before reporting (main thread, this path only).
+    - **Second pass, 4 runs:** `attached` each time. Spotify was in front afterwards in 3. In 1, the probe a second
+      later found **Stanza** in front. Something re-activated Stanza after the switch; I didn't find what.
+    - **Why it matters little:** this path only runs when Stanza isn't the active window. A real mouse click
+      activates Stanza, so the plain `SetForegroundWindow` path applies (Windows allows the foreground process to
+      hand over the foreground). The fallback exists for anything else.
+  - **Not verified:** a **real mouse click** on the button. That is the user's path, and it can't be done without
+    moving your cursor; please click it once with Spotify minimised. Also not verified: Spotify closed to the tray
+    (the hidden-window branch); 125%/150% scaling; macOS.
+  - Spotify was put back minimised. Focus afterwards was on the Claude app, not Discord where it started.
+- **Result (ran, after the fix):** `cargo test` 15 passed; `cargo clippy --all-targets` 0 warnings; `cargo fmt
+  --check` clean; `npm run tauri build -- --no-bundle` OK with 0 warnings, including `check-fixtures-excluded: OK`.
+  The TS suites didn't change after the last full run: Vitest 156, Playwright 694.
