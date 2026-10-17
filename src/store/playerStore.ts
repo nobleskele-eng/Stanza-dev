@@ -116,8 +116,15 @@ export class PlayerStore {
     for (const listener of this.listeners) listener(this.snapshot);
   }
 
+  /** Sets the active source's volume (0–1, clamped), shown at once like a seek (optimistic). */
   setVolume(level: number): void {
-    this.activeAdapter?.setVolume(level);
+    const adapter = this.activeAdapter;
+    if (!adapter || !Number.isFinite(level)) return;
+    const volume = Math.min(1, Math.max(0, level));
+    adapter.setVolume(volume);
+    if (!this.snapshot.caps.volume) return;
+    this.snapshot = { ...this.snapshot, volume };
+    for (const listener of this.listeners) listener(this.snapshot);
   }
 
   toggleShuffle(): void {

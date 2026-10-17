@@ -2356,3 +2356,67 @@ a slower position tick)."
   - The opt-in effects (shapes/waveform drive `--mp-beat` at ~30 fps; ripple/liquid text) were not measured; they
     are off unless a variant turns them on.
   - 125%/150% scaling.
+
+## 2026-10-17 — M1 R3a: Spotify's own volume (S5, Core Audio) — passed
+R3 was split in two: volume now; the lyrics button (S6) next, since it needs a new contract part (v6), a place and look
+in each of the five themes, and a copy slot.
+- **Rust: new `src-tauri/src/spotify/volume.rs`**, a `spotify-volume` thread (COM MTA).
+  - **Finding Spotify:** it enumerates every *active* render device's audio sessions (`IMMDeviceEnumerator` →
+    `IAudioSessionManager2` → `IAudioSessionControl2::GetProcessId`). It keeps the ones whose process image file
+    name is `Spotify.exe`, matched by file name (`is_spotify_exe`), never a hardcoded id, so installer and Store
+    builds both match.
+  - **Setting:** a request sets all of them through `ISimpleAudioVolume`. This is the per-app level the Windows
+    mixer shows; the master volume is never touched.
+  - **Reading:** the level is read once a second and published as `spotify:volume` `{available, level}` (rounded to 3
+    decimals, sent only on change). The session list is cached and rescanned every 5 s, every second while empty, and
+    at once if a cached session dies.
+  - **Commands:** `spotify_volume` (pull) and `spotify_set_volume`.
+  - **Why polling rather than `IAudioSessionEvents`/`IAudioSessionNotification` sinks:** far less COM code, and it
+    covers new sessions and device changes too. The cost is measured below.
+- **New windows-crate features:** `Win32_Media_Audio`, `Win32_System_Com` (+ `_StructuredStorage` and
+  `Win32_System_Variant`, which `IMMDevice::Activate` needs), and `Win32_System_Threading`.
+- **TS:**
+  - `NowPlaying.volume` (0–1).
+  - **`SpotifyFeed.acceptVolume`:** `caps.volume` is on only while Spotify has an audio session. Volume reports carry
+    no `seq`, so once an event has arrived a late pull is ignored.
+  - **`SpotifyAdapter`:** listens to both events and pulls both. Sending is latest-wins: one set in flight, the
+    newest level waiting.
+  - **Hold:** for 400 ms after a local change, incoming reports are held and only the newest is applied. Without it, a
+    report of an earlier step of a drag would pull the slider back.
+  - **`PlayerStore.setVolume`** is optimistic and clamped, like seek.
+  - **`.mp-volume`** is now a controlled input. Its value is the source's level, or the middle when there's none, so
+    fixtures look exactly as before. `readOnly` without an `onVolume`. The mock adapter now records the level.
+  - No contract change: the part and `data-cap-volume` already existed.
+- **Tests:**
+  - **`cargo test`:** 14 passed (2 new: exe-name matching incl. the Store path and `SpotifyWebHelper.exe`; level
+    rounding and wire format).
+  - **Vitest:** 155 passed (4 new: the volume mapping, availability, pull-after-event, the optimistic store).
+  - **`e2e/production.spec.ts`:** 3 new × 2 engines (the IPC fake now answers `spotify_volume`):
+    - the slider shows the level and `data-cap-volume`; an outside change moves it; no session → no slider;
+    - dragging sends `spotify_set_volume`, a stale report during the hold doesn't move the slider, and the newest
+      applies after it;
+    - no volume yet → no slider.
+  - **Mutation-checked:** with the hold removed, the drag test fails.
+  - One older test needed its filter updated: the transport test counted every `spotify_*` call, and now saw the
+    `spotify_volume` pull.
+- **Real exe (ran, with your OK).** Checked against an **independent Core Audio probe**: C# compiled by PowerShell,
+  not Stanza's code, reading and writing Spotify's session level and reading the master.
+  - **Before:** Spotify's own level 100% (1 session), master 43.3%. Stanza showed 1.0 with `data-cap-volume`.
+  - **From Stanza's slider:** 0.40 and 0.65 each appeared as Spotify's session level. The master stayed at 0.433 both
+    times. The ~1.1 s measured is mostly the probe's own startup; its first read already saw the new level.
+  - **From outside, as the mixer does:** 0.25 and 0.90 appeared on Stanza's slider within **745 ms** and **800 ms**,
+    i.e. within the 1 s check.
+  - **Restored:** Spotify back to exactly 1.0, master 0.433, and Stanza showed 1.0.
+  - **CPU with the check running** (T1, playing, three 10 s windows): `stanza.exe` 0 / 47 / 62 ms, whole app 47 / 219 /
+    281 ms. That matches the post-pass T1 baseline (126 median); the polling costs at most a few tens of ms per 10 s.
+- **Result (ran):** `npx tsc --noEmit` clean; `npx vitest run` 155 passed; `cargo test` 14 passed; `cargo clippy
+  --all-targets` 0 warnings (one excessive-precision literal in a test fixed); `cargo fmt --check` clean; `npx
+  playwright test` 672 passed (Chromium + WebKit); `npm run tauri build -- --no-bundle` OK with 0 warnings, including
+  `check-fixtures-excluded: OK`.
+- **Not checked:**
+  - Spotify on a non-default output device.
+  - A muted Spotify session: the level shows, but mute isn't reflected or changed.
+  - Spotify freshly started and not yet played (expected: no slider until it plays; only the e2e fake covers it).
+  - Dragging the slider with a real mouse (CDP `fill` was used).
+  - The Store build.
+  - macOS (untested; there, volume would come from AppleScript in M5).

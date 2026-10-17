@@ -39,6 +39,8 @@ strip = true
 # instead of Tauri getters that each round-trip the main event loop (the Win32_* features tao
 # already builds). Spotify's now-playing (src/spotify/gsmtc.rs, D5) needs the WinRT GSMTC API:
 # the Foundation, Media_Control, Storage_Streams and Win32_System_WinRT features (the S2 spike's).
+# Its per-app volume (src/spotify/volume.rs, S5) needs Core Audio: Win32_Media_Audio, Win32_System_Com
+# (+ _StructuredStorage and Win32_System_Variant for IMMDevice::Activate) and Win32_System_Threading.
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.61", features = [
     "Foundation",
@@ -47,6 +49,11 @@ windows = { version = "0.61", features = [
     "Storage_Streams",
     "Win32_Foundation",
     "Win32_Graphics_Gdi",
+    "Win32_Media_Audio",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_Threading",
+    "Win32_System_Variant",
     "Win32_System_WinRT",
     "Win32_UI_HiDpi",
     "Win32_UI_WindowsAndMessaging",

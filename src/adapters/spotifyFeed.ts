@@ -26,16 +26,26 @@ export interface SpotifyState {
 /** No Spotify session (Spotify not running): `unavailable` with no track (THEME_CONTRACT.md per-state table). */
 export const NOT_RUNNING: NowPlaying = { ...IDLE_NOW_PLAYING, status: "unavailable" };
 
+/** Wire format of Rust's `SpotifyVolume`: Spotify's own level in the Windows mixer (S5, Core Audio). */
+export interface SpotifyVolume {
+  /** Spotify has an audio session to set (it has played since it started). */
+  available: boolean;
+  /** 0–1. */
+  level: number;
+}
+
 /**
  * One state as the player shows it. No session → not running; a session with nothing loaded
- * (empty title) or stopped → idle. Shuffle/repeat stay off: the v1 contract has no controls for
- * them, and volume needs S5 (Core Audio). GSMTC always reports the album field, so `album` is on
- * whenever there is one.
+ * (empty title) or stopped → idle. Volume is on when Spotify has an audio session (S5). Shuffle and
+ * repeat stay off: the v1 contract has no controls for them. GSMTC always reports the album field,
+ * so `album` is on whenever there is one.
  */
-export function toNowPlaying(state: SpotifyState, artwork: string | undefined): NowPlaying {
+export function toNowPlaying(state: SpotifyState, artwork: string | undefined, volume?: SpotifyVolume | null): NowPlaying {
   if (!state.session) return NOT_RUNNING;
   if (state.status === "idle" || state.title === "") return IDLE_NOW_PLAYING;
+  const hasVolume = Boolean(volume?.available);
   return {
+    ...(hasVolume && { volume: Math.min(1, Math.max(0, volume!.level)) }),
     source: "spotify",
     status: state.status,
     track: {
@@ -47,7 +57,7 @@ export function toNowPlaying(state: SpotifyState, artwork: string | undefined): 
     },
     positionMs: Math.max(0, state.positionMs),
     positionUpdatedAt: state.positionUpdatedAt,
-    caps: { seek: state.canSeek, volume: false, shuffle: false, repeat: false, album: true },
+    caps: { seek: state.canSeek, volume: hasVolume, shuffle: false, repeat: false, album: true },
   };
 }
 
@@ -59,6 +69,21 @@ export function toNowPlaying(state: SpotifyState, artwork: string | undefined): 
 export class SpotifyFeed {
   private latest: SpotifyState | null = null;
   private artwork = new Map<number, string>();
+  private volume: SpotifyVolume | null = null;
+  private volumeEventSeen = false;
+
+  /**
+   * A volume report. Volume reports carry no `seq`, so once an event has arrived, a pull (always
+   * requested before it, possibly answered after it) is stale and ignored.
+   */
+  acceptVolume(volume: SpotifyVolume | null | undefined, from: "pull" | "event"): NowPlaying | null {
+    if (!volume || typeof volume.level !== "number" || !Number.isFinite(volume.level)) return null;
+    if (from === "pull" && this.volumeEventSeen) return null;
+    if (from === "event") this.volumeEventSeen = true;
+    this.volume = { available: Boolean(volume.available), level: volume.level };
+    const current = this.latest;
+    return current ? toNowPlaying(current, this.artwork.get(current.artworkId), this.volume) : null;
+  }
 
   accept(state: SpotifyState | null | undefined): NowPlaying | null {
     if (!state || typeof state.seq !== "number") return null;
@@ -76,11 +101,13 @@ export class SpotifyFeed {
     for (const id of this.artwork.keys()) if (id !== current.artworkId) this.artwork.delete(id);
 
     if (!newer && !artworkArrived) return null;
-    return toNowPlaying(current, this.artwork.get(current.artworkId));
+    return toNowPlaying(current, this.artwork.get(current.artworkId), this.volume);
   }
 
   reset(): void {
     this.latest = null;
     this.artwork.clear();
+    this.volume = null;
+    this.volumeEventSeen = false;
   }
 }

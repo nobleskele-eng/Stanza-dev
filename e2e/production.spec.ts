@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import { fixtures } from "../dev/fixtures/nowPlaying";
-import type { SpotifyState } from "../src/adapters/spotifyFeed";
+import type { SpotifyState, SpotifyVolume } from "../src/adapters/spotifyFeed";
 import { CONTRACT_VERSION } from "../src/theme/variant";
 
 // Written out rather than imported (appearance.ts pulls theme.json files in via the registry). Changing the key
@@ -76,9 +76,9 @@ test("invalid stored appearance falls back to the default theme and is rewritten
 // `theme` = the player's data-theme at the moment of the call (to check what happens before vs after a theme swap).
 type IpcCall = { cmd: string; args: Record<string, unknown>; theme: string | null };
 
-// `spotify` is what Rust's `spotify_state` answers (null = the worker never published, as with no Spotify).
-async function fakeTauri(page: import("@playwright/test").Page, opts: { spotify?: SpotifyState } = {}) {
-  await page.addInitScript((spotify: unknown) => {
+// `spotify` / `volume` are what Rust's `spotify_state` / `spotify_volume` answer (null = never published).
+async function fakeTauri(page: import("@playwright/test").Page, opts: { spotify?: SpotifyState; volume?: SpotifyVolume } = {}) {
+  await page.addInitScript(({ spotify, volume }: { spotify: unknown; volume: unknown }) => {
     const calls: { cmd: string; args: unknown; theme: string | null }[] = [];
     const callbacks = new Map<number, (raw: unknown) => void>();
     let nextCallback = 1;
@@ -113,6 +113,7 @@ async function fakeTauri(page: import("@playwright/test").Page, opts: { spotify?
           if (cmd === "plugin:menu|new") return Promise.resolve([nextRid, `menu-${nextRid++}`]);
           if (cmd === "plugin:menu|popup") return new Promise((resolve) => (closeOpenMenu = () => resolve(null)));
           if (cmd === "spotify_state") return Promise.resolve(spotify);
+          if (cmd === "spotify_volume") return Promise.resolve(volume);
           if (cmd.startsWith("spotify_")) return Promise.resolve(true);
           return Promise.resolve(null);
         },
@@ -123,7 +124,7 @@ async function fakeTauri(page: import("@playwright/test").Page, opts: { spotify?
         unregisterCallback: (id: number) => callbacks.delete(id),
       },
     });
-  }, opts.spotify ?? null);
+  }, { spotify: opts.spotify ?? null, volume: opts.volume ?? null });
 }
 
 const ipcCalls = (page: import("@playwright/test").Page, cmd: string) =>
@@ -577,6 +578,60 @@ test("while playing, the player re-renders about once a second (the position tic
   for (let i = 1; i < secs.length; i++) expect(secs[i] - secs[i - 1]).toBe(1);
 });
 
+// --- Spotify's own volume (S5, M1 R3): Core Audio's per-app level, through `spotify_volume` / `spotify:volume`.
+const emitVolume = (page: import("@playwright/test").Page, volume: SpotifyVolume) =>
+  page.evaluate((v) => (window as unknown as { __emit: (e: string, p: unknown) => void }).__emit("spotify:volume", v), volume);
+const volumeSets = async (page: import("@playwright/test").Page) => (await ipcCalls(page, "spotify_set_volume")).map((c) => c.args.level as number);
+
+test("in Tauri, Spotify's volume shows on the slider and turns the volume capability on", async ({ page }) => {
+  await fakeTauri(page, { spotify: spotifyState(), volume: { available: true, level: 0.37 } });
+  await page.goto("/");
+  const root = page.locator(".mp-root");
+  await expect(root).toHaveAttribute("data-cap-volume", "true");
+  await expect(page.locator(".mp-volume")).toHaveValue("0.37");
+
+  // A change made in the Windows mixer arrives as an event.
+  await emitVolume(page, { available: true, level: 0.81 });
+  await expect(page.locator(".mp-volume")).toHaveValue("0.81");
+
+  // Spotify's audio session gone (or never created): no capability, no slider.
+  await emitVolume(page, { available: false, level: 0 });
+  await expect(root).not.toHaveAttribute("data-cap-volume", /.*/);
+  await expect(page.locator(".mp-volume")).toHaveCount(0);
+});
+
+test("in Tauri, moving the slider sets Spotify's volume; reports during a drag don't pull the slider back", async ({ page }) => {
+  await fakeTauri(page, { spotify: spotifyState(), volume: { available: true, level: 0.5 } });
+  await page.goto("/");
+  const slider = page.locator(".mp-volume");
+  await expect(slider).toHaveValue("0.5");
+
+  await slider.fill("0.2");
+  await expect.poll(() => volumeSets(page)).toEqual([0.2]);
+  await expect(slider).toHaveValue("0.2");
+  // Rust reports an older level while the hold is on: the slider stays where the user put it...
+  await emitVolume(page, { available: true, level: 0.5 });
+  await page.waitForTimeout(100);
+  await expect(slider).toHaveValue("0.2");
+  // ...and the newest report applies once the hold ends.
+  await emitVolume(page, { available: true, level: 0.21 });
+  await expect(slider).toHaveValue("0.21", { timeout: 2000 });
+
+  // Several quick moves: every value reaches Rust in order, the last one last.
+  for (const v of ["0.3", "0.4", "0.6"]) await slider.fill(v);
+  await expect.poll(async () => (await volumeSets(page)).at(-1)).toBe(0.6);
+  const sets = await volumeSets(page);
+  expect([...sets].sort((a, b) => a - b).slice(-1)[0]).toBe(0.6);
+});
+
+test("in Tauri, no volume yet (Spotify hasn't played since it started) shows no slider", async ({ page }) => {
+  await fakeTauri(page, { spotify: spotifyState() });
+  await page.goto("/");
+  await expect(page.locator(".mp-root")).toHaveAttribute("data-status", "playing");
+  await expect(page.locator(".mp-root")).not.toHaveAttribute("data-cap-volume", /.*/);
+  await expect(page.locator(".mp-volume")).toHaveCount(0);
+});
+
 // --- Keyboard seek (M1 R2): ←/→ move 5 s while the window has focus; no visible seek control (contract "Not in v1").
 const seekCalls = async (page: import("@playwright/test").Page) =>
   (await ipcCalls(page, "spotify_seek")).map((c) => c.args.positionMs as number);
@@ -655,7 +710,7 @@ test("in Tauri, the transport buttons send Spotify's commands and never start a 
   await page.locator(".mp-btn-next").click();
   await page.locator(".mp-btn-prev").click();
   await expect
-    .poll(async () => (await ipcCmds(page)).filter((c) => c.startsWith("spotify_") && c !== "spotify_state"))
+    .poll(async () => (await ipcCmds(page)).filter((c) => c.startsWith("spotify_") && c !== "spotify_state" && c !== "spotify_volume"))
     .toEqual(["spotify_play_pause", "spotify_next", "spotify_previous"]);
   expect(await ipcCalls(page, "plugin:window|start_dragging")).toEqual([]);
 });

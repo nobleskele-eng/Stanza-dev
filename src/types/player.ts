@@ -34,6 +34,7 @@ export interface NowPlaying {
   track?: Track;
   positionMs: number;
   positionUpdatedAt: number; // epoch ms, for interpolation (C10)
+  volume?: number; // 0–1, the source's own level; present when caps.volume
   caps: Capabilities;
   error?: PlayerError;
 }

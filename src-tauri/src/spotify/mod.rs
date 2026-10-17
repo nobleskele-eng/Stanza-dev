@@ -4,14 +4,20 @@
 // messages, so nothing WinRT ever runs on the main thread.
 //
 // The frontend pulls the full state once (`spotify_state`) and then follows `spotify:state`
-// events. Artwork is a 300x300 PNG of ~240 kB (~320 kB as base64), so an event carries it only when it changed since
-// the previous event; a pull always carries it. `seq` orders pulls against events.
+// events. Artwork is a 300x300 PNG of ~240 kB (~320 kB as base64), so an event carries it only
+// when it changed since the previous event; a pull always carries it. `seq` orders pulls against
+// events.
+//
+// Volume (S5, M1 R3) is separate: GSMTC has none, so `volume.rs` sets Spotify's per-app level
+// through Core Audio on its own thread and publishes `spotify:volume`.
 //
 // macOS (AppleScript, D4) is M5: on other platforms nothing is started, the state stays "no
 // session" and every command answers false. **Untested off Windows.**
 
 #[cfg(windows)]
 mod gsmtc;
+#[cfg(windows)]
+mod volume;
 
 use std::sync::mpsc::{self, Sender};
 use std::sync::Mutex;
@@ -20,8 +26,9 @@ use std::time::Duration;
 use serde::Serialize;
 use tauri::{AppHandle, State};
 
-/// The event the frontend listens to (`src/adapters/spotifyAdapter.ts`).
+/// The events the frontend listens to (`src/adapters/spotifyAdapter.ts`).
 pub const STATE_EVENT: &str = "spotify:state";
+pub const VOLUME_EVENT: &str = "spotify:volume";
 
 /// How long a transport command waits for the worker before answering false.
 const CONTROL_TIMEOUT: Duration = Duration::from_secs(3);
@@ -58,6 +65,21 @@ pub struct SpotifyState {
     pub can_seek: bool,
 }
 
+/// Spotify's own (per-app) volume. Mirrors `SpotifyVolume` in `src/adapters/spotifyFeed.ts`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SpotifyVolume {
+    /// Spotify has an audio session to set (it has played since it started, on an active device).
+    pub available: bool,
+    /// 0–1, rounded to 3 decimals.
+    pub level: f32,
+}
+
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) enum VolumeMsg {
+    Set(f32, Sender<bool>),
+}
+
 #[cfg_attr(not(windows), allow(dead_code))]
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum Control {
@@ -81,6 +103,8 @@ pub(crate) enum Msg {
 pub struct Spotify {
     latest: Mutex<SpotifyState>,
     worker: Mutex<Option<Sender<Msg>>>,
+    volume: Mutex<SpotifyVolume>,
+    volume_worker: Mutex<Option<Sender<VolumeMsg>>>,
 }
 
 impl Spotify {
@@ -89,6 +113,28 @@ impl Spotify {
         if let Ok(mut latest) = self.latest.lock() {
             *latest = state.clone();
         }
+    }
+
+    #[cfg_attr(not(windows), allow(dead_code))]
+    pub(crate) fn store_volume(&self, volume: SpotifyVolume) {
+        if let Ok(mut current) = self.volume.lock() {
+            *current = volume;
+        }
+    }
+
+    async fn set_volume(&self, level: f32) -> bool {
+        let Some(worker) = self.volume_worker.lock().ok().and_then(|w| w.clone()) else {
+            return false;
+        };
+        let (reply, answer) = mpsc::channel();
+        if worker.send(VolumeMsg::Set(level, reply)).is_err() {
+            return false;
+        }
+        tauri::async_runtime::spawn_blocking(move || {
+            answer.recv_timeout(CONTROL_TIMEOUT).unwrap_or(false)
+        })
+        .await
+        .unwrap_or(false)
     }
 
     async fn control(&self, control: Control) -> bool {
@@ -117,6 +163,11 @@ pub fn start(app: &AppHandle) {
             *worker = Some(tx.clone());
         }
         gsmtc::spawn(app.clone(), tx, rx);
+        let (tx, rx) = mpsc::channel();
+        if let Ok(mut worker) = app.state::<Spotify>().volume_worker.lock() {
+            *worker = Some(tx);
+        }
+        volume::spawn(app.clone(), rx);
     }
     #[cfg(not(windows))]
     let _ = app;
@@ -147,7 +198,35 @@ pub async fn spotify_seek(position_ms: i64, spotify: State<'_, Spotify>) -> Resu
     Ok(spotify.control(Control::Seek(position_ms.max(0))).await)
 }
 
+#[tauri::command]
+pub fn spotify_volume(spotify: State<'_, Spotify>) -> SpotifyVolume {
+    spotify.volume.lock().map(|v| *v).unwrap_or_default()
+}
+
+#[tauri::command]
+pub async fn spotify_set_volume(level: f32, spotify: State<'_, Spotify>) -> Result<bool, String> {
+    if !level.is_finite() {
+        return Ok(false);
+    }
+    Ok(spotify.set_volume(level.clamp(0.0, 1.0)).await)
+}
+
 // --- Pure helpers (the WinRT glue in gsmtc.rs stays thin; these carry the logic and are unit-tested).
+
+/// Spotify's audio sessions are found by process image name (installer and Store builds both run
+/// `Spotify.exe`), compared on the file name only.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn is_spotify_exe(path: &str) -> bool {
+    path.rsplit(['\\', '/'])
+        .next()
+        .is_some_and(|file| file.eq_ignore_ascii_case("spotify.exe"))
+}
+
+/// A volume level clamped to 0–1 and rounded to 3 decimals, so float noise never counts as a change.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn round_level(level: f32) -> f32 {
+    (level.clamp(0.0, 1.0) * 1000.0).round() / 1000.0
+}
 
 /// D5: never hardcode the AUMID (installer build: `Spotify.exe`; the Store build differs).
 #[cfg_attr(not(windows), allow(dead_code))]
@@ -269,6 +348,36 @@ mod tests {
         assert!(is_spotify("SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify"));
         assert!(!is_spotify("Chrome"));
         assert!(!is_spotify(""));
+    }
+
+    #[test]
+    fn spotify_audio_sessions_are_matched_by_exe_file_name() {
+        assert!(is_spotify_exe(
+            r"C:\Users\u\AppData\Roaming\Spotify\Spotify.exe"
+        ));
+        assert!(is_spotify_exe(
+            r"C:\Program Files\WindowsApps\SpotifyAB.SpotifyMusic_1.0_x64\Spotify.exe"
+        ));
+        assert!(is_spotify_exe("spotify.EXE"));
+        assert!(!is_spotify_exe(r"C:\Spotify\SpotifyWebHelper.exe"));
+        assert!(!is_spotify_exe(
+            r"C:\Program Files\Google\Chrome\chrome.exe"
+        ));
+        assert!(!is_spotify_exe(""));
+    }
+
+    #[test]
+    fn volume_levels_are_clamped_and_rounded() {
+        assert_eq!(round_level(0.54 + 1e-7), 0.54); // f32 noise from the mixer
+        assert_eq!(round_level(0.123_456), 0.123);
+        assert_eq!(round_level(1.7), 1.0);
+        assert_eq!(round_level(-0.2), 0.0);
+        let json = serde_json::to_value(SpotifyVolume {
+            available: true,
+            level: 0.5,
+        })
+        .unwrap();
+        assert_eq!(json, serde_json::json!({ "available": true, "level": 0.5 }));
     }
 
     #[test]

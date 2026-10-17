@@ -154,7 +154,7 @@ Kept as written in v1 (history). Later surprises live in `docs/DECISIONS.md`.
 │        │ invoke / events                                        │
 │  RUST CORE                                                      │
 │   ├─ SpotifyAdapter · Windows (GSMTC): spike ✓, main ○ M1       │
-│   ├─ Per-app volume (Core Audio): ○ M1 (S5)                     │
+│   ├─ Per-app volume (Core Audio): ✓ (S5, M1 R3a)                │
 │   ├─ SpotifyAdapter · macOS (AppleScript): ○ M5                 │
 │   ├─ Hit region / click-through ✓ (Slice 3)                     │
 │   ├─ ThemeService (scan, validate, watch files): spike ✓, ○ M3  │
@@ -205,12 +205,12 @@ interface NowPlaying {
 | Play / pause / next / prev | ✓ | ✓ | ✓ |
 | Position | ✓ interpolated | ✓ | ✓ progress events |
 | Seek | ✓ (S2) | ✓ | ✓ |
-| Volume | ✗ in GSMTC; per-app Core Audio planned (S5, M1), ? until it passes | ✓ | ✓ |
+| Volume | ✗ in GSMTC; ✓ Spotify's per-app level via Core Audio (S5, passed 2026-10-17) once Spotify has played since it started | ✓ | ✓ |
 | Shuffle / repeat | ✓ shuffle (S2); repeat read ✓, set ? | ✓ (community libs set it) | ✗ native (shuffle emulatable) |
 | Change events | ✓ | ? distributed notification, else polling | ✓ |
 | Like / save | ✗ | ✗ | ✗ |
 
-**Design consequence:** capabilities are exposed as `data-cap-*` attributes. Every theme must look complete when any control is absent — e.g. Spotify on Windows has no volume slider at all until S5 lands.
+**Design consequence:** capabilities are exposed as `data-cap-*` attributes. Every theme must look complete when any control is absent — e.g. Spotify on Windows has no volume slider until Spotify has played since it started (no audio session to set yet, S5).
 
 ### Source rules
 1. One active source. Switching pauses the other.

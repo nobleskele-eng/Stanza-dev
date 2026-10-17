@@ -103,6 +103,7 @@ function ProductionApp() {
         onPlayPause={() => store?.playPause()}
         onNext={() => store?.next()}
         onPrevious={() => store?.previous()}
+        onVolume={(level) => store?.setVolume(level)}
       />
     </div>
   );

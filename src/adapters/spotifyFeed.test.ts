@@ -98,3 +98,36 @@ describe("SpotifyFeed", () => {
     expect(np!.track!.artwork).toBeUndefined();
   });
 });
+
+describe("SpotifyFeed volume (S5)", () => {
+  it("turns the volume capability on with Spotify's level, once there is a track", () => {
+    const feed = new SpotifyFeed();
+    expect(feed.acceptVolume({ available: true, level: 0.4 }, "pull"), "no state yet: nothing to show").toBeNull();
+    const np = feed.accept(state({ seq: 1 }))!;
+    expect(np.caps.volume).toBe(true);
+    expect(np.volume).toBe(0.4);
+    const changed = feed.acceptVolume({ available: true, level: 0.7 }, "event")!;
+    expect(changed.volume).toBe(0.7);
+    expect(changed.track!.title).toBe("t");
+  });
+
+  it("no audio session: no volume capability and no level", () => {
+    const feed = new SpotifyFeed();
+    feed.accept(state({ seq: 1 }));
+    const np = feed.acceptVolume({ available: false, level: 0 }, "event")!;
+    expect(np.caps.volume).toBe(false);
+    expect(np.volume).toBeUndefined();
+  });
+
+  it("a pull answered after an event is stale; garbage is ignored; reset forgets", () => {
+    const feed = new SpotifyFeed();
+    feed.accept(state({ seq: 1 }));
+    feed.acceptVolume({ available: true, level: 0.9 }, "event");
+    expect(feed.acceptVolume({ available: true, level: 0.2 }, "pull")).toBeNull();
+    expect(feed.acceptVolume({ available: true, level: Number.NaN }, "event")).toBeNull();
+    expect(feed.acceptVolume(null, "event")).toBeNull();
+    feed.reset();
+    feed.accept(state({ seq: 1 }));
+    expect(feed.acceptVolume({ available: true, level: 0.2 }, "pull")!.volume).toBe(0.2);
+  });
+});

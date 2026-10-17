@@ -49,8 +49,8 @@ export class MockAdapter implements PlayerAdapter {
     this.setState({ ...this.current, positionMs: ms, positionUpdatedAt: Date.now() });
   }
 
-  setVolume(_level: number): void {
-    // No-op: GSMTC has no volume control either (PLAN.md §3 capability matrix).
+  setVolume(level: number): void {
+    this.setState({ ...this.current, volume: level });
   }
 
   toggleShuffle(): void {

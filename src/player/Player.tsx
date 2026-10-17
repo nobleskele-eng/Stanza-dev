@@ -46,6 +46,8 @@ interface PlayerProps {
   onPlayPause?: () => void;
   onNext?: () => void;
   onPrevious?: () => void;
+  /** The volume slider moved (0–1). Without it the slider shows the level but doesn't move. */
+  onVolume?: (level: number) => void;
 }
 
 /**
@@ -66,6 +68,7 @@ export function Player({
   onPlayPause,
   onNext,
   onPrevious,
+  onVolume,
 }: PlayerProps) {
   // Track changes may be held back one frame so the browser can capture the old card first (morph).
   const { nowPlaying, positionMs } = useTrackTransition(
@@ -214,7 +217,19 @@ export function Player({
 
             {caps.volume && (
               <div className="mp-volume-wrap">
-                <input className="mp-volume" type="range" min={0} max={1} step={0.01} aria-label={copy("volume")} />
+                {/* Controlled by the source's level; a source with no level yet (fixtures) shows the
+                    middle, where an uncontrolled range input used to sit. */}
+                <input
+                  className="mp-volume"
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  aria-label={copy("volume")}
+                  value={nowPlaying.volume ?? 0.5}
+                  readOnly={!onVolume}
+                  onChange={(e) => onVolume?.(Number(e.currentTarget.value))}
+                />
               </div>
             )}
 

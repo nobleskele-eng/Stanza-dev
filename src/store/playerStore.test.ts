@@ -189,6 +189,27 @@ describe("PlayerStore source switching (D9: one source at a time)", () => {
     expect(store.getSnapshot()).toBe(before);
   });
 
+  it("setVolume() asks the adapter for a clamped level and shows it at once when the source has volume", () => {
+    const store = new PlayerStore();
+    const spotify = makeAdapter("spotify");
+    store.registerAdapter(spotify.adapter);
+    store.switchSource("spotify");
+    spotify.push({ ...playingAt(0, 0, 60_000), volume: 0.5, caps: { ...NO_CAPS, volume: true } });
+    store.setVolume(0.8);
+    expect(spotify.adapter.setVolume).toHaveBeenLastCalledWith(0.8);
+    expect(store.getSnapshot().volume).toBe(0.8);
+    store.setVolume(3);
+    expect(spotify.adapter.setVolume).toHaveBeenLastCalledWith(1);
+    store.setVolume(Number.NaN);
+    expect(spotify.adapter.setVolume).toHaveBeenCalledTimes(2);
+
+    // Without the volume capability nothing shown changes.
+    spotify.push(playingAt(0, 0, 60_000));
+    const before = store.getSnapshot();
+    store.setVolume(0.3);
+    expect(store.getSnapshot()).toBe(before);
+  });
+
   it("throws for an unregistered source instead of silently doing nothing", () => {
     const store = new PlayerStore();
     expect(() => store.switchSource("soundcloud")).toThrow(/soundcloud/);
