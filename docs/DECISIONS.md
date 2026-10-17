@@ -1958,3 +1958,57 @@ no customizer UI/persistence or Rust theme loader (Phase 4/5) — effects are ap
   OK`.
 - **Not yet run in the real exe:** your own old `tauri-app.exe` is still open (see Slice 5). The pending real-exe drive
   now also measures T1's placement and takes a capture; the results will be added here.
+
+## 2026-10-17 — Plan v2: real music first, then a companion creature (docs only)
+- **Why:** you asked where we are and to revamp the plan around a new feature: a small companion creature, like the
+  pixel pet on Claude's chat box. It walks, sits and hangs inside the player's frame and outside it (your sketch:
+  hanging under the bottom edge), has skins, and uses original designs we work out together. `docs/PLAN.md` was still v1
+  (2026-09-11, "planning, nothing built yet"), and `docs/PRIORITIZATION_PLAN.md` was a second, competing plan.
+- **Your four answers:** real Spotify data comes first (D18); pixel art; "watch + pick up" (click for a reaction, drag
+  and drop it); it roams around the player only, not the whole desktop.
+- **PLAN.md v2:** new status header; D17 (companion), D18 (order), D19 (one plan); the companion spec and architecture as
+  a new §4b; §5 now holds the status, a v1-phase → milestone table and milestones M0–M6 with gates; the definition of
+  done, risks, parking lot, open questions and sources updated. Stale lines fixed: the capability matrix (seek and
+  shuffle were confirmed by S2), palette extraction living in TS rather than a Rust `ArtworkService`, the
+  contract-version mentions, the storage note (Slice 1 uses `localStorage`). The v1 "CLAUDE.md seed" was removed: it
+  still had the pre-2026-09-22 artwork rule, and `CLAUDE.md` itself is the live copy.
+- **Deviation from the approved plan:** it said "new §5 Companion, §6 Status + roadmap". About 40 code comments (in 29
+  files) and many older entries here cite PLAN.md by section number (`§3`, `§4 roster`, `§9`, "Phase 3 gate"). Renumbering would have
+  pointed them at the wrong sections. So §0–§11 keep their v1 numbers, the companion is **§4b**, the roadmap replaces the
+  phases inside **§5**, and the v1 phases survive as a history table there.
+- **Where `PRIORITIZATION_PLAN.md` went (file deleted; it is in git history):**
+  - Skip (next/prev): already worked in the S2 spike; it ships with M1 R1.
+  - S5 per-app volume (Core Audio) and S6 lyrics button (bring Spotify's window forward): M1 R3.
+  - S7 genre-based fonts (narrow D7 exception, needs your Spotify app credentials): M3.
+  - S8 non-rectangular windows: rectangular click-through was answered by Slice 3; arbitrary silhouettes are parked
+    (PLAN.md §9).
+  - The withdrawn Valorant overlay item stays dropped.
+- **Companion architecture (D17), decided before any code:**
+  - **Window:** one window, grown by a margin the size of the pet. The page pads by it and the window shifts so the card
+    doesn't move. A second pet window was rejected: it would lag behind a dragged player.
+  - **Art:** pixel grids stored as data and rendered as crisp SVG, coloured by `--mp-pet-*`. One art pixel is always a
+    whole number of device pixels, so 125% and 150% scaling stay even.
+  - **Behaviour:** a pure seeded state machine (reusing `hashString`/`mulberry32` from `src/fx/beat.ts`); CSS-only frames
+    and movement.
+  - **Where it can be:** edges measured from `.mp-window`, plus an optional theme-declared inner ledge.
+  - **Rules:** it never overlaps the artwork, controls or source badge, because CLAUDE.md's artwork rule applies to it
+    (it is interactive).
+  - **Contract:** v6 lands with the first slice that puts companion parts in the production DOM (C2), not batched at
+    the end like D16's v4/v5.
+- **Research (inspiration only, nothing copied):**
+  - Shimeji-ee (BSD): action/behaviour split, Fall/Dragged/Thrown.
+  - eSheep (clone): edge walking, pick up and drop.
+  - oneko.js (MIT): tiny frame grids.
+  - vscode-pets: colour-variant skins (its art belongs to credited artists).
+  - VS Code's chat pet sprite rules: integer pixel units, palette skins sharing one body, an attachment rig, still poses
+    for reduced motion.
+  - Codex pets/Petdex: manifest + frames as an installable format.
+  - WindowPet (MIT, Tauri + React): proof the overlay approach works.
+  - BongoCat (MIT, Tauri) and VPet.
+  - Links and license notes are in PLAN.md §4b/§11. Some licenses (vscode-pets, the eSheep clone) could not be confirmed
+    from the pages read, which is fine because only ideas are taken.
+- **COPY.md:** a new "Companion" section with six `[NEEDS COPY]` slots (creature name, menu labels, settings title). I
+  wrote no wording.
+- **Untouched:** code, THEME_CONTRACT.md, CLAUDE.md.
+- **Not done:** the Slice 5/6 real-exe check is still pending (it needs your Stanza exe closed) and now rides on M1's
+  first real-exe run.

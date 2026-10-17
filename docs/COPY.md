@@ -57,6 +57,16 @@ shows `name`.
 - **Theme package import error:** [NEEDS COPY]
 - **"Reset appearance" tray item:** [NEEDS COPY]
 
+## Companion (PLAN.md §4b, planned for M2)
+Nothing reads these yet. More entries (one per skin and per palette) get added when those skins exist. The companion has
+no speech bubbles; its emotes are pixel icons, not text.
+- **Companion — creature name (first species):** [NEEDS COPY]
+- **Companion menu — submenu label:** [NEEDS COPY]
+- **Companion menu — show/hide item:** [NEEDS COPY]
+- **Companion menu — skins heading:** [NEEDS COPY]
+- **Companion menu — palettes heading:** [NEEDS COPY]
+- **Companion settings — section title:** [NEEDS COPY]
+
 ## Player UI
 - **Generic error (no detail available):** [NEEDS COPY]
 - **Previous button label:** [NEEDS COPY]
