@@ -524,7 +524,7 @@ Likelihoods are qualitative — there's no reliable base rate for any of these.
 | School workload stalls a half-built milestone | — | Med | One slice per turn; every slice leaves `main` working |
 | Companion pixel art looks uneven at 125%/150% scaling | Med | Med | Whole-device-pixel scale (§4b); checked in C0 |
 | An always-animating pet costs CPU/battery on an always-on-top window | **High** (measured: smooth endless animation = 10–20% of a core here, M1 R2) | Med | Stepped low-rate frames and movement, no per-frame JS; C0 CPU gate; paused/idle → a still sleep pose |
-| Existing endless animations (the play-icon pulse while paused, from `structure.css`, so every theme; T4's marquee; T5's reels; the effect layers) cost CPU the same way | **Measured** for the pulse: ~20% of a core whenever paused | Med–High (an always-on app, often left paused) | A CPU-budget pass over every theme (see DECISIONS.md M1 R2); fixes are design calls |
+| Endless or per-tick animation in themes and effects costs CPU the same way | **Measured and fixed for T1–T5 (2026-10-17):** the paused pulse is 3 runs then still; marquee/reels are stepped; flap paging is finite; a 1 s position tick. Playing now costs 79–704 ms of CPU per 10 s (T5 was up to 7,391) | Med (an always-on app) | e2e guards: every endless theme animation must be `steps()`, no width transitions on the progress fill, ~1 render/s. Opt-in effects (shapes/waveform beat, ripple/liquid) not yet measured |
 | The pet hides controls or the source badge | Low (by design) | High (usability, attribution) | No-go zones in the planner; e2e time-lapse over every theme |
 | Creature art too close to someone else's | Low | High | Original designs only; per-design originality check, logged |
 
