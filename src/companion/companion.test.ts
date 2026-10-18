@@ -71,6 +71,11 @@ const clone = (): Record<string, unknown> => JSON.parse(JSON.stringify(dummy));
 const codes = (raw: unknown) => validateSkin(raw).issues.map((i) => `${i.code}@${i.path}`);
 
 describe("validateSkin", () => {
+  it("bundles exactly the skins in companions/ (the lab e2e reads that folder)", () => {
+    const folders = Object.keys(import.meta.glob("../../companions/*/companion.json")).map((p) => p.split("/").slice(-2)[0]);
+    expect(Object.keys(SKINS).sort()).toEqual(folders.sort());
+  });
+
   it("accepts every bundled skin, keyed by its id, named from COPY.md", () => {
     const copy = parseCopy(copyMarkdown);
     for (const [id, skin] of Object.entries(SKINS)) {

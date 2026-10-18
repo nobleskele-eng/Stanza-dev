@@ -5,7 +5,7 @@
 
 Version 2 · 2026-10-17 · Status: Phases 0–4 largely built (five themes, the effects layer) and **M1 Real music done**:
 real Spotify tracks, transport, keyboard seek, its own volume and the lyrics button, in the real exe (theme contract v6).
-**M2 Companion** (§5) under way: the C0 spike and C1 (renderer, skin format, lab) are done; next is the D1 design round. Version 1 (2026-09-11, "planning, nothing built yet") is in git history.
+**M2 Companion** (§5) under way: the C0 spike and C1 (renderer, skin format, lab) are done, and the D1 concepts are drawn; next is your pick. Version 1 (2026-09-11, "planning, nothing built yet") is in git history.
 
 Section numbers §0–§11 are the same as in v1, because code comments and older `docs/DECISIONS.md` entries cite them. The
 companion is the new §4b. §5 now holds the status and the roadmap; the v1 phases are summarised there as history.
@@ -423,7 +423,7 @@ locally on `main` ("Slice N: …"), never pushed unless you ask. Hour ranges are
 - **Done:** Phase 0; spikes S1 (window), S2 (GSMTC), S4 (themes) — on their spike branches, learnings merged; Phase 2 core; Phase 3 design system + contract; Phase 4 themes T1–T5, the D16 effects layer, contract v5.
 - **Production slices on `main`:** 1 theme applied + remembered · 2 real frameless transparent window · 3 click-through · 4 right-click theme picker · 5 CSP + named Stanza · 6 player centred side to side.
 - **M1 Real music (done 2026-10-17, DECISIONS.md M1 R1–R3b):** the GSMTC adapter on `main` (20-track gate passed), position drift ≤ 0.2 s over 5 min, keyboard seek, a "Spotify not running" state with recovery, Spotify's own volume through Core Audio, the lyrics button (contract v6), and a CPU pass (every theme 0.1–0.7 s of CPU per 10 s while playing). The Slice 5/6 real-exe checks passed along the way.
-- **Tests at last full run:** 168 unit (Vitest), 708 e2e (Playwright, Chromium + WebKit), `cargo test` 15.
+- **Tests at last full run:** 169 unit (Vitest), 716 e2e (Playwright, Chromium + WebKit), `cargo test` 15.
 - **Open from M1:** `[NEEDS COPY]` labels; the Store build of Spotify; 125%/150% scaling.
 
 ### v1 phases → milestones
@@ -457,7 +457,7 @@ locally on `main` ("Slice N: …"), never pushed unless you ask. Hour ranges are
 ### M2 — Companion · ~32–52 h (§4b)
 - **C0 spike** (`spike/c0-companion`) — **done 2026-10-17** (DECISIONS.md): margin window, crisp pixels at 100/125/150/200%, click-through around the pet, pick up and drop, no flicker all passed. The CPU gate failed for a *continuously* walking pet (+2.5–8% of a core); the measurements set the frame-timer architecture and the change budget above.
 - **C1 Renderer + skin format + lab** — **done 2026-10-18** (DECISIONS.md): SVG sprite renderer with JS-timer frames, skin format v1 (`docs/COMPANION.md`), validator and registry, the "test dummy" skin with all 11 animations and two palettes, and the dev-only Companion lab (`?lab=companion`). Crisp at 100/125/150/200% in Chromium and WebKit after moving the layout onto a 4 px grid.
-- **D1 design round** (with you): three original concepts in the lab; you pick or mix.
+- **D1 design round** (with you): three original concepts in the lab; you pick or mix. **Concepts drawn 2026-10-18** (DECISIONS.md, `docs/design/d1-concepts.png`): `pilcrow` (¶ with legs), `bookworm` (a ruled-paper inchworm whose poses are letters), `cassette` (reels for eyes). Waiting for your pick.
 - **C2 Brain + top edge + contract v7:** idle, walk, sit, sleep, wake, reacting to playback, in the production player.
 - **C3 All edges:** climbing the sides, hanging under the bottom, corner transitions, riding a moving edge; the production window margin and position shift.
 - **C4 Pick up and react:** drag, drop, fall, land, click reactions; the hit region includes the pet. Real-exe drag check.

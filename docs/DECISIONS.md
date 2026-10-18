@@ -2639,3 +2639,74 @@ card's outside; the hit region following the pet; pick up and drop.
   - The lab in the Browser pane at 100%: boxes on the grid, no console errors.
   - No Rust changes, so no `cargo` run.
   - Not checked: the real exe (nothing companion-related is in the production DOM yet), and real 125%/150% displays.
+
+## 2026-10-18 — D1 design round: three original creature concepts, waiting for your pick
+- **What was made (on `main`, dev-only):**
+  - Three concept skins. Each has all 11 animations and three palettes, and passes `validateSkin`. Each is drawn in
+    `scripts/companions/<id>.mjs` and written by `scripts/gen-companions.mjs`, using shared helpers in
+    `scripts/companions/pixels.mjs`. `shape` outlines a filled mask automatically.
+  - **In-context scenes in the lab:** at the top of `?lab=companion`, each creature appears at real size around a
+    plain mock card with no text, on light and dark:
+    - walking, asleep and sitting on the top edge;
+    - hanging under the bottom edge (your sketch);
+    - climbing the left side.
+  - **A review sheet:** `docs/design/d1-concepts.png`, built by `scripts/companion-sheet.mjs`.
+- **The concepts:**
+  - **A, `pilcrow`.**
+    - The paragraph mark ¶ as a creature: its bowl is the head (one eye), its two stems are the legs.
+    - Proofreader's-pencil red; palettes `default`, `ink` and `marker`.
+    - It hangs upside down by its feet like a bat, and then reads as a "d". It climbs by turning its walk a quarter.
+  - **B, `bookworm`.**
+    - An inchworm cut from ruled notebook paper whose poses are lowercase letters:
+      - stands as an "r";
+      - inches along as "—" and "n";
+      - sleeps curled into an "o" and wakes through a "c";
+      - hangs on its silk as a "J";
+      - pops up as an "i" whose dot is a heart;
+      - falls as a "u".
+    - Palettes `default` (notebook), `kraft` and `graph`.
+  - **C, `cassette`.**
+    - A tape on two legs whose reels are its eyes. The reels turn while it walks, which makes the music visible.
+    - It hangs from a loop of its own tape, and shows hearts in its window when it reacts.
+    - Palettes `default` (smoke), `clear` and `chrome`.
+- **Originality check:**
+  - All three were drawn from scratch as text grids, from written descriptions, with no reference image open. Nothing
+    was traced, recoloured or adapted.
+  - **Against PLAN.md's references** (Claude's chat-box pet, oneko, Shimeji, eSheep, vscode-pets, the VS Code pet
+    rules, Petdex, WindowPet, BongoCat, VPet): as far as I know, none of their pets is a punctuation mark, a paper
+    worm or a cassette.
+  - **Web searches (2026-10-18):**
+    - No pilcrow creature and no cassette pet turned up.
+    - The bookworm search found the well-worn cartoon "green worm in glasses": Looney Tunes' Bookworm, a Tiny Toons
+      character, plush reading mascots. So ours is deliberately not green and wears no glasses. Its identity is the
+      paper and the letter poses.
+  - A cassette with a face and a creature hanging upside down are common motifs, not anyone's specific design.
+- **Design findings (inputs to C2/C3):**
+  - **Thin parts in the outline colour vanish on dark cards.** It happened twice: the dummy's legs, and the cassette's
+    first legs, now drawn in its shell grey. Every part of a creature must read on both lab backdrops.
+  - **Contacts:**
+    - `hang` and `climb` contacts can be read off the art: the top-most row, and the wall-side column.
+    - `sit` can't, so the lab keeps a `sit` row per skin. C3 decides whether the format gets per-animation anchors
+      (docs/COMPANION.md).
+    - A quarter-turned walk made a convincing climb for all three.
+  - **The bookworm's walk changes its footprint:** a 14-pixel body, then a 10-pixel arch with the head planted. C2
+    must step the position with the frames.
+  - **Scene placement already follows the C2 rule:** a grid-aligned origin, then `transform` by whole device px. The
+    e2e checks it.
+- **Tests added:**
+  - The lab's crispness check now covers every skin folder, at 100/125/150/200% in both engines.
+  - Scene poses land on whole device px. The tolerance is 0.001 device px, because Chromium stores computed lengths
+    as 32-bit floats: 76.8 comes back as 76.800003.
+  - A unit test checks that the registry bundles exactly the skin folders. Mutation-checked: leaving one out fails.
+- **Production build:** the JS bundle is byte-identical to before (same hash), so no skin or lab code ships.
+- **Open, for you:**
+  - Pick one, mix them, or send me back to the drawing board.
+  - Names and any wording come from you via COPY.md.
+  - The unchosen concepts get removed when the chosen one replaces the dummy (C6), or sooner if you prefer.
+- **Checks run (2026-10-18):**
+  - `npx tsc --noEmit`: clean.
+  - `npx vitest run`: 169 passed.
+  - `npx playwright test`: 716 passed (Chromium + WebKit). The lab spec is now 11 cases × 2 engines.
+  - `npm run build`: passed, check-fixtures-excluded OK.
+  - The art was reviewed in captures at 3× (scenes) and zoomed (frames). Motion is only visible live in the lab.
+  - The real exe isn't involved: nothing companion-related is in the production DOM yet.
