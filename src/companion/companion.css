@@ -1,0 +1,12 @@
+/* Companion sprites (PLAN.md §4b). Each palette slot is a class reading a custom property, so a
+   palette skin is just different values of --mp-pet-1..8 on an ancestor. No animation here: frames
+   change from a JS timer (useFrame), because any running CSS animation costs ~2% of a core in the
+   transparent window (C0 spike, docs/DECISIONS.md 2026-10-17). */
+.mp-pet-c1 { fill: var(--mp-pet-1); }
+.mp-pet-c2 { fill: var(--mp-pet-2); }
+.mp-pet-c3 { fill: var(--mp-pet-3); }
+.mp-pet-c4 { fill: var(--mp-pet-4); }
+.mp-pet-c5 { fill: var(--mp-pet-5); }
+.mp-pet-c6 { fill: var(--mp-pet-6); }
+.mp-pet-c7 { fill: var(--mp-pet-7); }
+.mp-pet-c8 { fill: var(--mp-pet-8); }

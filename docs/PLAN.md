@@ -5,7 +5,7 @@
 
 Version 2 · 2026-10-17 · Status: Phases 0–4 largely built (five themes, the effects layer) and **M1 Real music done**:
 real Spotify tracks, transport, keyboard seek, its own volume and the lyrics button, in the real exe (theme contract v6).
-Next: **M2 Companion** (§5). Version 1 (2026-09-11, "planning, nothing built yet") is in git history.
+**M2 Companion** (§5) under way: the C0 spike and C1 (renderer, skin format, lab) are done; next is the D1 design round. Version 1 (2026-09-11, "planning, nothing built yet") is in git history.
 
 Section numbers §0–§11 are the same as in v1, because code comments and older `docs/DECISIONS.md` entries cite them. The
 companion is the new §4b. §5 now holds the status and the roadmap; the v1 phases are summarised there as history.
@@ -352,9 +352,10 @@ Keep these in `docs/COPY.md`; code reads from there.
 
 ### Rendering: pixel grids → crisp SVG, no image files
 - Each frame is a list of strings, one character per pixel, each character a palette index (`.` = transparent).
-- `src/companion/sprite.ts` (pure) merges runs into one `<path>` per colour with `shape-rendering: crispEdges`. Colours come from custom properties `--mp-pet-1..8`, so a palette skin is a variable swap.
+- `src/companion/spritePaths.ts` (pure) merges runs into one `<path>` per colour with `shape-rendering: crispEdges`. Colours come from custom properties `--mp-pet-1..8`, so a palette skin is a variable swap. The skin format is `docs/COMPANION.md`.
 - **Scale:** one art pixel is always a whole number of device pixels: `round(2 × devicePixelRatio) / devicePixelRatio` logical px. At 125% and 150% scaling a fixed 2 px would give uneven pixels.
-- **Frames and movement are discrete changes from JS timers, never CSS/WAAPI animations** (changed after the C0 spike, DECISIONS.md 2026-10-17). Each animation is a horizontal strip inside an `overflow: hidden` box; a `setTimeout` chain sets the next frame's offset, and steps the pet one or two art pixels along its path. Nothing is "running" between changes.
+- **Layout grid (C1):** the sprite's box is the art rounded up to a multiple of 4 CSS px, and the pet's layer and moves stay on whole device px. Other lengths aren't stored exactly in the engines' 1/64 px layout units, and Chromium then blends the art's edge at 125% (DECISIONS.md 2026-10-18).
+- **Frames and movement are discrete changes from JS timers, never CSS/WAAPI animations** (changed after the C0 spike, DECISIONS.md 2026-10-17). A `setTimeout` chain swaps in the next frame's paths (`useFrame`, C1), and steps the pet one or two art pixels along its path. Nothing is "running" between changes.
 - **CPU budget, measured in the real exe (C0):** *any* running CSS/WAAPI animation, even a stepped 4 Hz one, keeps Chromium's compositor busy and costs ~2% of a core by itself. On top of that, every visible change costs ~3–6 ms of CPU, a re-composite of the whole transparent window (5.9 ms at T1's 404×664, 3.1 ms at T3's 312×150). So ≤ ~1% of a core on average means **≤ ~2 visible changes a second on average**.
 - **Behaviour that fits the budget:** the pet is *still* most of the time (sit, idle and sleep are single frames with an occasional blink). Activity comes in short bursts: walks at ~4–5 steps a second, a few seconds at a time. It sleeps without changing at all while playback is paused or idle. The brain (C2) tracks a running budget of changes and enforces it; the e2e suite counts changes per minute.
 
@@ -377,7 +378,7 @@ Keep these in `docs/COPY.md`; code reads from there.
 - **No-go zones:** the pet is interactive, so CLAUDE.md's rule ("interactive controls never on or over the artwork") applies to it. The planner treats the artwork, the controls and the source badge as no-go zones.
 
 ### Skins
-- Bundled packages: `companions/<id>/companion.json` — id, name (from COPY.md), format version, grid size, named palettes, foot anchor, animations (`fps`, `loop`, frames), attachment points for later accessories.
+- Bundled packages: `companions/<id>/companion.json` — id, name (from COPY.md), format version, grid size, named palettes, foot anchor, animations (`fps`, `loop`, frames, optional per-frame `durations`). Attachment points for accessories come later (D2), as a format change.
 - A validator and registry mirror `src/theme/registry.ts` / `variant.ts`: enums only, every required animation present. Format documented in a new `docs/COMPANION.md`.
 - **Three skin layers:** species (a new body), palette (a colour swap on the same body), accessory (an overlay on the attachment rig, later).
 
@@ -422,7 +423,7 @@ locally on `main` ("Slice N: …"), never pushed unless you ask. Hour ranges are
 - **Done:** Phase 0; spikes S1 (window), S2 (GSMTC), S4 (themes) — on their spike branches, learnings merged; Phase 2 core; Phase 3 design system + contract; Phase 4 themes T1–T5, the D16 effects layer, contract v5.
 - **Production slices on `main`:** 1 theme applied + remembered · 2 real frameless transparent window · 3 click-through · 4 right-click theme picker · 5 CSP + named Stanza · 6 player centred side to side.
 - **M1 Real music (done 2026-10-17, DECISIONS.md M1 R1–R3b):** the GSMTC adapter on `main` (20-track gate passed), position drift ≤ 0.2 s over 5 min, keyboard seek, a "Spotify not running" state with recovery, Spotify's own volume through Core Audio, the lyrics button (contract v6), and a CPU pass (every theme 0.1–0.7 s of CPU per 10 s while playing). The Slice 5/6 real-exe checks passed along the way.
-- **Tests at last full run:** 156 unit (Vitest), 694 e2e (Playwright, Chromium + WebKit), `cargo test` 15.
+- **Tests at last full run:** 168 unit (Vitest), 708 e2e (Playwright, Chromium + WebKit), `cargo test` 15.
 - **Open from M1:** `[NEEDS COPY]` labels; the Store build of Spotify; 125%/150% scaling.
 
 ### v1 phases → milestones
@@ -455,7 +456,7 @@ locally on `main` ("Slice N: …"), never pushed unless you ask. Hour ranges are
 
 ### M2 — Companion · ~32–52 h (§4b)
 - **C0 spike** (`spike/c0-companion`) — **done 2026-10-17** (DECISIONS.md): margin window, crisp pixels at 100/125/150/200%, click-through around the pet, pick up and drop, no flicker all passed. The CPU gate failed for a *continuously* walking pet (+2.5–8% of a core); the measurements set the frame-timer architecture and the change budget above.
-- **C1 Renderer + skin format + lab:** `sprite.ts`, the validator and registry, a "test dummy" skin with every required animation, the dev-only Companion lab (every state × palette × scale, light and dark backdrops).
+- **C1 Renderer + skin format + lab** — **done 2026-10-18** (DECISIONS.md): SVG sprite renderer with JS-timer frames, skin format v1 (`docs/COMPANION.md`), validator and registry, the "test dummy" skin with all 11 animations and two palettes, and the dev-only Companion lab (`?lab=companion`). Crisp at 100/125/150/200% in Chromium and WebKit after moving the layout onto a 4 px grid.
 - **D1 design round** (with you): three original concepts in the lab; you pick or mix.
 - **C2 Brain + top edge + contract v7:** idle, walk, sit, sleep, wake, reacting to playback, in the production player.
 - **C3 All edges:** climbing the sides, hanging under the bottom, corner transitions, riding a moving edge; the production window margin and position shift.

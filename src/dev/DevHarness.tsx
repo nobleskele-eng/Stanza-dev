@@ -6,6 +6,7 @@ import { emptyVariant, validateVariant, variantToDom } from "../theme/variant";
 import { Player, type FxSettings, type Layout } from "../player/Player";
 import { PlayerStore, interpolatePositionMs } from "../store/playerStore";
 import type { NowPlaying } from "../types/player";
+import { CompanionLab } from "./CompanionLab";
 
 // Dev-only UI for exercising PlayerStore against fixture data in a normal browser
 // (docs/PLAN.md §4). The only place in src/ allowed to reach into /dev/fixtures,
@@ -58,6 +59,7 @@ export function DevHarness() {
   const fxParam = (params.get("fx") ?? "").split(",");
   const textFx = (k: string) => fxParam.find((x) => x.startsWith(`${k}:`))?.split(":")[1] as TextFx | undefined;
   const fxFromUrl: FxSettings = { shapes: fxParam.includes("shapes"), waveform: fxParam.includes("waveform"), flow: fxParam.includes("flow"), morph: fxParam.includes("morph"), debris: fxParam.includes("debris"), title: textFx("title"), artist: textFx("artist") };
+  if (params.get("lab") === "companion") return <CompanionLab />;
   if (fixtureName) {
     return (
       <MatrixCell
