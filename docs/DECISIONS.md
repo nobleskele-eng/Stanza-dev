@@ -2710,3 +2710,22 @@ card's outside; the hit region following the pet; pick up and drop.
   - `npm run build`: passed, check-fixtures-excluded OK.
   - The art was reviewed in captures at 3× (scenes) and zoomed (frames). Motion is only visible live in the lab.
   - The real exe isn't involved: nothing companion-related is in the production DOM yet.
+
+## 2026-10-18 — D1 outcome: all three creatures ship, as species you choose between
+You asked to do all three, so `pilcrow`, `bookworm` and `cassette` are all kept. The plan already treated species as
+one of the skin layers (PLAN.md §4b), so nothing structural changes.
+- **Default:** `pilcrow` (`DEFAULT_SKIN` in `src/companion/registry.ts`), my recommendation because it reads best at
+  real size. It's one line to change.
+- **Copy:** COPY.md's single "creature name (first species)" slot became three "Companion skin name — `<id>`" slots,
+  all `[NEEDS COPY]`. Those are the keys `companion.test.ts` already checks each skin's `name` against. Nothing
+  displays them yet.
+- **What it costs later:**
+  - Every new pose, corner transition or accessory is drawn three times: C3 corners, D2 accessories.
+  - Each creature gets a polish pass before C6 ships the picker. The D1 art is a first draft.
+  - The brain (C2) stays species-agnostic, but movement must follow each species' frames: the bookworm's walk
+    changes length mid-step. C2 will likely add per-animation step data, a format change logged when it lands.
+  - The e2e time-lapse over themes × fixtures runs per species.
+- **PLAN.md:**
+  - D1 is marked settled.
+  - C6 is now "species and palettes in the picker, plus a polish pass on each creature".
+  - D2 drops "a second species" and keeps more palettes and accessories.

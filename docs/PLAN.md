@@ -5,7 +5,7 @@
 
 Version 2 · 2026-10-17 · Status: Phases 0–4 largely built (five themes, the effects layer) and **M1 Real music done**:
 real Spotify tracks, transport, keyboard seek, its own volume and the lyrics button, in the real exe (theme contract v6).
-**M2 Companion** (§5) under way: the C0 spike and C1 (renderer, skin format, lab) are done, and the D1 concepts are drawn; next is your pick. Version 1 (2026-09-11, "planning, nothing built yet") is in git history.
+**M2 Companion** (§5) under way: the C0 spike and C1 (renderer, skin format, lab) are done, and D1 settled on three species (pilcrow, bookworm, cassette); next is C2. Version 1 (2026-09-11, "planning, nothing built yet") is in git history.
 
 Section numbers §0–§11 are the same as in v1, because code comments and older `docs/DECISIONS.md` entries cite them. The
 companion is the new §4b. §5 now holds the status and the roadmap; the v1 phases are summarised there as history.
@@ -390,8 +390,8 @@ Keep these in `docs/COPY.md`; code reads from there.
 
 ### Designing the creature (together, as we go)
 - C1 ships a deliberately plain "test dummy" so engineering never waits on art.
-- **D1 design round:** three original concepts, animated in a dev-only **Companion lab** (`?lab=companion` in `DevHarness`), each tied to Stanza's type-first identity. First seeds to work out: a glyph critter, a bookworm, a tape critter. You pick or mix.
-- **D2 design round:** more palettes, a second species, accessories.
+- **D1 design round:** three original concepts, animated in a dev-only **Companion lab** (`?lab=companion` in `DevHarness`), each tied to Stanza's type-first identity. First seeds to work out: a glyph critter, a bookworm, a tape critter. You pick or mix. **Outcome (2026-10-18): all three ship as species you choose between; `pilcrow` is the default.**
+- **D2 design round:** more palettes, accessories (the three species came from D1).
 - **Originality check per design:** compared against the references below (silhouette, palette, proportions), never traced or recoloured; logged in DECISIONS.md.
 
 ### Research (2026-10-17): what to learn from, what not to take
@@ -457,13 +457,13 @@ locally on `main` ("Slice N: …"), never pushed unless you ask. Hour ranges are
 ### M2 — Companion · ~32–52 h (§4b)
 - **C0 spike** (`spike/c0-companion`) — **done 2026-10-17** (DECISIONS.md): margin window, crisp pixels at 100/125/150/200%, click-through around the pet, pick up and drop, no flicker all passed. The CPU gate failed for a *continuously* walking pet (+2.5–8% of a core); the measurements set the frame-timer architecture and the change budget above.
 - **C1 Renderer + skin format + lab** — **done 2026-10-18** (DECISIONS.md): SVG sprite renderer with JS-timer frames, skin format v1 (`docs/COMPANION.md`), validator and registry, the "test dummy" skin with all 11 animations and two palettes, and the dev-only Companion lab (`?lab=companion`). Crisp at 100/125/150/200% in Chromium and WebKit after moving the layout onto a 4 px grid.
-- **D1 design round** (with you): three original concepts in the lab; you pick or mix. **Concepts drawn 2026-10-18** (DECISIONS.md, `docs/design/d1-concepts.png`): `pilcrow` (¶ with legs), `bookworm` (a ruled-paper inchworm whose poses are letters), `cassette` (reels for eyes). Waiting for your pick.
+- **D1 design round** (with you): three original concepts in the lab; you pick or mix. **Concepts drawn 2026-10-18** (DECISIONS.md, `docs/design/d1-concepts.png`): `pilcrow` (¶ with legs), `bookworm` (a ruled-paper inchworm whose poses are letters), `cassette` (reels for eyes). **You chose all three** as species to pick from; `pilcrow` is the default (DECISIONS.md).
 - **C2 Brain + top edge + contract v7:** idle, walk, sit, sleep, wake, reacting to playback, in the production player.
 - **C3 All edges:** climbing the sides, hanging under the bottom, corner transitions, riding a moving edge; the production window margin and position shift.
 - **C4 Pick up and react:** drag, drop, fall, land, click reactions; the hit region includes the pet. Real-exe drag check.
 - **C5 Inner ledges:** `theme.json` `companion.shelf` for each theme that has room (some may have none).
-- **C6 Skins, picker, persistence:** palettes, the Companion submenu, the app-wide saved setting; the chosen creature's art replaces the dummy.
-- **D2 design round:** more palettes, a second species, accessories. Stretch: the pet swings while you drag the player.
+- **C6 Skins, picker, persistence:** species and palettes in the Companion submenu, the app-wide saved setting; a polish pass on each of the three creatures, which replace the dummy.
+- **D2 design round:** more palettes, accessories for all three species. Stretch: the pet swings while you drag the player.
 - **Milestone gate:** a fake-clock e2e time-lapse over all five themes × the fixture matrix — the pet stays in the window and never overlaps the artwork, controls or badge; reduced-motion still pose; no console errors; CSP clean; idle CPU budget met in the real exe; visual review by you.
 
 ### M3 — Make it yours (Phase 4 leftovers) · ~15–30 h

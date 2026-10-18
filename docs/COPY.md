@@ -60,7 +60,9 @@ shows `name`.
 ## Companion (PLAN.md §4b, planned for M2)
 Nothing reads these yet. More entries (one per skin and per palette) get added when those skins exist. The companion has
 no speech bubbles; its emotes are pixel icons, not text.
-- **Companion — creature name (first species):** [NEEDS COPY]
+- **Companion skin name — pilcrow:** [NEEDS COPY]
+- **Companion skin name — bookworm:** [NEEDS COPY]
+- **Companion skin name — cassette:** [NEEDS COPY]
 - **Companion menu — submenu label:** [NEEDS COPY]
 - **Companion menu — show/hide item:** [NEEDS COPY]
 - **Companion menu — skins heading:** [NEEDS COPY]
