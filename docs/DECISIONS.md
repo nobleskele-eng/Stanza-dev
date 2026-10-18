@@ -2552,5 +2552,5 @@ card's outside; the hit region following the pet; pick up and drop.
   - macOS.
 - **Housekeeping:**
   - With your OK I closed your running Stanza for these runs.
-  - Your saved appearance was restored to exactly what it was after every theme switch (string-identical; checked).
+  - Your saved appearance was restored after every run, string-identical to its value at that run's start (checked). One diagnostic run I interrupted had already rewritten it as a plain T1 appearance (no overrides, nothing hidden). Later runs restored that, so your theme is T1 as before, but its stored text may differ from your original.
   - `stanza.exe` was rebuilt from `main` afterwards, so it's your normal app again.
