@@ -354,8 +354,9 @@ Keep these in `docs/COPY.md`; code reads from there.
 - Each frame is a list of strings, one character per pixel, each character a palette index (`.` = transparent).
 - `src/companion/sprite.ts` (pure) merges runs into one `<path>` per colour with `shape-rendering: crispEdges`. Colours come from custom properties `--mp-pet-1..8`, so a palette skin is a variable swap.
 - **Scale:** one art pixel is always a whole number of device pixels: `round(2 × devicePixelRatio) / devicePixelRatio` logical px. At 125% and 150% scaling a fixed 2 px would give uneven pixels.
-- **Frames:** each animation is a horizontal strip inside an `overflow: hidden` box, flipped by CSS `steps(n)`.
-- **Movement:** stepped, not smooth: the pet moves one art pixel per frame at a low frame rate (pixel-art style), via CSS `steps()` on its container. JS runs only when the state changes (every few seconds), never per frame. **Why stepped (measured in the real exe, DECISIONS.md M1 R2):** in Stanza's transparent window any *smooth* endless animation costs ~10–20% of a CPU core, while the same animation stepped once a second costs about nothing. A pet that is always on screen must stay on the cheap side.
+- **Frames and movement are discrete changes from JS timers, never CSS/WAAPI animations** (changed after the C0 spike, DECISIONS.md 2026-10-17). Each animation is a horizontal strip inside an `overflow: hidden` box; a `setTimeout` chain sets the next frame's offset, and steps the pet one or two art pixels along its path. Nothing is "running" between changes.
+- **CPU budget, measured in the real exe (C0):** *any* running CSS/WAAPI animation, even a stepped 4 Hz one, keeps Chromium's compositor busy and costs ~2% of a core by itself. On top of that, every visible change costs ~3–6 ms of CPU, a re-composite of the whole transparent window (5.9 ms at T1's 404×664, 3.1 ms at T3's 312×150). So ≤ ~1% of a core on average means **≤ ~2 visible changes a second on average**.
+- **Behaviour that fits the budget:** the pet is *still* most of the time (sit, idle and sleep are single frames with an occasional blink). Activity comes in short bursts: walks at ~4–5 steps a second, a few seconds at a time. It sleeps without changing at all while playback is paused or idle. The brain (C2) tracks a running budget of changes and enforces it; the e2e suite counts changes per minute.
 
 ### Surfaces
 - Measured from `.mp-window`'s box. A ResizeObserver re-measures when the card's height changes with its state, or with T3's hover-reveal; the pet rides a moving edge.
@@ -372,7 +373,7 @@ Keep these in `docs/COPY.md`; code reads from there.
 ### Interaction ("watch + pick up")
 - `.mp-companion` carries `data-no-drag`, so the window-drag handler (C8) leaves it alone.
 - A click plays the react animation. A drag (pointer capture) holds the pet, clamped to the window; on drop it falls to the surface below or the nearest edge.
-- **Hit region:** `.mp-companion` joins the reported parts — at rest, and at most ~10 Hz while it moves.
+- **Hit region:** `.mp-companion` joins the reported parts — re-measured on each of its own position changes (it knows when it moved), sent only when its box changed. C0 showed the sends themselves cost nothing measurable.
 - **No-go zones:** the pet is interactive, so CLAUDE.md's rule ("interactive controls never on or over the artwork") applies to it. The planner treats the artwork, the controls and the source badge as no-go zones.
 
 ### Skins
@@ -453,9 +454,7 @@ locally on `main` ("Slice N: …"), never pushed unless you ask. Hour ranges are
   - S6: a button brings Spotify's own window (and its lyrics view) to the foreground. Gate: works reliably while Spotify is minimised or behind other windows, not just the first time. Needs a contract part and a copy slot.
 
 ### M2 — Companion · ~32–52 h (§4b)
-- **C0 spike** (`spike/c0-companion`): in the real exe, a 32 px placeholder box moves inside a window with the margin.
-  Checks: click-through around it, dragging it, idle CPU with it on vs off (Slice 3's method), crispness at 100% (real) and 125%/150% (Playwright `deviceScaleFactor`).
-  **Gate:** idle CPU change within noise (≤ ~1% of a core), no flicker, hit test correct.
+- **C0 spike** (`spike/c0-companion`) — **done 2026-10-17** (DECISIONS.md): margin window, crisp pixels at 100/125/150/200%, click-through around the pet, pick up and drop, no flicker all passed. The CPU gate failed for a *continuously* walking pet (+2.5–8% of a core); the measurements set the frame-timer architecture and the change budget above.
 - **C1 Renderer + skin format + lab:** `sprite.ts`, the validator and registry, a "test dummy" skin with every required animation, the dev-only Companion lab (every state × palette × scale, light and dark backdrops).
 - **D1 design round** (with you): three original concepts in the lab; you pick or mix.
 - **C2 Brain + top edge + contract v7:** idle, walk, sit, sleep, wake, reacting to playback, in the production player.
@@ -523,7 +522,8 @@ Likelihoods are qualitative — there's no reliable base rate for any of these.
 | Scope creep (lyrics, visualiser, likes, pet care) | High | Med | §9 parking lot; companion scope fixed by §4b |
 | School workload stalls a half-built milestone | — | Med | One slice per turn; every slice leaves `main` working |
 | Companion pixel art looks uneven at 125%/150% scaling | Med | Med | Whole-device-pixel scale (§4b); checked in C0 |
-| An always-animating pet costs CPU/battery on an always-on-top window | **High** (measured: smooth endless animation = 10–20% of a core here, M1 R2) | Med | Stepped low-rate frames and movement, no per-frame JS; C0 CPU gate; paused/idle → a still sleep pose |
+| An always-animating pet costs CPU/battery on an always-on-top window | **Measured (C0):** a continuously walking pet = +2.5–8% of a core; any running CSS animation ~2% by itself; ~3–6 ms per visible change | Med | JS-timer frames (no CSS animations), still by default, short activity bursts, a change budget of ≤ ~2/s on average enforced by the brain, sleep (no changes) when paused/idle |
+| T4's marquee and T5's reels are still stepped CSS animations, so each pays the ~2% "animation running" cost | Measured indirectly (C0) | Low–Med | Possible follow-up: drive them from JS timers like the companion |
 | Endless or per-tick animation in themes and effects costs CPU the same way | **Measured and fixed for T1–T5 (2026-10-17):** the paused pulse is 3 runs then still; marquee/reels are stepped; flap paging is finite; a 1 s position tick. Playing now costs 79–704 ms of CPU per 10 s (T5 was up to 7,391) | Med (an always-on app) | e2e guards: every endless theme animation must be `steps()`, no width transitions on the progress fill, ~1 render/s. Opt-in effects (shapes/waveform beat, ripple/liquid) not yet measured |
 | The pet hides controls or the source badge | Low (by design) | High (usability, attribution) | No-go zones in the planner; e2e time-lapse over every theme |
 | Creature art too close to someone else's | Low | High | Original designs only; per-design originality check, logged |

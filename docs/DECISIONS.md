@@ -2477,3 +2477,80 @@ in each of the five themes, and a copy slot.
 - **Real mouse click, by you (2026-10-17):** "works". You clicked the lyrics button in the release exe, and Spotify
   came to the front. That was the one path the automated runs couldn't take (a real click activates Stanza first). The
   S6 gate is closed.
+
+## 2026-10-17 — M2 C0 spike: the companion's window, pixels, clicks and cost (branch `spike/c0-companion`)
+The spike's code stays on its branch (commit `df606f3`, not merged), per the spike rule. What was built there: the window
+grown by the pet's box on every side; a 16×16 two-frame placeholder blob drawn as a crisp SVG; a stepped walk around the
+card's outside; the hit region following the pet; pick up and drop.
+- **Margin window (passed):** in the real exe the window was 404×664, T1's 340×600 plus the 32 px pet box on each side
+  at 100%. The card stays centred inside it.
+- **Crisp pixels (passed, Playwright, Chromium + WebKit):**
+  - **The scale rule:** one art pixel = `round(2 × dpr) / dpr` logical px. In each capture of the pet alone, every
+    pixel was either fully transparent or exactly a sprite colour, and every colour run was a whole multiple of
+    2/3/3/4 device px at 100/125/150/200%.
+  - **The control:** a fixed 2 px per art pixel at 125% fails the same check, so the check can fail.
+  - **Chromium at 125%:** it lays the 38.4 px box out as 38.390625 px (layout uses 1/64 px units), yet paints it on
+    exact device pixels.
+  - **Two traps, both in my tests, not the app:**
+    - T1's card shadow showed through the pet's transparent pixels until the player was hidden for the capture.
+    - WebKit paints a faint 2×2 tint at the page origin even on an empty page; the pet's loop starts there, so the
+      capture moves it along first.
+- **Click-through (passed, real exe).** A Win32 probe moved only Stanza's window under the motionless cursor:
+  - **On the paused pet:** click-through off, and Windows found Stanza under the cursor.
+  - **12 px beside it, in the margin:** click-through on, and Discord underneath.
+  - **On the card:** Stanza.
+  - **Below the card, in the margin:** Discord.
+- **Pick up and drop (passed):**
+  - **e2e (both engines):** the pet follows the mouse in whole art pixels and never starts a window drag.
+  - **Real exe (CDP mouse):** the pet followed and clamped at the window edge, and the window didn't move.
+- **No flicker (passed, real exe).** 60 GDI captures, 50 ms apart, of the pet's path while it walked down the right
+  side: all 60 showed the whole sprite, exactly 376 orange pixels (94 orange art pixels × 4).
+- **CPU gate (failed for a continuously walking pet).** Real exe, Spotify paused, 5 × 10 s windows, medians of CPU ms
+  per 10 s, app + WebView2:
+
+  | Config | CPU ms / 10 s |
+  |---|---|
+  | Pet off | 63 |
+  | Walk 10 Hz + legs 4 Hz + hit-region tracking (~11 sends/s) | 313 |
+  | Same, tracking off | 313 |
+  | Legs only (stepped CSS, 4 Hz) | 297 |
+  | Still pet | 157 (noisy) |
+
+  - A first attribution run was invalid: it paused the pet right after a reload, and the initial size observation
+    restarted the walk. Re-done with a settle delay, and every window checked that the pause held.
+  - **Hypothesis test (pet-off baseline 78, same session):**
+
+    | Leg flip at 4 Hz, driven by | CPU ms / 10 s | Above baseline |
+    |---|---|---|
+    | A stepped CSS/WAAPI animation | 437 | +359 |
+    | A JS timer (one style change each 250 ms) | 219 | +141 |
+    | JS timers, legs 4 Hz + walk 10 Hz | 860 | +782 |
+
+  - **Window size, same 4 Hz JS-timer legs:**
+
+    | Theme (window) | Still | Legs | Per change |
+    |---|---|---|---|
+    | T1 (404×664) | 78 | 312 | ~5.9 ms |
+    | T3 (312×150) | 94 | 219 | ~3.1 ms |
+
+- **Learnings (they change the companion design; PLAN.md §4b updated):**
+  1. **Any running CSS/WAAPI animation**, even a stepped low-rate one, costs about 2% of a core in this transparent
+     window just by running. The compositor stays busy whether or not anything changes. **The companion drives its
+     frames and steps from JS timers**, with nothing running in between. (This also explains part of what T4's
+     stepped marquee and T5's stepped reels still cost; a possible follow-up, logged in the risk register.)
+  2. **Every visible change costs ~3–6 ms of CPU**, a re-composite of the whole window. It grows with window area,
+     but sublinearly: a 5.7× smaller window only halves it. So a separate small pet window wouldn't pay for its drag
+     lag, and one window stays.
+  3. **The 1%-of-a-core budget means ≤ ~2 visible changes a second on average.** The pet must be still by default,
+     move in short bursts at ~4–5 steps a second, and sleep without changing while paused or idle. The C2 brain will
+     enforce a change budget, and e2e will count changes per minute.
+  4. Hit-region sends while the pet moves (~11/s here) cost nothing measurable.
+- **Not checked:**
+  - Real 125%/150% displays (only Playwright's simulated scaling).
+  - A real mouse drag.
+  - Multi-monitor with mixed DPI (the pet's size would have to follow the window between monitors).
+  - macOS.
+- **Housekeeping:**
+  - With your OK I closed your running Stanza for these runs.
+  - Your saved appearance was restored to exactly what it was after every theme switch (string-identical; checked).
+  - `stanza.exe` was rebuilt from `main` afterwards, so it's your normal app again.
