@@ -78,7 +78,7 @@ const held = (dx) => swing(HELD, 9, dx);
 export const bookworm = {
   id: "bookworm",
   name: "[NEEDS COPY]",
-  format: 1,
+  format: 2,
   grid: 16,
   anchor: { x: 8, y: 14 },
   palettes: {
@@ -88,8 +88,11 @@ export const bookworm = {
   },
   animations: {
     idle: { fps: 1, loop: true, frames: [ground(R(), 4), ground(R_BLINK, 4)], durations: [2800, 160] },
-    walk: { fps: 3, loop: true, frames: [ground(DASH, 1), ground(N, 5)] },
-    sit: { fps: 1, loop: true, frames: [frame([SIT("e"), 2, 7]), frame([SIT("k"), 2, 7])], durations: [3200, 160] },
+    // Inching: entering the arch moves nothing (the tail catches up to the planted head); entering the dash moves
+    // 4 px (the head reaches forward from the planted tail).
+    walk: { fps: 3, loop: true, frames: [ground(DASH, 1), ground(N, 5)], steps: [4, 0] },
+    // Row 10 (the draped back half) rests on the edge; the head droops below it.
+    sit: { fps: 1, loop: true, frames: [frame([SIT("e"), 2, 7]), frame([SIT("k"), 2, 7])], durations: [3200, 160], anchor: { x: 8, y: 10 } },
     climb: { fps: 3, loop: true, frames: [rotCCW(ground(DASH, 1)), rotCCW(ground(N, 5))] },
     hang: { fps: 1, loop: true, frames: [hang(0), hang(1)], durations: [1400, 1400] },
     sleep: { fps: 1, loop: true, frames: [frame([O, 3, 7], [Z[0], 12, 1]), frame([O, 3, 7], [Z[1], 12, 3])], durations: [4000, 4000] },

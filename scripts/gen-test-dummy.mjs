@@ -42,7 +42,7 @@ const squash = frame([E, E, E, E], body("open").filter((_, i) => i !== 2 && i !=
 const skin = {
   id: "test-dummy",
   name: "[NEEDS COPY]",
-  format: 1,
+  format: 2,
   grid: 16,
   anchor: { x: 8, y: 14 },
   palettes: {

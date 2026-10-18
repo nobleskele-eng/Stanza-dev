@@ -3,7 +3,7 @@ import copyMarkdown from "../../docs/COPY.md?raw";
 import { NEEDS_COPY, parseCopy } from "../copy";
 import { LAYOUT_GRID, artPixelPx, spriteBoxPx, spriteSizePx } from "./pixel";
 import { SKINS } from "./registry";
-import { MAX_FPS, REQUIRED_ANIMATIONS, validateSkin, type Skin } from "./skin";
+import { MAX_FPS, MAX_STEP, REQUIRED_ANIMATIONS, validateSkin, type Skin } from "./skin";
 import { frameToPaths } from "./spritePaths";
 
 describe("artPixelPx", () => {
@@ -91,7 +91,7 @@ describe("validateSkin", () => {
     const s = clone();
     s.extra = 1;
     delete s.anchor;
-    s.format = 2;
+    s.format = 1; // the previous format
     expect(codes(s)).toEqual(expect.arrayContaining(["unknown-key@extra", "missing@anchor", "format-mismatch@format"]));
   });
 
@@ -118,7 +118,7 @@ describe("validateSkin", () => {
     expect(codes(big)).toContain("palette-invalid@palettes.default");
   });
 
-  it("requires every animation and checks fps, loop, frames and durations", () => {
+  it("requires every animation and checks fps, loop, frames, durations, steps and anchors", () => {
     const s = clone() as { animations: Record<string, Record<string, unknown>> };
     delete s.animations.sleep;
     s.animations.dance = { fps: 1, loop: true, frames: [] };
@@ -126,6 +126,9 @@ describe("validateSkin", () => {
     s.animations.idle.loop = "yes";
     s.animations.idle.durations = [10, 160];
     s.animations.sit.frames = [];
+    s.animations.climb.steps = [MAX_STEP + 1, 0];
+    s.animations.hang.steps = [1];
+    s.animations.wake.anchor = { x: 99, y: 0 };
     expect(codes(s)).toEqual(
       expect.arrayContaining([
         "missing@animations.sleep",
@@ -134,6 +137,9 @@ describe("validateSkin", () => {
         "loop-invalid@animations.idle.loop",
         "durations-invalid@animations.idle.durations",
         "frames-invalid@animations.sit.frames",
+        "steps-invalid@animations.climb.steps",
+        "steps-invalid@animations.hang.steps",
+        "anchor-invalid@animations.wake.anchor",
       ]),
     );
   });

@@ -1,8 +1,8 @@
-// Companion skin format, version 1 (docs/COMPANION.md; PLAN.md §4b). A skin is one creature: its
+// Companion skin format, version 2 (docs/COMPANION.md; PLAN.md §4b). A skin is one creature: its
 // grid, palettes and the frames of every required animation. Validation returns machine codes and
 // paths, never prose (displayed strings come from COPY.md, CLAUDE.md), like src/theme/variant.ts.
 
-export const SKIN_FORMAT = 1;
+export const SKIN_FORMAT = 2;
 
 /** Every skin must have all of these (the C2 brain's states). */
 export const REQUIRED_ANIMATIONS = ["idle", "walk", "sit", "climb", "hang", "sleep", "wake", "react", "held", "fall", "land"] as const;
@@ -17,6 +17,8 @@ export const MAX_FRAMES = 8;
  * window (~3–6 ms of CPU, C0 spike), so the budget is about two changes a second on average.
  */
 export const MAX_FPS = 12;
+/** Art pixels an animation may move the creature on entering one frame (`steps`). */
+export const MAX_STEP = 8;
 export const MIN_GRID = 8;
 export const MAX_GRID = 32;
 
@@ -26,6 +28,22 @@ export interface SkinAnimation {
   frames: string[][];
   /** Optional ms per frame (same length as frames), overriding fps: e.g. a long open-eyes frame, then a short blink. */
   durations?: number[];
+  /**
+   * Optional art pixels the creature moves forward on entering each frame (format 2). Absent: 1 per frame for `walk`,
+   * 0 for everything else. The bookworm inches: [4, 0] keeps its head planted while its tail catches up.
+   */
+  steps?: number[];
+  /**
+   * Optional contact point for this animation (format 2), overriding the skin's: e.g. `sit`, whose seat is higher
+   * than its feet because its legs hang over the edge.
+   */
+  anchor?: Anchor;
+}
+
+/** An art pixel whose bottom edge rests on the surface the creature stands or sits on. */
+export interface Anchor {
+  x: number;
+  y: number;
 }
 
 export interface Skin {
@@ -33,8 +51,8 @@ export interface Skin {
   name: string;
   format: number;
   grid: number;
-  /** The foot point in art pixels: where the creature touches the surface it stands or hangs on. */
-  anchor: { x: number; y: number };
+  /** The foot point in art pixels: where the creature touches the surface it stands on. */
+  anchor: Anchor;
   /** Named palettes; each is the colours of slots 1..n. Must include "default". */
   palettes: Record<string, string[]>;
   animations: Record<AnimationName, SkinAnimation>;
@@ -55,6 +73,7 @@ export type SkinIssueCode =
   | "fps-invalid"
   | "loop-invalid"
   | "durations-invalid"
+  | "steps-invalid"
   | "frames-invalid"
   | "rows-invalid"
   | "row-length"
@@ -71,7 +90,9 @@ const isInt = (v: unknown, min: number, max: number) => Number.isInteger(v) && (
 const HEX = /^#[0-9a-f]{6}$/i;
 const ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const TOP_KEYS = ["id", "name", "format", "grid", "anchor", "palettes", "animations"];
-const ANIMATION_KEYS = ["fps", "loop", "frames", "durations"];
+const ANIMATION_KEYS = ["fps", "loop", "frames", "durations", "steps", "anchor"];
+const isAnchor = (v: unknown, grid: number | null) =>
+  isObject(v) && Object.keys(v).every((k) => k === "x" || k === "y") && grid !== null && isInt(v.x, 0, grid - 1) && isInt(v.y, 0, grid - 1);
 export const MIN_FRAME_MS = 50;
 export const MAX_FRAME_MS = 10_000;
 
@@ -89,16 +110,7 @@ export function validateSkin(raw: unknown): { skin: Skin | null; issues: SkinIss
   const grid = isInt(raw.grid, MIN_GRID, MAX_GRID) ? (raw.grid as number) : null;
   if ("grid" in raw && grid === null) add("grid-invalid", "grid");
 
-  const anchor = raw.anchor;
-  if ("anchor" in raw) {
-    const ok =
-      isObject(anchor) &&
-      Object.keys(anchor).every((k) => k === "x" || k === "y") &&
-      grid !== null &&
-      isInt(anchor.x, 0, grid - 1) &&
-      isInt(anchor.y, 0, grid - 1);
-    if (!ok) add("anchor-invalid", "anchor");
-  }
+  if ("anchor" in raw && !isAnchor(raw.anchor, grid)) add("anchor-invalid", "anchor");
 
   let slots = 0;
   if ("palettes" in raw) {
@@ -147,6 +159,12 @@ export function validateSkin(raw: unknown): { skin: Skin | null; issues: SkinIss
           const ok = Array.isArray(d) && d.length === frames.length && d.every((ms) => isInt(ms, MIN_FRAME_MS, MAX_FRAME_MS));
           if (!ok) add("durations-invalid", `${path}.durations`);
         }
+        if ("steps" in anim) {
+          const st = anim.steps;
+          const ok = Array.isArray(st) && st.length === frames.length && st.every((n) => isInt(n, 0, MAX_STEP));
+          if (!ok) add("steps-invalid", `${path}.steps`);
+        }
+        if ("anchor" in anim && !isAnchor(anim.anchor, grid)) add("anchor-invalid", `${path}.anchor`);
       }
     }
   }
@@ -178,3 +196,12 @@ function checkFrame(frame: unknown, grid: number | null, slots: number, path: st
     }
   });
 }
+
+/** How long frame `i` of an animation stays up, in ms. */
+export const frameMs = (anim: SkinAnimation, i: number) => anim.durations?.[i] ?? Math.round(1000 / anim.fps);
+
+/** Art pixels the creature moves forward on entering frame `i` (`steps`; absent: 1 for `walk`, else 0). */
+export const stepPx = (name: AnimationName, anim: SkinAnimation, i: number) => anim.steps?.[i] ?? (name === "walk" ? 1 : 0);
+
+/** Where an animation rests on its surface: its own anchor, else the skin's. */
+export const anchorOf = (skin: Skin, name: AnimationName): Anchor => skin.animations[name].anchor ?? skin.anchor;

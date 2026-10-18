@@ -2729,3 +2729,93 @@ one of the skin layers (PLAN.md §4b), so nothing structural changes.
   - D1 is marked settled.
   - C6 is now "species and palettes in the picker, plus a polish pass on each creature".
   - D2 drops "a second species" and keeps more palettes and accessories.
+
+## 2026-10-18 — M2 C2a: the companion's brain, running on the lab's mock cards
+- **Diagnosis (same failure twice, written before the third try).** The fake-clock e2e for the live creatures timed out
+  twice: the first time with 100 ms clock steps, then with 150 ms and 2 s steps.
+  - **Measured:** every `page.clock.runFor` call took ~150–200 ms, whatever the step size.
+    - 1000 steps ran past 180 s.
+    - Even 150 coarse steps ran past 30 s.
+  - **Cause:** the lab page also runs its whole gallery, about 570 animated sprites, each with its own timer chain.
+    Under the fake clock every step fires all of their timers and re-renders them, so the four live creatures are
+    buried under the gallery's work.
+  - **Fix to try:** a `?live` lab view with only the live cards. The e2e opens that.
+  - **Result:** the `?live` view cut each step from ~150–200 ms to a few ms. Chromium ran all four cases in ~10 s.
+  - **A second, separate race:** with the clock flowing, a state read straight after a click could see the DOM
+    before React rendered. The wake pose never showed, although the brain had woken. Two causes:
+    - `clock.install()` lets time keep running in real time.
+    - Chromium runs DevTools commands ahead of the page's posted messages, which is how React commits.
+  - **Fixed in the test, not the app:**
+    - The clock is paused after load, so only the test moves time.
+    - After every step or click, the test waits for a `MessageChannel` round trip in the page, which queues behind
+      React's work.
+    - Clicks are dispatched as DOM events, because Playwright's own click waits for animation frames, which the
+      paused clock holds.
+  - **WebKit cost:** its DevTools round trips are ~10× slower, and the 2.5-minute budget time-lapse took 2.2 min
+    there. That one case runs in Chromium only: what it counts is React's commits, which don't depend on the engine,
+    and the brain's unit tests simulate whole hours. The other three cases run in both engines.
+- **Why C2 is split:** C2 as planned was the brain, plus the production player, plus the window margin, plus
+  contract v7. Like R3, it's split:
+  - **C2a (this):** the brain and its component, proven on the lab's mock cards.
+  - **C2b:** putting it in the player: the window margin, `.mp-companion`, contract v7, the on/off switch, the
+    real-exe CPU check.
+- **What C2a built:**
+  - **`src/companion/brain.ts`:** a pure, seeded state machine (mulberry32, unrolled from `src/fx/beat.ts` so the
+    state is plain data).
+    - **Modes:** idle, walk, sit, sleep, wake, react.
+    - **The change budget:** a hard cap of `BUDGET_PER_MINUTE` = 90 visible changes in any rolling minute.
+      - Optional changes only start when the minute leaves room for all of their frames: another blink loop,
+        another sleepy loop, a walk (planned in full and shortened to fit), ending an idle or a sit.
+      - Changes caused by the music always happen: falling asleep, waking, a track-change reaction.
+    - **Music:** it falls asleep `DROWSY_MS` (3 s) after the music stops, so a quick pause doesn't count. It plays
+      `sleep` 3 times, then holds still, with no timer at all. It wakes when the music starts. A new track makes it
+      react, but only while awake.
+    - **Reduced motion:** still poses, sitting where allowed and standing where not. Nothing changes on its own; only
+      the music changes its pose.
+    - `nextDue` decides both when the next change is and what it is, so the timer and the step can't disagree.
+  - **`src/companion/Companion.tsx`:** runs the brain on one timer and renders `.mp-companion`
+    (`data-pet-state`, `data-pet-surface="top"`). The timer re-arms right after each change rather than after React
+    renders. It's not interactive yet (`pointer-events: none` until C4).
+  - **`src/companion/place.ts`:**
+    - the pose's anchor pixel rests on the edge;
+    - mirrored placement for facing left;
+    - `noSitRanges` turns blocked stretches of the edge (CSS px) into anchor positions where the dangling legs would
+      cover them. It's computed from the frames' rows below the sit anchor, for both facings. C2b feeds it the real
+      parts.
+  - `Sprite` gained `mirrored` (frames are drawn facing right).
+- **Skin format v2** (a format change, so `format` is now 2 and v1 files are rejected):
+  - `steps` per frame, so the bookworm inches `[4, 0]`; the pilcrow and cassette walk `[2, 2]`.
+  - `anchor` per animation, so `sit` rests on its seat: pilcrow (10, 10), bookworm (8, 10), cassette (8, 11).
+  - The lab's temporary `SIT_ROW` table is gone.
+  - New rule in COMPANION.md: frame 0 of a looping animation is its rest pose, because the brain may hold it.
+- **Measured (simulated, an hour per skin while playing):**
+
+  | Skin | Changes a minute |
+  |---|---|
+  | test-dummy | 58.0 |
+  | pilcrow | 51.5 |
+  | bookworm | 52.5 |
+  | cassette | 48.1 |
+
+  At C0's 3–6 ms per change that is ~0.3–0.6% of a core. The busiest minute never exceeds 90. A deliberately frantic
+  skin, blinking every 100 ms, is held at 86–90 by the budget alone. The real-exe measurement is C2b.
+- **Mutation checks:**
+  - Sleep that never holds still fails the e2e ("changes while asleep").
+  - Ignoring reduced motion fails the e2e, but only once both of its guards are removed: the brain's `still` flag,
+    and the direct check where changes are scheduled. Removing one alone changed nothing, so both stay.
+  - The same mutation also showed that the reduced-motion pose had no end time. It's set now, so no state carries a
+    stale one.
+- **Checked in the Browser pane on the real clock:** in the lab, next track → react; pause → asleep ~3 s later;
+  play → wake → idle; `document.getAnimations()` is 0.
+- **A third timing note:** the first full run timed out WebKit's pausing case at 30 s under suite load. It had taken
+  28.7 s alone. The stretches that check that nothing changes now advance the clock 30 s at a time: any change, even
+  several batched into one commit, still shows as non-zero. That case now takes ~12 s in WebKit.
+- **Checks run (2026-10-18):**
+  - `npx tsc --noEmit`: clean.
+  - `npx vitest run`: 185 passed, including 13 brain and 3 placement tests.
+  - `npx playwright test`: 723 passed and 1 skipped (the WebKit budget time-lapse, on purpose).
+  - `npm run build`: passed, check-fixtures-excluded OK.
+    - The production JS has no companion code. The only change is COPY.md's text: the three skin-name slots from the
+      previous commit, bundled like all copy.
+  - The lab in the Browser pane on the real clock, as above.
+  - The real exe isn't involved: nothing companion-related is in the production DOM yet (C2b).

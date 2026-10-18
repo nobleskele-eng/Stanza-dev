@@ -68,7 +68,7 @@ const held = stand("wide", "dangle", 1);
 export const pilcrow = {
   id: "pilcrow",
   name: "[NEEDS COPY]",
-  format: 1,
+  format: 2,
   grid: 16,
   anchor: { x: 10, y: 14 },
   palettes: {
@@ -78,8 +78,8 @@ export const pilcrow = {
   },
   animations: {
     idle: { fps: 1, loop: true, frames: [standing, blink], durations: [2800, 160] },
-    walk: { fps: 4, loop: true, frames: [stand("open", "stepA"), stand("open", "stepB")] },
-    sit: { fps: 1, loop: true, frames: [sit("open"), sit("closed")], durations: [3200, 160] },
+    walk: { fps: 4, loop: true, frames: [stand("open", "stepA"), stand("open", "stepB")], steps: [2, 2] },
+    sit: { fps: 1, loop: true, frames: [sit("open"), sit("closed")], durations: [3200, 160], anchor: { x: 10, y: 10 } },
     climb: { fps: 3, loop: true, frames: [climb("stepA"), climb("stepB")] },
     hang: { fps: 1, loop: true, frames: [hang(0), hang(1)], durations: [1400, 1400] },
     sleep: { fps: 1, loop: true, frames: [sleeping(Z[0]), sleeping(Z[1])], durations: [4000, 4000] },

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { artPixelPx, spriteBoxPx } from "./pixel";
-import type { Skin, SkinAnimation } from "./skin";
+import { frameMs, type Skin, type SkinAnimation } from "./skin";
 import { frameToPaths } from "./spritePaths";
 import "./companion.css";
 
@@ -9,8 +9,6 @@ export function paletteVars(colours: readonly string[]): CSSProperties {
   return Object.fromEntries(colours.map((c, i) => [`--mp-pet-${i + 1}`, c])) as CSSProperties;
 }
 
-/** How long frame `i` stays up. */
-export const frameMs = (anim: SkinAnimation, i: number) => anim.durations?.[i] ?? Math.round(1000 / anim.fps);
 
 /**
  * The frame index of a playing animation, advanced by a `setTimeout` chain (never a CSS animation,
@@ -49,6 +47,7 @@ export function Sprite({
   palette = "default",
   dpr = window.devicePixelRatio || 1,
   pixel,
+  mirrored = false,
   className,
 }: {
   skin: Skin;
@@ -58,6 +57,8 @@ export function Sprite({
   dpr?: number;
   /** Logical px per art pixel, overriding the dpr rule (the lab's zoomed view; keep it whole device px). */
   pixel?: number;
+  /** Facing left: the art is drawn facing right and mirrored within its grid (whole art pixels, so still crisp). */
+  mirrored?: boolean;
   className?: string;
 }) {
   const frames = skin.animations[animation].frames;
@@ -76,9 +77,11 @@ export function Sprite({
       aria-hidden="true"
       style={{ display: "block", ...paletteVars(colours) }}
     >
-      {paths.map(({ slot, d }) => (
-        <path key={slot} className={`mp-pet-c${slot}`} d={d} />
-      ))}
+      <g transform={mirrored ? `translate(${skin.grid} 0) scale(-1 1)` : undefined}>
+        {paths.map(({ slot, d }) => (
+          <path key={slot} className={`mp-pet-c${slot}`} d={d} />
+        ))}
+      </g>
     </svg>
   );
 }

@@ -63,7 +63,7 @@ function hang(dx) {
 export const cassette = {
   id: "cassette",
   name: "[NEEDS COPY]",
-  format: 1,
+  format: 2,
   grid: 16,
   anchor: { x: 8, y: 14 },
   palettes: {
@@ -73,8 +73,8 @@ export const cassette = {
   },
   animations: {
     idle: { fps: 1, loop: true, frames: [stand(), stand("closed")], durations: [2800, 160] },
-    walk: { fps: 4, loop: true, frames: [stand("open", "stepA"), stand("turn", "stepB")] },
-    sit: { fps: 1, loop: true, frames: [sit("open", "sitA"), sit("open", "sitB")], durations: [2400, 2400] },
+    walk: { fps: 4, loop: true, frames: [stand("open", "stepA"), stand("turn", "stepB")], steps: [2, 2] },
+    sit: { fps: 1, loop: true, frames: [sit("open", "sitA"), sit("open", "sitB")], durations: [2400, 2400], anchor: { x: 8, y: 11 } },
     climb: { fps: 3, loop: true, frames: [rotCCW(stand("open", "stepA")), rotCCW(stand("turn", "stepB"))] },
     hang: { fps: 1, loop: true, frames: [hang(0), hang(1)], durations: [1400, 1400] },
     sleep: { fps: 1, loop: true, frames: [frame([stand("closed", "tuck"), 0, 0], [Z[0], 12, 0]), frame([stand("closed", "tuck"), 0, 0], [Z[1], 13, 1])], durations: [4000, 4000] },
