@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { edgeInset, edgeLength, noSitRanges, placeAround, placeOnEdge, type Surface } from "./place";
+import { edgeLength, noSitRanges, placeAround, placeOnEdge, type Surface } from "./place";
 import { SKINS } from "./registry";
 import { anchorOf, type AnimationName, type Skin } from "./skin";
 
@@ -57,12 +57,6 @@ describe("companion placement around the card (C3a)", () => {
   }
   const most = (xs: number[]) => Math.max(...xs);
   const least = (xs: number[]) => Math.min(...xs);
-
-  it("leaves the top edge's inset where it was: climb and hang don't count on the top", () => {
-    const inset = Object.fromEntries(Object.values(SKINS).map((s) => [s.id, [edgeInset(s, 2), edgeInset(s, 2.4)]]));
-    // Measured before C3a (DECISIONS.md 2026-10-29).
-    expect(inset).toEqual({ "test-dummy": [16, 19.2], pilcrow: [20, 24], bookworm: [16, 19.2], cassette: [16, 19.2] });
-  });
 
   for (const skin of Object.values(SKINS)) {
     it(`${skin.id}: climbing, the art touches the side from outside, and at the top corner it's level with the top`, () => {

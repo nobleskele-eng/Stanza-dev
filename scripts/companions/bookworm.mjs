@@ -93,7 +93,7 @@ export const bookworm = {
     walk: { fps: 3, loop: true, frames: [ground(DASH, 1), ground(N, 5)], steps: [4, 0] },
     // Row 10 (the draped back half) rests on the edge; the head droops below it.
     sit: { fps: 1, loop: true, frames: [frame([SIT("e"), 2, 7]), frame([SIT("k"), 2, 7])], durations: [3200, 160], anchor: { x: 8, y: 10 } },
-    climb: { fps: 3, loop: true, frames: [rotCCW(ground(DASH, 1)), rotCCW(ground(N, 5))] },
+    climb: { fps: 3, loop: true, frames: [rotCCW(ground(DASH, 1)), rotCCW(ground(N, 5))], steps: [4, 0] }, // the walk turned: same stride
     hang: { fps: 1, loop: true, frames: [hang(0), hang(1)], durations: [1400, 1400] },
     sleep: { fps: 1, loop: true, frames: [frame([O, 3, 7], [Z[0], 12, 1]), frame([O, 3, 7], [Z[1], 12, 3])], durations: [4000, 4000] },
     wake: { fps: 4, loop: false, frames: [ground(O, 3), ground(C, 3), ground(R(), 4)] },

@@ -59,25 +59,27 @@ function ProductionApp() {
   companion.current = appearance.companion;
   // Last size asked of the native window, so a switch that already grew it to the new size isn't repeated.
   const sizedTo = useRef("");
-  // The companion (M2 C2b): off until turned on, kept across theme switches. On, the window grows by a margin on
-  // top, the height of the pet's box, so it can stand on the card's top edge without the card moving on screen.
+  // The companion (M2 C2b, C3b): off until turned on, kept across theme switches. On, the window grows by a margin on
+  // every side, the pet's box, so it can walk the card's top, climb its sides and hang under it without the card
+  // moving on screen.
   const dpr = useDevicePixelRatio();
   const skin = SKINS[appearance.companion.skin];
   const margin = appearance.companion.on ? spriteBoxPx(skin.grid, artPixelPx(dpr)) : 0;
   const marginRef = useRef(margin);
   marginRef.current = margin;
-  // The companion's top margin currently reflected in the window's position (it grows the window upward). It starts
+  // The companion's margin currently reflected in the window's position (it grows the window left and up). It starts
   // at the launch margin, not 0: tauri-plugin-window-state restores the position saved at the last exit, which already
-  // includes the margin if the companion was on, so shifting again would move the card up a margin on every launch.
+  // includes the margin if the companion was on, so shifting again would move the card a margin on every launch.
   const shifted = useRef(margin);
   const sizeWindow = useCallback((size: { width: number; height: number }, margin: number) => {
-    const height = size.height + margin;
-    const key = `${size.width}x${height}`;
-    const moveY = shifted.current - margin;
-    if (key === sizedTo.current && !moveY) return Promise.resolve();
+    const width = size.width + 2 * margin;
+    const height = size.height + 2 * margin;
+    const key = `${width}x${height}`;
+    const move = shifted.current - margin;
+    if (key === sizedTo.current && !move) return Promise.resolve();
     sizedTo.current = key;
     shifted.current = margin;
-    return fitWindowToTheme({ width: size.width, height }, moveY);
+    return fitWindowToTheme({ width, height }, move);
   }, []);
   // The native window takes the active theme's declared size. The player is centred side to side
   // and pinned to the top (.app-stage; docs/DECISIONS.md, Slice 6).
@@ -121,7 +123,7 @@ function ProductionApp() {
   );
   const dom = variantToDom(appearance.variant);
   return (
-    <div className="app-stage" style={margin ? { paddingTop: margin } : undefined}>
+    <div className="app-stage" style={margin ? { padding: margin } : undefined}>
       <Player
         nowPlaying={nowPlaying}
         positionMs={positionMs}

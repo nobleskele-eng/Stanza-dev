@@ -3,7 +3,7 @@
   "name": "Glow Card",
   "author": "[NEEDS COPY]",
   "version": "1.0.0",
-  "contract": 7,
+  "contract": 8,
   "layout": "card",
   "window": { "width": 280, "height": 507 },
   "colorMode": "artwork",

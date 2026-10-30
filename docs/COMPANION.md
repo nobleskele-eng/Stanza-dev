@@ -86,7 +86,7 @@ pixels, so still crisp).
 | `loop` | `true` repeats. `false` plays once and holds the last frame. |
 | `frames` | 1–8 frames. |
 | `durations` | Optional. Milliseconds per frame, one per frame, each 50–10 000. Overrides `fps`, e.g. a long open-eyes frame and then a short blink. |
-| `steps` | Optional (v2). Art pixels the creature moves forward on entering each frame, one per frame, each 0–8. If absent, `walk` and `climb` move 1 per frame and every other animation stays put. The pilcrow and cassette walk `[2, 2]`. The bookworm inches with `[4, 0]`: its tail catches up to its planted head (0), then its head reaches forward (4). |
+| `steps` | Optional (v2). Art pixels the creature moves forward on entering each frame, one per frame, each 0–8. If absent, `walk` and `climb` move 1 per frame and every other animation stays put. The pilcrow and cassette walk `[2, 2]`. The bookworm inches with `[4, 0]`: its tail catches up to its planted head (0), then its head reaches forward (4). Each species' `climb` is its walk turned a quarter, so it keeps the walk's `steps` (C3b). |
 | `anchor` | Optional (v2). This animation's own contact point, overriding the default. `sit` needs one: the creature sits on a row in the middle of its frame and its legs hang below the edge. `climb` and `hang` touch the card differently (below) and have their own defaults. |
 
 **Required animations** (the brain's states, PLAN.md §4b). What each one should show:
@@ -162,7 +162,7 @@ The budget is about two changes a second on average (C0 spike, docs/DECISIONS.md
 - **Around cards** (C3a): the same, but each creature travels the card's whole outline. At an end of the top it may
   turn the corner (half the time), climb down the side in short legs with pauses, hang under the bottom, then climb
   back up. With the music off it holds still wherever it is; off the top it doesn't sleep or react. They have their own
-  seeds. Production doesn't use the outline yet (C3b).
+  seeds. The production player does the same since C3b, in a window with the pet's box as a margin on every side.
 - **Each skin in context** at the top, at real size around a plain mock card (no text), on a light and a dark backdrop:
   - walking, asleep and sitting on the top edge;
   - hanging under the bottom edge;

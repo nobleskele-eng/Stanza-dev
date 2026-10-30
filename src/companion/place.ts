@@ -1,5 +1,5 @@
-// Where the companion goes on an edge (PLAN.md §4b, M2 C2). Pure: CSS px and art px in, CSS px out.
-import { anchorOf, REQUIRED_ANIMATIONS, type AnimationName, type Skin } from "./skin";
+// Where the companion goes on the card's outline (PLAN.md §4b, M2 C2, C3). Pure: CSS px and art px in, CSS px out.
+import { anchorOf, type AnimationName, type Skin } from "./skin";
 
 /** An edge in its container's CSS px: the line the creature stands on, from `left` for `width` px. */
 export interface EdgeBox {
@@ -83,23 +83,6 @@ export function placeAround(
   const y = card.top + (pos - a.y) * px;
   if (surface === "left") return { left: card.left - (a.x + 1) * px, top: y, mirrored: false };
   return { left: card.left + card.width - (skin.grid - 1 - a.x) * px, top: y, mirrored: true };
-}
-
-/** Animations shown on the top edge: all but the outline's own (`climb` on the sides, `hang` under the bottom). */
-const ON_TOP = REQUIRED_ANIMATIONS.filter((name) => name !== "climb" && name !== "hang");
-
-/**
- * How far (CSS px) the sprite can reach sideways of an anchor position, in any pose shown on the top and either facing.
- * The edge it walks is the card's top edge shortened by this at both ends, so no pose ever pokes out past the card's
- * sides and into the window's clip (C2b; C3b adds side margins and lifts this).
- */
-export function edgeInset(skin: Skin, px: number): number {
-  let reach = 0;
-  for (const name of ON_TOP) {
-    const a = anchorOf(skin, name);
-    reach = Math.max(reach, a.x, skin.grid - 1 - a.x);
-  }
-  return reach * px;
 }
 
 /** How far (CSS px) the sitting pose's legs hang below the edge: from the anchor row to the lowest opaque row. */

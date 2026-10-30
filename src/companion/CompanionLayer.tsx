@@ -1,13 +1,14 @@
-// The companion in the production player (PLAN.md §4b, M2 C2b). It lives in `.mp-root` outside `.mp-window` (like the
-// effect filters), in a fixed, zero-size layer at the window's origin, so no theme's positioning or clipping can
-// reach it. The layer measures `.mp-window`'s top edge and the parts near it, and re-measures when any of them move
-// (the card's height changes with its state, T3 reveals its controls on hover), so the pet rides a moving edge.
+// The companion in the production player (PLAN.md §4b, M2 C2b, C3b). It lives in `.mp-root` outside `.mp-window` (like
+// the effect filters), in a fixed, zero-size layer at the window's origin, so no theme's positioning or clipping can
+// reach it. The layer measures `.mp-window`'s outline and the parts near its top, and re-measures when any of them
+// move (the card's height changes with its state, T3 reveals its controls on hover), so the pet rides a moving edge.
+// The window's margin on every side (App.tsx) is the room it climbs and hangs in.
 import { useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { hashString } from "../fx/beat";
 import { Companion } from "./Companion";
-import { measureTopEdge, type Box } from "./measure";
+import { measureOutline, type Box } from "./measure";
 import { artPixelPx } from "./pixel";
-import type { EdgeBox } from "./place";
+import type { EdgeBox, Outline } from "./place";
 import type { Skin } from "./skin";
 import { useDevicePixelRatio } from "./useDevicePixelRatio";
 
@@ -19,6 +20,7 @@ const PART_SELECTOR = [
 
 interface Measured {
   edge: EdgeBox;
+  outline: Outline;
   blocked: [number, number][];
 }
 
@@ -50,17 +52,16 @@ export function CompanionLayer({
     let frame = 0;
     const measure = () => {
       frame = 0;
-      const { edge, blocked } = measureTopEdge(
+      // The card's sides on whole device px, so the art never lands between them (the C1 sharpness rule) and the right
+      // side and the bottom sit exactly where the card ends.
+      const r = toBox(card.getBoundingClientRect());
+      const { edge, outline, blocked } = measureOutline(
         skin,
-        toBox(card.getBoundingClientRect()),
+        { left: snap(r.left), top: snap(r.top), right: snap(r.right), bottom: snap(r.bottom) },
         [...card.querySelectorAll(PART_SELECTOR)].map((el) => toBox(el.getBoundingClientRect())),
         px,
       );
-      // Whole device px, so the art never lands between them (the C1 sharpness rule); the width rounds down.
-      const next: Measured = {
-        edge: { left: snap(edge.left), top: snap(edge.top), width: Math.floor(edge.width * dpr) / dpr },
-        blocked,
-      };
+      const next: Measured = { edge, outline, blocked };
       const key = JSON.stringify(next);
       if (key === sent.current) return;
       sent.current = key;
@@ -100,6 +101,7 @@ export function CompanionLayer({
           playing={playing}
           trackKey={trackKey}
           edge={measured.edge}
+          outline={measured.outline}
           blocked={measured.blocked}
           seed={hashString(skin.id)}
           dpr={dpr}

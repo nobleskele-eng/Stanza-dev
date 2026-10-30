@@ -1,6 +1,6 @@
-// Where the companion's top edge is, measured from the player's real parts (PLAN.md §4b, M2 C2b). Pure: boxes in, boxes
-// out, all in one coordinate space (CSS px of the viewport, which the pet's fixed layer shares).
-import { edgeInset, sitDepth, type EdgeBox } from "./place";
+// Where the companion's surfaces are, measured from the player's real parts (PLAN.md §4b, M2 C2b, C3b). Pure: boxes
+// in, boxes out, all in one coordinate space (CSS px of the viewport, which the pet's fixed layer shares).
+import { sitDepth, type EdgeBox, type Outline } from "./place";
 import type { Skin } from "./skin";
 
 export interface Box {
@@ -11,14 +11,15 @@ export interface Box {
 }
 
 /**
- * The edge the creature walks (the card's top, shortened by the sprite's sideways reach) and the stretches of it
+ * The card's outline (the pet climbs outside its sides and hangs under its bottom), the top edge it walks (the
+ * card's whole top: the window's margin on every side leaves the corners room, C3b), and the stretches of the top
  * where sitting would hang its legs over a part. `parts` are the player's artwork, text, controls and source badge:
  * any that reaches up into the legs' depth below the card's top blocks the stretch it spans (`noSitRanges` turns that
  * into anchor positions). Blocked stretches are relative to the edge's start.
  */
-export function measureTopEdge(skin: Skin, card: Box, parts: readonly Box[], px: number) {
-  const inset = edgeInset(skin, px);
-  const edge: EdgeBox = { left: card.left + inset, top: card.top, width: Math.max(px, card.right - card.left - 2 * inset) };
+export function measureOutline(skin: Skin, card: Box, parts: readonly Box[], px: number) {
+  const outline: Outline = { left: card.left, top: card.top, width: Math.max(px, card.right - card.left), height: Math.max(px, card.bottom - card.top) };
+  const edge: EdgeBox = { left: outline.left, top: outline.top, width: outline.width };
   const reach = card.top + sitDepth(skin, px);
   const blocked: [number, number][] = parts
     .filter((b) => b.right > b.left && b.bottom > b.top && b.bottom > card.top && b.top < reach)
@@ -31,5 +32,5 @@ export function measureTopEdge(skin: Skin, card: Box, parts: readonly Box[], px:
     if (last && r[0] <= last[1]) last[1] = Math.max(last[1], r[1]);
     else merged.push([r[0], r[1]]);
   }
-  return { edge, blocked: merged };
+  return { outline, edge, blocked: merged };
 }

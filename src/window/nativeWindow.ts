@@ -10,17 +10,18 @@ const NO_DRAG_SELECTOR = "button, input, a, [data-no-drag]";
 
 /**
  * Set the native window to a theme's declared `window` size (logical px, so DPI scaling applies), then move it
- * `moveY` logical px down (negative = up). The companion's top margin grows the window upward by exactly the
- * margin it adds, so the card stays where it was on screen (M2 C2b). Never rejects.
+ * `move` logical px right and down (negative = left and up). The companion's margin grows the window by the same
+ * amount on every side, so moving it by minus the margin keeps the card where it was on screen (M2 C2b, C3b).
+ * Never rejects.
  */
-export async function fitWindowToTheme(size: { width: number; height: number }, moveY = 0): Promise<void> {
+export async function fitWindowToTheme(size: { width: number; height: number }, move = 0): Promise<void> {
   if (!isTauri()) return;
   const win = getCurrentWindow();
   try {
     await win.setSize(new LogicalSize(size.width, size.height));
-    if (moveY) {
+    if (move) {
       const [at, scale] = await Promise.all([win.outerPosition(), win.scaleFactor()]);
-      await win.setPosition(new LogicalPosition(at.x / scale, at.y / scale + moveY));
+      await win.setPosition(new LogicalPosition(at.x / scale + move, at.y / scale + move));
     }
   } catch (e) {
     console.error("fitting the window failed", e);

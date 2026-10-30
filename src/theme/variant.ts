@@ -21,7 +21,8 @@ import { WCAG_AA_NORMAL, contrastRatio, parseColor } from "./contrast";
 // parts, the simulated `--mp-beat` variable, and `effects` in variants. Purely additive.
 // v5 (2026-09-23): design round 2 (T5) — `data-fx-flow|morph|debris`, the `splitflap` text effect, `.mp-flow` /
 // `.mp-debris` parts, app-provided artwork filter ids, `--mp-flap-*` tokens, theme.json `fx`. Purely additive.
-export const CONTRACT_VERSION = 7;
+// v6–v8: the lyrics button and the companion; their notes are in docs/THEME_CONTRACT.md's change list.
+export const CONTRACT_VERSION = 8;
 
 export type ControlType = "color" | "length" | "number" | "font";
 

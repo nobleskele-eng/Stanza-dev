@@ -80,7 +80,7 @@ export const pilcrow = {
     idle: { fps: 1, loop: true, frames: [standing, blink], durations: [2800, 160] },
     walk: { fps: 4, loop: true, frames: [stand("open", "stepA"), stand("open", "stepB")], steps: [2, 2] },
     sit: { fps: 1, loop: true, frames: [sit("open"), sit("closed")], durations: [3200, 160], anchor: { x: 10, y: 10 } },
-    climb: { fps: 3, loop: true, frames: [climb("stepA"), climb("stepB")] },
+    climb: { fps: 3, loop: true, frames: [climb("stepA"), climb("stepB")], steps: [2, 2] }, // the walk turned: same stride
     hang: { fps: 1, loop: true, frames: [hang(0), hang(1)], durations: [1400, 1400] },
     sleep: { fps: 1, loop: true, frames: [sleeping(Z[0]), sleeping(Z[1])], durations: [4000, 4000] },
     wake: { fps: 4, loop: false, frames: [sleeping(blank(1, 1)), stand("half", "squat"), standing] },

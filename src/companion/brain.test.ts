@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { BUDGET_PER_MINUTE, DROWSY_MS, SLEEP_LOOPS, advance, createBrain, nextChangeAt, pose, setWorld, trackChanged, type Brain, type Pose, type World } from "./brain";
 import { SKINS } from "./registry";
-import type { Skin } from "./skin";
+import { stepPx, type Skin } from "./skin";
 
 const MINUTE = 60_000;
 const playing: World = { playing: true, reducedMotion: false, edge: { length: 160, noSit: [] } };
@@ -222,7 +222,9 @@ describe("companion brain around the card (C3a)", () => {
             expect(corner, `seed ${seed}: ${prev.surface} → ${p.surface} isn't a corner`).toBeDefined();
             expect([prev.x, p.x], `seed ${seed}: ${prev.surface} → ${p.surface}`).toEqual(corner);
           } else if (p.animation === "climb" && prev.animation === "climb") {
-            expect(Math.abs(p.x - prev.x), `seed ${seed}: climbs 1 px a frame`).toBeLessThanOrEqual(1);
+            // At most the step for entering this frame (its stride, or none while it clings): never a catch-up jump.
+            const most = stepPx("climb", skin.animations.climb, p.frame);
+            expect(Math.abs(p.x - prev.x), `seed ${seed}: climbs a frame's step at a time`).toBeLessThanOrEqual(most);
           }
           prev = p;
         }

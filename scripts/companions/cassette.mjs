@@ -75,7 +75,7 @@ export const cassette = {
     idle: { fps: 1, loop: true, frames: [stand(), stand("closed")], durations: [2800, 160] },
     walk: { fps: 4, loop: true, frames: [stand("open", "stepA"), stand("turn", "stepB")], steps: [2, 2] },
     sit: { fps: 1, loop: true, frames: [sit("open", "sitA"), sit("open", "sitB")], durations: [2400, 2400], anchor: { x: 8, y: 11 } },
-    climb: { fps: 3, loop: true, frames: [rotCCW(stand("open", "stepA")), rotCCW(stand("turn", "stepB"))] },
+    climb: { fps: 3, loop: true, frames: [rotCCW(stand("open", "stepA")), rotCCW(stand("turn", "stepB"))], steps: [2, 2] }, // the walk turned: same stride
     hang: { fps: 1, loop: true, frames: [hang(0), hang(1)], durations: [1400, 1400] },
     sleep: { fps: 1, loop: true, frames: [frame([stand("closed", "tuck"), 0, 0], [Z[0], 12, 0]), frame([stand("closed", "tuck"), 0, 0], [Z[1], 13, 1])], durations: [4000, 4000] },
     wake: { fps: 4, loop: false, frames: [stand("closed", "tuck"), stand("turn"), stand()] },

@@ -3111,3 +3111,68 @@ one of the skin layers (PLAN.md §4b), so nothing structural changes.
     time-lapses in WebKit).
   - Not run: the real exe (nothing in production changed), `cargo test`.
 - **Next: C3b** (production margins on every side, contract v8, the tuning above), then **C3c** corner art with you.
+
+## 2026-10-29 — M2 C3b: the companion travels the whole card in the real player; contract v8
+- **Window:** with the companion on, the native window is the theme's size plus the pet's box on **every** side, and
+  it moves left and up by the box, so the card stays put (`App.tsx`, `fitWindowToTheme`'s move now applies to both
+  axes). `.app-stage` pads by the box on every side; the card stays centred because the padding is symmetric.
+- **Measuring:** `measureOutline` (was `measureTopEdge`) gives the card's whole box and its whole top width; the
+  side-reach inset is gone (`edgeInset` deleted: the side margins replace it). The card's edges are snapped to device px
+  on both sides of each axis, so the right side and the bottom sit exactly where the card ends. `CompanionLayer` passes
+  the outline, so production runs C3a's brain.
+- **Tuning (the C3a note):** each species' `climb` is its walk turned a quarter (`scripts/companions/*.mjs`), so it now
+  keeps the walk's stride: `steps` `[2, 2]` for pilcrow and cassette, `[4, 0]` (inching) for bookworm. The test dummy
+  keeps 1 a frame. Regenerated: the three `companion.json` files changed only by those `steps`. Simulated on a T1-sized
+  card (sides 274 art px), 5 seeds × an hour: time on the sides fell from 32–44% to 22–25% for the species, activity
+  from 62–68 to 58–61 steps a minute, the busiest minute still at the 90 cap.
+- **Contract v8:** `data-pet-surface` gains `right | bottom | left`, `data-pet-state` gains `climb | hang`, and the
+  window's margin is on every side. Nothing renamed or removed; all five themes at `contract: 8`. The `theme.json`
+  `companion` field is still not read: every theme gets all four edges, and nothing in the five themes needed a
+  restriction (the e2e below checks every theme's real layout).
+- **How often it goes around (a design note, not a bug):** a pet reaches a corner only when a walk runs out at an end
+  of the top, and turns half the time. On a real card that's 1–2 of ~30–40 walks per half hour, so for some seeds the
+  first trip takes over 30 minutes (simulated: the test dummy's production seed made no corner turn in 30 minutes on a
+  T1-sized card; the cassette's first came at 21 minutes). Across seeds it's ~7–16 corners an hour on a T1-sized card.
+  Left as designed; say if you'd like trips more often.
+- **E2E (`companion-player.spec.ts`), redesigned around that:**
+  - The toggle test now gives the page the size the app asked for, as Tauri would, so a centred card's sideways shift
+    shows: on, it moves right and down by the box inside a window that moved left and up by it.
+  - **Every theme × species** (Chromium; WebKit one species per theme): up to 10 minutes of play (3 in WebKit), or
+    until it has been all the way around. Every drawn pixel is checked each second: inside the window, over no part,
+    off the card while off the card's top. Then it's paused: within a minute it settles, and then nothing changes.
+  - **Every theme** (Chromium): species one after another until one has climbed a side and hung, checked the same
+    way. Each theme got there with its first species, in 4–9 s of test time.
+  - **Mutation-checked:**
+    - Not passing the outline fails the per-theme tests ("no species climbed a side and hung").
+    - Moving the right-side climber 1 art px onto the card fails the pixel check where a right-side climb happens.
+      The unit tests check that geometry for every skin, on both sides.
+- **Surprise: Playwright's WebKit (its Windows port) reported a stale position.** In "it rides a moving card"
+  (real clock), WebKit drew the pet in the right place after the resize: a forced repaint (a screenshot) showed it on the
+  card. But until that repaint, `getBoundingClientRect` and even `getComputedStyle(pet).transform` kept the old
+  position: for 5 s, across animation frames, in about half the runs. The inline transform the app set was right. The
+  test now reads that transform (the layer sits at the window's origin). Diagnosed before the retry, per the rules.
+  **Untested on macOS:** whether WKWebView (a different WebKit port) ever shows the pet late after a card move.
+- **Retired with the inset:** `place.test.ts`'s inset pin (C3a's guarantee that production hadn't changed; it changes
+  on purpose now). `brain.test.ts`'s climb check is now "at most this frame's step", which still rules out the C3a
+  catch-up jump.
+- **Real exe (ran), `npm run tauri build -- --no-bundle` OK, including `check-fixtures-excluded: OK`.** Spotify was
+  playing; right-clicks on the artwork only.
+  - Off: window 340×600 at (2231, 404), card at (2261, 404).
+  - On: window 404×664 at (2199, 372), +32 on every side and moved (−32, −32). The card stayed at (2261, 404).
+  - Relaunched twice with it on: the same window and the same card position, so no creep in either axis.
+  - Off again: back to 340×600 at (2231, 404), card at (2261, 404).
+  - A capture of the real window showed the pilcrow on the card's top edge near the left corner, with the desktop
+    showing through the margin.
+  - Settings restored (Default, companion off); no page errors.
+  - Not seen in the real exe: a climb or a hang. That would take minutes to hours of real time. The e2e covers it.
+- **Checks run (Windows):**
+  - `npx tsc --noEmit`: clean.
+  - `npx vitest run`: 22 files, 234 passed.
+  - `npm run build`: passed, check-fixtures-excluded OK.
+  - `npx playwright test`: 767 passed, 23 skipped (Chromium + WebKit; the 5 new skips are WebKit's copies of the
+    per-theme test).
+  - The release build and the real-exe drive above.
+  - **Not run:** `cargo test` (no Rust changed); CPU (the cap and the change cost are the same as C2b's measurement,
+    in a window 404×664 instead of 340×632).
+- **Open:** the one-frame jump on toggling now goes sideways as well as up (your "keep it for now" stands). C3c corner
+  art with you. How often trips should happen, if you want more.

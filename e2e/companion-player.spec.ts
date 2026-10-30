@@ -28,7 +28,8 @@ const PART_SELECTOR = [
   ".mp-artwork", ".mp-meta", ".mp-progress", ".mp-time-current", ".mp-time-total", ".mp-controls",
   ".mp-volume-wrap", ".mp-link-out", ".mp-source-badge", ".mp-empty", ".mp-error",
 ].join(", ");
-const PET_STATES = ["idle", "walk", "sit", "sleep", "wake", "react"]; // contract v7, C2b
+const PET_STATES = ["idle", "walk", "sit", "sleep", "wake", "react", "climb", "hang"]; // contract v8, C3b
+const PET_SURFACES = ["top", "right", "bottom", "left"];
 // Where the fake says the window is (physical px, scale 1), so a move reads as a plain offset from it.
 const AT = { x: 100, y: 300 };
 
@@ -148,13 +149,20 @@ test("off by default: no companion part exists, the window is the theme's size a
   expect(stored.companion).toMatchObject({ on: false, skin: "pilcrow" });
 });
 
-test("the menu turns it on and off: the parts come and go, the window grows upward by the pet's box and back, the card stays put on screen, and it's saved", async ({ page }) => {
+/** Gives the page the size the app last asked of the native window, as Tauri would (logical px = CSS px here). */
+async function applyWindowSize(page: Page) {
+  const { width, height } = (last(await ipcCalls(page, "plugin:window|set_size")).args.value as { Logical: { width: number; height: number } }).Logical;
+  await page.setViewportSize({ width, height });
+}
+
+test("the menu turns it on and off: the parts come and go, the window grows by the pet's box on every side and back, the card stays put on screen, and it's saved", async ({ page }) => {
   await fakeTauri(page, spotifyState(Date.now()));
+  const { width, height } = themeJson("t1-default").window;
+  await page.setViewportSize({ width, height });
   await page.goto("/");
   const card = page.locator(".mp-window");
   await expect(page.locator(".mp-root")).toHaveAttribute("data-status", "playing");
-  const { width, height } = themeJson("t1-default").window;
-  const y0 = (await card.boundingBox())!.y;
+  const { x: x0, y: y0 } = (await card.boundingBox())!;
 
   // On.
   const off = await toggleFromMenu(page);
@@ -164,9 +172,19 @@ test("the menu turns it on and off: the parts come and go, the window grows upwa
   const margin = await page.locator(".app-stage").evaluate((el) => parseFloat(getComputedStyle(el).paddingTop));
   expect(margin).toBeGreaterThan(0);
   expect(margin % 4, "the margin is a sprite box, a multiple of the 4 px layout grid").toBe(0);
-  await expect.poll(async () => last(await ipcCalls(page, "plugin:window|set_size")).args.value).toEqual({ Logical: { width, height: height + margin } });
-  await expect.poll(async () => last(await ipcCalls(page, "plugin:window|set_position"))?.args.value).toEqual({ Logical: { x: AT.x, y: AT.y - margin } });
-  // The window moved up by the margin and the card moved down inside it by the same: on screen it didn't move.
+  const pads = await page.locator(".app-stage").evaluate((el) => {
+    const s = getComputedStyle(el);
+    return [s.paddingTop, s.paddingRight, s.paddingBottom, s.paddingLeft].map(parseFloat);
+  });
+  expect(pads, "the same margin on every side").toEqual([margin, margin, margin, margin]);
+  await expect
+    .poll(async () => last(await ipcCalls(page, "plugin:window|set_size")).args.value)
+    .toEqual({ Logical: { width: width + 2 * margin, height: height + 2 * margin } });
+  await expect.poll(async () => last(await ipcCalls(page, "plugin:window|set_position"))?.args.value).toEqual({ Logical: { x: AT.x - margin, y: AT.y - margin } });
+  // The window moved left and up by the margin and the card moved right and down inside it by the same: on screen it
+  // didn't move.
+  await applyWindowSize(page);
+  await expect.poll(async () => (await card.boundingBox())!.x).toBeCloseTo(x0 + margin, 5);
   expect((await card.boundingBox())!.y).toBeCloseTo(y0 + margin, 5);
   let stored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!), APPEARANCE_STORAGE_KEY);
   expect(stored.companion).toMatchObject({ on: true });
@@ -177,7 +195,9 @@ test("the menu turns it on and off: the parts come and go, the window grows upwa
   expect(on).not.toHaveProperty("checked");
   await expect(page.locator(".mp-companion-layer, .mp-companion")).toHaveCount(0);
   await expect.poll(async () => last(await ipcCalls(page, "plugin:window|set_size")).args.value).toEqual({ Logical: { width, height } });
-  await expect.poll(async () => last(await ipcCalls(page, "plugin:window|set_position")).args.value).toEqual({ Logical: { x: AT.x, y: AT.y + margin } });
+  await expect.poll(async () => last(await ipcCalls(page, "plugin:window|set_position")).args.value).toEqual({ Logical: { x: AT.x + margin, y: AT.y + margin } });
+  await applyWindowSize(page);
+  await expect.poll(async () => (await card.boundingBox())!.x).toBeCloseTo(x0, 5);
   expect((await card.boundingBox())!.y).toBeCloseTo(y0, 5);
   stored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!), APPEARANCE_STORAGE_KEY);
   expect(stored.companion).toMatchObject({ on: false });
@@ -190,7 +210,9 @@ test("saved on, a launch sizes the window with the margin but doesn't move it (t
   await expect(page.locator(".mp-companion")).toHaveCount(1);
   const { width, height } = themeJson("t1-default").window;
   const margin = await page.locator(".app-stage").evaluate((el) => parseFloat(getComputedStyle(el).paddingTop));
-  await expect.poll(async () => last(await ipcCalls(page, "plugin:window|set_size"))?.args.value).toEqual({ Logical: { width, height: height + margin } });
+  await expect
+    .poll(async () => last(await ipcCalls(page, "plugin:window|set_size"))?.args.value)
+    .toEqual({ Logical: { width: width + 2 * margin, height: height + 2 * margin } });
   expect(await ipcCalls(page, "plugin:window|set_position")).toEqual([]);
 });
 
@@ -219,7 +241,8 @@ test("the parts match the contract: where they sit, what they carry, and that th
   });
   expect(shape.layerParent).toContain("mp-root");
   expect(shape.afterWindow, ".mp-companion-layer comes after .mp-window").toBe(true);
-  expect(shape).toMatchObject({ layerHidden: "true", layerPointer: "none", petHidden: "true", petPointer: "none", surface: "top" });
+  expect(shape).toMatchObject({ layerHidden: "true", layerPointer: "none", petHidden: "true", petPointer: "none" });
+  expect(PET_SURFACES).toContain(shape.surface);
   expect(PET_STATES).toContain(shape.state);
   expect(shape.transform).toMatch(/^translate\(/);
   for (const c of shape.slots) expect(c).toMatch(/^mp-pet-c[1-8]$/);
@@ -266,7 +289,13 @@ const snapshot = (page: Page) =>
     const parts = [...document.querySelectorAll(partSelector)]
       .map((el) => ({ part: el.className.toString(), ...rect(el) }))
       .filter((b) => b.right > b.left && b.bottom > b.top);
-    return { state: pet.getAttribute("data-pet-state")!, x: box.left, pixels, parts, card: rect(document.querySelector(".mp-window")!) };
+    return {
+      state: pet.getAttribute("data-pet-state")!,
+      surface: pet.getAttribute("data-pet-surface")!,
+      pixels,
+      parts,
+      card: rect(document.querySelector(".mp-window")!),
+    };
   }, PART_SELECTOR);
 
 /** Lets React finish what it has queued (see companion-brain.spec.ts: DevTools commands overtake React's commits). */
@@ -284,54 +313,102 @@ const EPS = 0.01;
 const overlaps = (a: { left: number; top: number; right: number; bottom: number }, b: typeof a) =>
   a.left < b.right - EPS && b.left < a.right - EPS && a.top < b.bottom - EPS && b.top < a.bottom - EPS;
 
+const STEP = 1000;
+
+/**
+ * The production player in its real window (the theme's size plus the pet's box on every side, C3b, so "inside the
+ * window" is "inside the viewport") on a paused fake clock, and a `step` that moves time on by STEP and checks every
+ * drawn pixel: inside the window, over no part, and off the card while the pet is off the card's top. Sized before the
+ * page loads: shrinking it afterwards moves the card under a pet whose re-measure waits for an animation frame, and
+ * under the paused fake clock that frame sometimes hadn't come by the first check (the moving card has its own test,
+ * on the real clock, below).
+ */
+async function timeLapse(page: Page, theme: string, skin: string) {
+  const margin = spriteBoxPx(skinGrid(skin), artPixelPx(await page.evaluate(() => devicePixelRatio)));
+  const { width, height } = themeJson(theme).window;
+  const view = { width: width + 2 * margin, height: height + 2 * margin };
+  await page.setViewportSize(view);
+  const t0 = Date.now();
+  await saveAppearance(page, theme, { on: true, skin, palette: "default" });
+  await fakeTauri(page, spotifyState(t0));
+  await page.clock.install({ time: t0 });
+  await page.goto("/");
+  await page.locator(".mp-companion").waitFor();
+  expect(await page.locator(".app-stage").evaluate((el) => parseFloat(getComputedStyle(el).paddingTop))).toBe(margin);
+  await page.clock.pauseAt(t0 + 1000); // from here on, time moves only when the test moves it
+  await settle(page);
+
+  const seen = new Set<string>();
+  let t = 0;
+  const step = async () => {
+    await page.clock.runFor(STEP);
+    t += STEP;
+    const s = await snapshot(page);
+    seen.add(`${s.surface}/${s.state}`);
+    // Collected, then one expect a step: Playwright records every expect call as a step, and one per pixel and
+    // part (~600 a step) took a 120 s time-lapse past its 3-minute timeout.
+    const wrong = new Set<string>();
+    for (const p of s.pixels) {
+      if (p.left < -EPS || p.top < -EPS || p.right > view.width + EPS || p.bottom > view.height + EPS) wrong.add("a pixel outside the window");
+      for (const part of s.parts) if (overlaps(p, part)) wrong.add(`a pixel over ${part.part}`);
+      if (s.surface !== "top" && overlaps(p, s.card)) wrong.add("a pixel on the card while off its top");
+    }
+    expect([...wrong], `${theme} × ${skin}: ${s.state} on ${s.surface}, t=${t} ms`).toEqual([]);
+    return s;
+  };
+  const elapsed = () => t;
+  /** It has climbed a side and hung under the bottom. */
+  const around = () => (seen.has("left/climb") || seen.has("right/climb")) && seen.has("bottom/hang");
+  const pause = () => emitSpotify(page, spotifyState(t0, { seq: 4, status: "paused" }));
+  return { step, seen, elapsed, around, pause };
+}
+
+/**
+ * How long each time-lapse plays. A pet only reaches a corner when a walk runs out at an end of the top, and turns
+ * half of those times, so on a real card a seed's first trip around can take more than half an hour (DECISIONS.md
+ * 2026-10-29). Each pair plays a fixed stretch; the per-theme test below makes sure each layout gets a trip around.
+ */
+const PLAY = { chromium: 10 * 60_000, webkit: 3 * 60_000 } as Record<string, number>;
+
 for (const [i, theme] of THEME_IDS.entries())
   for (const skin of SKIN_IDS)
-    test(`time-lapse, ${theme} × ${skin}: the pet stays inside the window over the card's width and never covers a part`, async ({ page, browserName }) => {
+    test(`time-lapse, ${theme} × ${skin}: wherever it goes, the pet stays inside the window, covers no part, and holds still once paused`, async ({ page, browserName }) => {
       // Every pair in Chromium. WebKit's DevTools round trips are ~10× Chromium's (companion-brain.spec.ts), so there it
       // runs one skin per theme, taking turns, which still covers every skin (docs/DECISIONS.md 2026-10-29).
       test.skip(browserName === "webkit" && skin !== SKIN_IDS[i % SKIN_IDS.length], "WebKit: one skin per theme");
       test.setTimeout(180_000);
-      // The real window from the start: the theme's size plus the pet's box on top, so "inside the window" is "inside
-      // the viewport". Sized before the page loads: shrinking it afterwards moves the card under a pet whose re-measure
-      // waits for an animation frame, and under the paused fake clock that frame sometimes hadn't come by the first
-      // check (the moving card has its own test, on the real clock, below).
-      const margin = spriteBoxPx(skinGrid(skin), artPixelPx(await page.evaluate(() => devicePixelRatio)));
-      const { width, height } = themeJson(theme).window;
-      await page.setViewportSize({ width, height: height + margin });
-      const t0 = Date.now();
-      await saveAppearance(page, theme, { on: true, skin, palette: "default" });
-      await fakeTauri(page, spotifyState(t0));
-      await page.clock.install({ time: t0 });
-      await page.goto("/");
-      await page.locator(".mp-companion").waitFor();
-      expect(await page.locator(".app-stage").evaluate((el) => parseFloat(getComputedStyle(el).paddingTop))).toBe(margin);
-      await page.clock.pauseAt(t0 + 1000); // from here on, time moves only when the test moves it
-      await settle(page);
-
-      const seen = new Set<string>();
-      const xs = new Set<number>();
-      // 90 s of playing in 500 ms steps, then 30 s paused: long enough to fall asleep and hold still.
-      for (let t = 0; t < 120_000; t += 500) {
-        if (t === 90_000) await emitSpotify(page, spotifyState(t0, { seq: 4, status: "paused" }));
-        await page.clock.runFor(500);
-        const s = await snapshot(page);
-        seen.add(s.state);
-        xs.add(Math.round(s.x));
-        // Collected, then one expect a step: Playwright records every expect call as a step, and one per pixel and
-        // part (~600 a step) took a 120 s time-lapse past its 3-minute timeout.
-        const wrong = new Set<string>();
-        for (const p of s.pixels) {
-          if (p.top < -EPS) wrong.add("a pixel above the window's top");
-          if (p.left < s.card.left - EPS) wrong.add("a pixel left of the card");
-          if (p.right > s.card.right + EPS) wrong.add("a pixel right of the card");
-          for (const part of s.parts) if (overlaps(p, part)) wrong.add(`a pixel over ${part.part}`);
-        }
-        expect([...wrong], `${s.state} at x=${s.x}, t=${t + 500} ms`).toEqual([]);
+      const run = await timeLapse(page, theme, skin);
+      while (run.elapsed() < PLAY[browserName] && !run.around()) await run.step();
+      for (const k of run.seen) {
+        const [surface, state] = k.split("/");
+        expect(PET_SURFACES, k).toContain(surface);
+        expect(PET_STATES, k).toContain(state);
       }
-      for (const state of seen) expect(PET_STATES).toContain(state);
-      expect(seen, "paused, it fell asleep (DROWSY_MS after the pause)").toContain("sleep");
-      expect(xs.size, "the pet walked at least once in 90 s of music").toBeGreaterThan(1);
+      expect(run.seen, "it walked").toContain("top/walk");
+      // Paused, wherever it is: within a minute it settles (asleep on the top, or holding still off it), then nothing
+      // changes at all.
+      await run.pause();
+      for (let n = 0; n < 60; n++) await run.step();
+      const held = JSON.stringify(await run.step());
+      for (let n = 0; n < 30; n++) await page.clock.runFor(STEP);
+      expect(JSON.stringify(await snapshot(page)), "still, paused").toBe(held);
     });
+
+for (const theme of THEME_IDS)
+  test(`around ${theme}: a pet climbs a side and hangs under the bottom, checked pixel by pixel all the way`, async ({ page, browserName }) => {
+    // Engine-independent (where the pet goes is the brain's arithmetic); the pairs above run WebKit's layouts.
+    test.skip(browserName === "webkit", "engine-independent time-lapse; Chromium covers it");
+    test.setTimeout(180_000);
+    const tried: string[] = [];
+    // One species after another, each for up to half an hour of play, until one has been all the way around.
+    for (const skin of SKIN_IDS) {
+      const run = await timeLapse(page, theme, skin);
+      while (run.elapsed() < 30 * 60_000 && !run.around()) await run.step();
+      if (run.around()) return;
+      tried.push(`${skin}: ${[...run.seen].sort().join(", ")}`);
+    }
+    expect(tried, "no species climbed a side and hung").toEqual([]);
+  });
 
 test("it rides a moving card: when the window resizes and the card moves under it, the pet follows (real clock)", async ({ page }) => {
   // Paused and under reduced motion, so nothing else in the card changes (no position ticks, no entry animations or
@@ -341,22 +418,29 @@ test("it rides a moving card: when the window resizes and the card moves under i
   await fakeTauri(page, spotifyState(Date.now(), { status: "paused" }));
   await page.goto("/"); // Playwright's 1280-px-wide page: the card is centred far from the left
   await expect(page.locator(".mp-companion")).toHaveCount(1);
-  // Where the pet's box is against the card: its middle over the card's width, its feet at the card's top.
+  // Where the pet's box is against the card: its middle over the card's width, its feet at the card's top. Read from
+  // the transform the app set (the layer sits at the window's origin), not from the pet's layout box: after this
+  // resize, Playwright's WebKit (Windows port) kept reporting the old box, even in computed style, for 5 s and across
+  // animation frames, until a forced repaint, while drawing the pet in the right place (docs/DECISIONS.md 2026-10-29).
   const onCard = () =>
     page.evaluate(() => {
       const c = document.querySelector(".mp-window")!.getBoundingClientRect();
-      const p = document.querySelector(".mp-companion svg")!.getBoundingClientRect();
-      const mid = p.left + p.width / 2;
-      return { card: c.left, onCard: mid > c.left && mid < c.right && p.top < c.top && p.bottom > c.top };
+      const pet = document.querySelector(".mp-companion") as HTMLElement;
+      const svg = pet.querySelector("svg")!;
+      const [x, y] = (/translate\(([-\d.]+)px, ([-\d.]+)px\)/.exec(pet.style.transform) ?? []).slice(1).map(Number);
+      const p = { left: x, top: y, right: x + svg.width.baseVal.value, bottom: y + svg.height.baseVal.value };
+      const mid = (p.left + p.right) / 2;
+      const where = `pet ${pet.getAttribute("data-pet-state")} on ${pet.getAttribute("data-pet-surface")} at (${p.left}, ${p.top}), card at (${c.left}, ${c.top})–(${c.right}, ${c.bottom})`;
+      return { card: c.left, onCard: mid > c.left && mid < c.right && p.top < c.top && p.bottom > c.top, where };
     });
   expect(await page.evaluate(() => document.getAnimations().length), "nothing animating").toBe(0);
   const before = await onCard();
-  expect(before.onCard).toBe(true);
+  expect(before.onCard, before.where).toBe(true);
   const margin = await page.locator(".app-stage").evaluate((el) => parseFloat(getComputedStyle(el).paddingTop));
   const { width, height } = themeJson("t1-default").window;
-  await page.setViewportSize({ width, height: height + margin });
+  await page.setViewportSize({ width: width + 2 * margin, height: height + 2 * margin }); // the real window (C3b)
   await expect.poll(async () => (await onCard()).card).toBeLessThan(before.card - 200); // the card did move
-  await expect.poll(async () => (await onCard()).onCard).toBe(true);
+  await expect.poll(async () => ((r) => (r.onCard ? "on the card" : r.where))(await onCard())).toBe("on the card");
 });
 
 test("under reduced motion the pet holds a still pose while the music plays", async ({ page }) => {
