@@ -1959,6 +1959,22 @@ no customizer UI/persistence or Rust theme loader (Phase 4/5) — effects are ap
 - **Not yet run in the real exe:** your own old `tauri-app.exe` is still open (see Slice 5). The pending real-exe drive
   now also measures T1's placement and takes a capture; the results will be added here.
 
+## 2026-10-12 — School Mac session: what runs from the USB drive, and two doc mismatches
+- **Setup:** Node/npm from the drive, FAT32, no admin rights, no Rust, no Apple developer tools, no `git`. Nothing was
+  written to the Mac.
+- **Ran, on the Mac (macOS, untested for the native app):**
+  - `npx tsc --noEmit`: no errors.
+  - `npm test`: 14 files, 132 tests passed.
+  - `npm run build`: exit 0, including `check-fixtures-excluded: OK, no fixture markers found in dist/`.
+- **Tried and failed: `npx playwright install chromium webkit`.** The Chromium download stopped at ~10% with
+  `Unable to update lock within the stale threshold` on `ms-playwright/__dirlock`. Cause not verified; FAT32's coarse
+  timestamps or the slow download are the guesses. Not retried (same failure would likely repeat). So
+  `npm run test:e2e` was **not run** on the Mac; the Windows result in Slice 6 (610 passed) is the latest.
+- **Mismatch 1:** PLAN.md §8 names `npm run typecheck` and "lint"; `package.json` has neither. `tsc` only runs inside
+  `npm run build`. Use `npx tsc --noEmit` until a script is added.
+- **Mismatch 2:** PRIORITIZATION_PLAN.md says `main` is still the bare Tauri scaffold. The tree on `main` has the
+  themes T1–T5, `src/fx`, the e2e specs and Slices 1–6 logged above. That plan's description of `main` is out of date.
+
 ## 2026-10-17 — Plan v2: real music first, then a companion creature (docs only)
 - **Why:** you asked where we are and to revamp the plan around a new feature: a small companion creature, like the
   pixel pet on Claude's chat box. It walks, sits and hangs inside the player's frame and outside it (your sketch:
