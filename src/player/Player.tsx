@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { CompanionLayer } from "../companion/CompanionLayer";
+import type { Skin } from "../companion/skin";
 import { copy } from "../copy";
 import { AnimatedText, FxFilters, type TextFx } from "../fx/AnimatedText";
 import { Debris } from "../fx/Debris";
@@ -50,6 +52,8 @@ interface PlayerProps {
   onVolume?: (level: number) => void;
   /** The lyrics button: bring the source's own app forward (S6). */
   onLyrics?: () => void;
+  /** The companion (contract v7). Absent = off: no part is rendered. */
+  companion?: { skin: Skin; palette: string };
 }
 
 /**
@@ -72,6 +76,7 @@ export function Player({
   onPrevious,
   onVolume,
   onLyrics,
+  companion,
 }: PlayerProps) {
   // Track changes may be held back one frame so the browser can capture the old card first (morph).
   const { nowPlaying, positionMs } = useTrackTransition(
@@ -108,6 +113,7 @@ export function Player({
     };
   }, [artworkUrl]);
 
+  const windowRef = useRef<HTMLDivElement>(null);
   const shapesRef = useRef<SVGSVGElement>(null);
   const waveformRef = useRef<HTMLDivElement>(null);
   useBeat(
@@ -159,7 +165,7 @@ export function Player({
     >
       {/* Outside .mp-window: not a grid item, so it never needs a grid-area. */}
       <FxFilters palette={artPalette} />
-      <div className="mp-window">
+      <div className="mp-window" ref={windowRef}>
         {status === "idle" && <div className="mp-empty">{copy("idle")}</div>}
         {/* No session to read (Spotify not running): the same empty-state part, its own copy. */}
         {status === "unavailable" && !track && <div className="mp-empty">{copy("notRunning")}</div>}
@@ -253,6 +259,16 @@ export function Player({
 
         <div className="mp-source-badge">{copy("sourceBadge")}</div>
       </div>
+      {/* Contract v7: outside .mp-window like .mp-fx-filters, so no theme grid or clip reaches it. */}
+      {companion && (
+        <CompanionLayer
+          skin={companion.skin}
+          palette={companion.palette}
+          playing={status === "playing"}
+          trackKey={track ? `${track.title}::${track.artist}` : ""}
+          windowRef={windowRef}
+        />
+      )}
     </div>
   );
 }

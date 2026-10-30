@@ -1,9 +1,9 @@
 # Stanza — Theme Contract
 
-**Contract version: 6**
-**Status:** live at v6. v1 froze 2026-09-22 (every item in "Remaining before this
+**Contract version: 7**
+**Status:** live at v7. v1 froze 2026-09-22 (every item in "Remaining before this
 contract can be frozen" below was checked off); v2 and v3 followed the same day, v4 and v5 the day after,
-v6 on 2026-10-17, each in the same change as the code that needed it. Any further change to a part,
+v6 on 2026-10-17 and v7 on 2026-10-18, each in the same change as the code that needed it. Any further change to a part,
 attribute or variable name is a version bump made in the same change as the code that
 needs it.
 
@@ -39,6 +39,12 @@ needs it.
   theme that styles `.mp-btn-prev`/`.mp-btn-next` should style it the same way (every shipped theme groups it with
   them). Nothing renamed or removed: a v5 theme keeps working apart from its `contract` number, though an unstyled
   lyrics button would look like a plain browser button.
+- **v7 (2026-10-18):** the companion in the production player (PLAN.md §4b, M2 C2b). Added parts, rendered only while the
+  owner has the companion on: `.mp-companion-layer`, `.mp-companion` and the sprite slot classes `.mp-pet-c1`…`.mp-pet-c8`
+  (see **Companion**). Added the attributes `data-pet-state` and `data-pet-surface` on `.mp-companion`, and the
+  app-provided variables `--mp-pet-1`…`--mp-pet-8`. Nothing renamed or removed: a v6 theme keeps working apart from its
+  `contract` number. The `theme.json` `companion` field (allowed edges, an inner shelf) is not read yet: it arrives with
+  C3 and C5, in the same change as the code that reads it.
 
 This file is the source of truth for the class names, data attributes and CSS custom
 properties a Stanza theme may rely on. Most of it is checked by tests, not by hand:
@@ -178,6 +184,34 @@ customization layer.
 
 ---
 
+## Companion (v7, opt-in, app-provided)
+A small pixel-art creature (PLAN.md §4b, `docs/COMPANION.md`) that stands on the card's top edge. It is **not theme art**:
+the app draws it, a theme only has to leave it room. It is **off until the owner turns it on** (right-click menu), and
+while it is off none of these parts exist.
+
+- **`.mp-companion-layer`** — a child of `.mp-root` after `.mp-window` (like `.mp-fx-filters`, so it is not a grid item and
+  needs no `grid-area`), `aria-hidden`. A zero-size layer fixed at the window's origin, `pointer-events: none`, above the card
+  (`z-index: 1`). It measures `.mp-window`'s top edge and the parts near it, and follows them when they move.
+- **`.mp-companion`** — inside the layer: the creature. `aria-hidden`, `pointer-events: none` (until pick-up lands in C4).
+  Carries `data-pet-state` (`idle | walk | sit | sleep | wake | react` today; the rest of the skin format's 11 names come
+  with C3 and C4) and `data-pet-surface` (`top` today). Its position is an inline `transform` set by the app.
+- **`.mp-pet-c1`…`.mp-pet-c8`** — the sprite's colour slots: one SVG `<path>` per colour, filled from `--mp-pet-N`.
+- **`--mp-pet-1`…`--mp-pet-8`** — app-provided, set inline on the sprite, from the chosen skin's palette. Not theme-authored
+  and not editable: a palette is part of a skin, not of a theme.
+
+What a theme can rely on:
+- The native window is the theme's declared `window` size **plus a transparent margin on top** (the height of the creature's
+  box) while the companion is on. `.mp-window` does not move on screen when it is switched on or off.
+- The creature stands on the top edge of `.mp-window`, shortened at both ends by its sideways reach, so it never leaves the
+  card's width. Its legs may hang over the card's top; it only sits where they cover none of the artwork, controls, text parts
+  or source badge. Measured from the parts' real boxes, so a theme needs nothing declared to be safe.
+- It rides the edge: when the card's height or a part's box changes (state, T3's hover reveal) it re-measures.
+- It reacts only to playback state (playing, paused, a new track), never to the audio (D16). Under
+  `prefers-reduced-motion` it holds still poses.
+- Themes **must not** style, hide or reposition any of these parts. `.mp-companion-layer` and `.mp-companion` are not in the
+  **Parts** list because they are absent whenever the companion is off; `e2e/companion-player.spec.ts` checks this section
+  against the DOM instead.
+
 ## `theme.json`
 ```json
 {
@@ -185,7 +219,7 @@ customization layer.
   "name": "[NEEDS COPY]",
   "author": "[NEEDS COPY]",
   "version": "1.0.0",
-  "contract": 6,
+  "contract": 7,
   "layout": "strip",
   "layouts": ["strip"],
   "window": { "width": 400, "height": 202 },
@@ -466,7 +500,7 @@ the same property can still win. The guarantee in this section is *planned* unti
 ## Variants (customizer, D14)
 A variant is one JSON file per saved look, in `<app data dir>/variants/`, tied to one theme:
 ```json
-{ "theme": "<theme id>", "contract": 6, "layout": "strip",
+{ "theme": "<theme id>", "contract": 7, "layout": "strip",
   "overrides": { "--mp-bg": "#101010", "--mp-radius-window": "12px" },
   "hidden": ["album", "volume"],
   "effects": { "shapes": true, "waveform": true, "flow": true, "morph": true, "debris": true, "title": "splitflap", "artist": "ripple" } }

@@ -2836,6 +2836,57 @@ one of the skin layers (PLAN.md §4b), so nothing structural changes.
   - The lab in the Browser pane on the real clock, as above.
   - The real exe isn't involved: nothing companion-related is in the production DOM yet (C2b).
 
+## 2026-10-22 — M2 C2b on the school Mac: picking up unlogged work, a launch bug, and the e2e it was missing
+- **Surprise: C2b's code was already in the tree, unlogged.** Files dated 2026-10-21 (`CompanionLayer.tsx`,
+  `measure.ts` + tests, the window margin and menu toggle in `App.tsx`/`themeMenu.ts`, the saved
+  `companion` setting, contract v7 in THEME_CONTRACT.md and every `theme.json` at `contract: 7`) had no entry here,
+  and THEME_CONTRACT.md named `e2e/companion-player.spec.ts`, which didn't exist. git isn't available on this Mac,
+  so whether any of it was committed can't be seen from here. Treated as work in progress and finished below.
+- **Stale test found by reading:** `production.spec.ts` "right-click opens a native menu of every theme" expected the
+  menu to be exactly the theme names. The menu now ends with a separator and the companion's on/off item (whose label is
+  `[NEEDS COPY]`), so it would have failed. Updated: the theme items are checked as before, then the tail is
+  `[Separator, the toggle unchecked]`.
+- **Bug found by reading, fixed:** `tauri-plugin-window-state` restores the window's position (`StateFlags::POSITION`,
+  `lib.rs`). With the companion on, the position saved at exit already includes the top margin. But `App.tsx` started
+  `shifted` at 0, so every launch with the companion on moved the window up by the margin again: the card would creep
+  up 36–48 px per launch. `shifted` now starts at the launch margin, so a launch only sizes the window and never moves
+  it. Known limit: if the display scaling changed between sessions, the margin differs by a few px once.
+  Real-exe check pending.
+- **`e2e/companion-player.spec.ts` (new):**
+  - off by default (no parts, theme's exact size, no move);
+  - the menu turns it on and off: the parts come and go, `set_size` adds the margin, `set_position` moves up by it
+    (and back), the card's on-screen position is unchanged, and the setting is saved;
+  - saved on: launch sizes with the margin and never calls `set_position` (the regression test for the bug above);
+  - contract shape: layer after `.mp-window` in `.mp-root`, `aria-hidden`, `pointer-events: none`, state/surface
+    values, slot classes and `--mp-pet-N` only; a click over the pet never lands on it;
+  - a fake-clock time-lapse for every theme × every skin (20 cases): 90 s playing, then 30 s paused. At every 500 ms
+    step, each opaque art pixel (read from the SVG's runs, mirroring included) must be inside the window's top, inside
+    the card's width, and over no part. It must have walked, and fallen asleep after the pause;
+  - reduced motion: no DOM change in 2 minutes of music.
+- **Surprise: the e2e suite can't run on this Mac.**
+  - Playwright's bundled browsers still aren't on the drive (the 2026-10-12 download failure).
+  - Playwright driving the Mac's own Google Chrome (`channel: "chrome"`) launched and then stalled on the first
+    page load. Diagnosis before any retry: the dev server answered in ~2 ms, so it wasn't the server.
+  - The school's Chrome policy sets `IncognitoModeAvailability = 1` (private windows off), and every Playwright
+    test runs in a private (off-the-record) browser context. That fits the stall, but it isn't proven.
+  - It's a school restriction, so it wasn't worked around. Installing browsers onto the Mac's own disk is ruled
+    out too (nothing is written to the Mac).
+- **Checks run (2026-10-22, school Mac):**
+  - `npx tsc --noEmit`: clean.
+  - `npx vitest run`: 21 files, 212 passed.
+  - `npm run build`: passed, check-fixtures-excluded OK.
+  - Both e2e specs touched here type-check, with a throwaway tsconfig that adds `e2e/` and ES2022 (`tsconfig.json`
+    only covers `src`): clean.
+  - **Not run:** `npx playwright test` (any spec, either engine). The new spec and the menu-test change have never
+    executed. Run them on Windows first.
+- **Still open for C2b (Windows):**
+  - the full e2e in both engines;
+  - in the real exe:
+    - turning it on/off leaves the card still on screen. `setSize` and then `setPosition` are two calls, so watch for
+      a one-frame jump;
+    - relaunching with it on doesn't move the card;
+    - idle CPU with the pet on.
+
 ## 2026-10-22 — M1 leftover: the first approved copy
 - **Your answers, written into `docs/COPY.md` exactly:** Idle → `idle`; the four transport labels → `Previous`, `Play`,
   `Pause`, `Next` (you said "just use those", meaning the slot names).
@@ -2873,3 +2924,127 @@ one of the skin layers (PLAN.md §4b), so nothing structural changes.
     `[NEEDS COPY]`.
   - Companion toggle icon: on hold, waiting for you to see what the menu contains.
   - Re-run after these edits: `npx vitest run` 212 passed; `npm run build` passed, check-fixtures-excluded OK.
+
+## 2026-10-22 — The companion's menu item is a cassette icon
+- **Your call:** an icon instead of words, using the cassette companion. A Tauri v2 icon menu item can't also show a
+  check mark, so the pose is the state: **on = the cassette's `idle` frame (eyes open), off = its `sleep` frame (eyes
+  shut, with its pixel "z")**, in the default palette. Its text is empty. Known cost (raised before you chose):
+  screen readers get no name for it.
+- **How:** `src/window/companionIcon.ts` rasterizes the skin frame to RGBA (`.` = transparent), and `Image.new` turns
+  it into a native image. That needs no Cargo `image-png` feature: raw RGBA isn't decoded. The pixels go as a plain
+  `number[]`, because a `Uint8Array` nested in invoke args would serialize as an object. The images are made once per
+  state and scale, then kept. They're made inside the menu's one-step-at-a-time chain, after the previous menu has
+  closed, because `Image.new` is a resource command like `Menu.new` (the Slice 4 deadlock rule). If the image fails,
+  the item falls back to the old check item with COPY.md's label, so the toggle never disappears.
+- **Scale:** 1 device px per art pixel (16×16) up to 199%, 2 (32×32) at 200%. Rounding 150% up to 32 px would likely be
+  taller than a menu row. Whether Windows draws the bitmap at its own size or rescales it hasn't been checked.
+- **Assumed, unverified:** `core:default` (already in `capabilities/default.json`) includes `core:image:default`, which
+  allows `image|new`. I couldn't confirm it: `src-tauri/gen/schemas` isn't on the drive. If the real exe logs
+  "companion menu icon failed", add `core:image:allow-new`.
+- **Tests:** `companionIcon.test.ts` (new: colour mapping, transparency, scaling, on ≠ off) and `themeMenu.test.ts`
+  (`companionMenuItem`: the icon item, and the fallback). Both e2e fakes answer `plugin:image|new` with their own rids
+  (500, 501, …) so the menu rids the deadlock tests check are unchanged. The menu test expects
+  `{ text: "", icon: 500 }` (asleep, since it starts off), and the toggle test expects 500 and then 501.
+- **Checks run (2026-10-22, school Mac):**
+  - `npx tsc --noEmit`: clean.
+  - `npx vitest run`: 22 files, 218 passed.
+  - `npm run build`: passed, check-fixtures-excluded OK.
+  - The three edited e2e specs type-check (scratch stub for `node:fs`): clean.
+  - **Not run:** `npx playwright test`, and the real exe. macOS untested.
+- **To check on Windows (visual, ready for review):** the icon is crisp and sized right in the menu at 100/125/150%,
+  readable in light and dark menus (the outline is dark slate), the row isn't a strange empty strip, and clicking it
+  toggles the pet.
+
+## 2026-10-29 — M2 C3 started on the school Mac, paused before any code landed
+- **Baseline checks (school Mac):** `npx tsc --noEmit` clean; `npx vitest run` 22 files, 218 passed; `npm run build`
+  passed, check-fixtures-excluded OK. Not run: Playwright (Windows only).
+- **C3 split into slices** (like C2a/C2b), because it mixes pure logic, production window/contract changes and new art:
+  - **C3a (next):** the brain travels the outline: `Surface` (`top | right | bottom | left`), optional `World.around`
+    (`{ side, bottom }` lengths; absent = top only, so production and the existing e2e behave exactly as before), climb
+    in short budget-checked legs (10–40 art px, clinging 2–8 s between legs), hang under the bottom (8–25 s), corners
+    turned at the top's ends (50% on arrival). Off the top with the music off it holds its pose still rather than
+    sleeping; reduced motion puts it back on the top. Reactions only on the top. Lab-only: a separate "around" live
+    section, so `?live` and its e2e are unchanged.
+  - **Anchors for C3a (no format bump planned; the doc called them undefined):** `climb`'s anchor is the pixel whose
+    right edge touches the wall (art faces a wall on its right; mirrored on the right side), defaulting to the right-most
+    opaque column and top-most opaque row. `hang`'s is the pixel whose top edge touches the bottom, defaulting to the
+    skin anchor's column and the top-most opaque row. `edgeInset` must then skip `climb`/`hang` so the top edge doesn't
+    change. `climb` without `steps` moves 1 per frame (COMPANION.md to be updated).
+  - **C3b:** production: margins on all four sides, contract v8 (`data-pet-surface` values, the new states), e2e.
+  - **C3c:** corner transition art for the three species, with you.
+- **State:** nothing changed in `src/`. A half-written `brain.ts` is kept at `stanza-kit/home/tmp/brain.ts.c3a-wip`
+  for reference only; the tree is the 2026-10-22 code and type-checks clean.
+
+## 2026-10-29 — M2 C2b on Windows: the e2e's first run, three test bugs, and the real exe
+- **Picked up:** everything the school Mac sessions left (2026-10-12, 10-22, 10-29) was still uncommitted on `main`. Read
+  it all, then ran it on Windows for the first time. The C3a work-in-progress file is on the USB drive
+  (`E:\stanza-kit\home\tmp\brain.ts.c3a-wip`); it wasn't touched.
+- **Confirmed, no longer assumed:** `core:default` includes `core:image:default`, which includes `allow-new`
+  (`src-tauri/gen/schemas/acl-manifests.json`), so the menu icon needs no extra permission. `allow-outer-position` and
+  `allow-scale-factor` are in `core:window:default` too, so their lines in `capabilities/default.json` are redundant
+  (left in: harmless, and they say what `nativeWindow.ts` calls).
+- **First full e2e run: 10 failures by the time it was stopped (733 passed), all in tests written on the Mac, none in
+  the app:**
+  1. **The menu test assumed 1× scaling.** The icon's size follows the page's `devicePixelRatio`, and Playwright's
+     Desktop Safari runs at 2×, so WebKit correctly got a 32×32 icon where the test expected 16×16. The test now
+     derives the size from the page's scaling.
+  2. **The time-lapse measured the pet in the wrong window.** It loaded the page at Playwright's 1280-px width, paused
+     the fake clock, then shrank the viewport to the theme's size. The card moved under the pet, but the pet's
+     re-measure waits for an animation frame, and with the clock paused that frame sometimes hadn't run by the first
+     check: the pet stood ~650 px right of the card. Whether it ran depended on timing (failed alone, passed under
+     load). In the real app frames aren't faked. The viewport is now sized before the page loads, and the test checks
+     the page's margin matches.
+  3. **The time-lapse timed out (cassette, then others under load).** Each step ran ~600 `expect` calls (every pixel
+     × every part), ~144k per case. Playwright records each one as a step, so the cassette, with the most pixels,
+     passed the 3-minute timeout while the page itself was fine (traced step by step: no hang, every page call under
+     10 ms). It now collects what's wrong and runs one `expect` per step. A case now takes ~3 s in Chromium.
+- **Also changed in `companion-player.spec.ts`:**
+  - The pet snapshot settles React in the same round trip (WebKit's settle alone was ~120 ms a step).
+  - The file's tests run in parallel (each builds its own page), so the long ones don't queue in one worker.
+  - WebKit runs one skin per theme, taking turns (t1 bookworm, t2 cassette, t3 pilcrow, t4 test-dummy, t5
+    bookworm), which still covers every skin; Chromium runs all 20 pairs. A WebKit case is ~35 s, so all 20 would add
+    ~12 minutes of worker time.
+  - **New test, the moving card (real clock):** load at 1280 px, shrink to the theme's window, the pet must follow
+    the card. It runs paused and under reduced motion so nothing else can set off a re-measure. Mutation-checked:
+    with `resize` removed from `CompanionLayer.tsx`'s events it fails at the follow check (both engines); restored, it
+    passes. Two earlier versions passed with the mutation too: while playing, something else re-measures, and T1's
+    entry animations end (`animationend`) just after load. Lesson logged for the test, not a bug: several triggers
+    re-measure, so a test of one has to silence the others.
+- **Real exe (ran), `npm run tauri build -- --no-bundle` OK, including `check-fixtures-excluded: OK`.** Spotify was
+  playing your music the whole time: read-only, right-clicks only, on the artwork (the driver refuses a point on a
+  control), nothing pressed. The window was on your second display, at 100%.
+  - **Menu:** `Default ✓, Glow Card, Micro Pill, Extreme, Kinetic`, a separator, then the companion item with no text
+    and a bitmap (`GetMenuItemInfo` → `hbmpItem`), so `Image.new` worked and the check-item fallback wasn't used.
+    At 100% Windows draws the 16×16 icon 1:1, crisp (an 8× zoom of a capture: each art pixel is one screen pixel). It
+    reads on the dark menu; the slate outline is low-contrast there. **Not checked:** 125/150/200% (changing display
+    scaling is a system setting) and a light menu.
+  - **On:** the window went from 340×600 at y 364 to 340×632 at y 332, and the card's top stayed at screen y 364.
+    **Off:** back to 340×600 at 364. Three on/off cycles; the saved setting followed each time.
+  - **Relaunch twice with it on:** window at y 332 and card at 364 both times. No creep: the launch-bug fix holds.
+  - **One-frame jump (seen; accepted for now).** Two strips over the card's top edge, captured every ~12 ms while
+    toggling, show the card off by exactly the margin (32 px) in one or two captures on every toggle, then back.
+    Off: always up, because the page drops its padding a frame before the window shrinks and moves. On: down when the
+    padding paints first, up when the window move lands first, and the order varies. The padding and the window move are
+    changes in two processes that land in different frames. Kept because it only happens on a deliberate menu click and
+    lasts about a frame. **The way to remove it:** keep the margin whether the pet is on or off, so a toggle changes
+    only the DOM. That breaks the contract's promise (off = the theme's exact size) and keeps a transparent strip above
+    the card, so it's your call. C3b's margins on every side raise the same question.
+  - **CPU** (ms per 10 s, app + WebView2, music playing, windows with a track or play-state change dropped): two runs.
+    Off: medians 156 and 125. On: medians 172 and 203, with one 531 window. Under 1% of a core either way; the pet's cost
+    is inside the noise. The pet made 6–18 changes per 10 s (React commits, counted as MutationObserver callbacks),
+    within the 90-a-minute cap. **Not measured:** paused, with the pet asleep (it would mean pausing your music).
+  - **Method:** launched with `--remote-debugging-port` and Playwright over CDP. The native menu was read with
+    `MN_GETHMENU`/`GetMenuItemInfo` and driven with posted Down ×6 + Enter (Down skips the separator). The strips were
+    GDI `CopyFromScreen` captures. Your settings were restored after every run (Default, companion off).
+  - **Probe bug, no product impact:** with the menu open, `Process.MainWindowHandle` was the menu's window, so the
+    recordings' window-rect column came back as zeros once the menu closed. Positions above come from the pixels and
+    from `GetWindowRect` before and after, with a fresh handle.
+- **Checks run (2026-10-29, Windows):**
+  - `npx tsc --noEmit`: clean.
+  - `npx vitest run`: 22 files, 218 passed.
+  - `npx playwright test`: 760 passed, 16 skipped (Chromium + WebKit; 4.5 min). The 16 are WebKit's 15 time-lapse
+    pairs above and the one skipped before.
+  - The three edited e2e specs type-check (scratch config with a `node:fs` stub): clean.
+  - The release build above, and the real-exe drive.
+  - **Not run:** `cargo test` (no Rust changed).
+- **C2b is done.** Still open, both visual (ready for review): the menu icon at 125/150/200% and in a light menu.

@@ -5,7 +5,7 @@
 
 Version 2 · 2026-10-17 · Status: Phases 0–4 largely built (five themes, the effects layer) and **M1 Real music done**:
 real Spotify tracks, transport, keyboard seek, its own volume and the lyrics button, in the real exe (theme contract v6).
-**M2 Companion** (§5) under way: the C0 spike and C1 (renderer, skin format, lab) are done, D1 settled on three species (pilcrow, bookworm, cassette), and C2a (the brain, on the lab's mock cards) is done; next is C2b, the companion in the production player. Version 1 (2026-09-11, "planning, nothing built yet") is in git history.
+**M2 Companion** (§5) under way: the C0 spike and C1 (renderer, skin format, lab) are done, D1 settled on three species (pilcrow, bookworm, cassette), C2a (the brain, on the lab's mock cards) and C2b (the companion in the production player, contract v7) are done; next is C3a, the brain travelling the card's whole outline. Version 1 (2026-09-11, "planning, nothing built yet") is in git history.
 
 Section numbers §0–§11 are the same as in v1, because code comments and older `docs/DECISIONS.md` entries cite them. The
 companion is the new §4b. §5 now holds the status and the roadmap; the v1 phases are summarised there as history.
@@ -384,6 +384,7 @@ Keep these in `docs/COPY.md`; code reads from there.
 
 ### Persistence, picker, contract, copy
 - **Saved setting:** the appearance (`src/theme/appearance.ts`) gains an app-wide `companion: { on, skin, palette }`. Unlike variant overrides, it survives theme switches. Validated; old saved data stays valid.
+- **On/off item (2026-10-22):** an icon with no text, the cassette awake (on) or asleep (off), by your choice (DECISIONS.md).
 - **Picker:** the right-click menu (`src/window/themeMenu.ts`) gains a Companion submenu, keeping Slice 4's one-step-at-a-time menu lifecycle (the deadlock fix). Settings-window options come in M3.
 - **Contract v7** (v6 went to the lyrics button, M1 R3b) lands with the first slice that puts companion parts in the production DOM (C2), not batched at the end: `.mp-companion` and its sprite part, `data-pet-state`, `data-pet-surface`, `--mp-pet-*`, and the `theme.json` `companion` field. Later slices update the doc in the same change.
 - **Copy:** `docs/COPY.md` "Companion" section, all `[NEEDS COPY]` until you write it. No speech bubbles: emotes (heart, sleep) are pixel icons, not text.
@@ -423,7 +424,7 @@ locally on `main` ("Slice N: …"), never pushed unless you ask. Hour ranges are
 - **Done:** Phase 0; spikes S1 (window), S2 (GSMTC), S4 (themes) — on their spike branches, learnings merged; Phase 2 core; Phase 3 design system + contract; Phase 4 themes T1–T5, the D16 effects layer, contract v5.
 - **Production slices on `main`:** 1 theme applied + remembered · 2 real frameless transparent window · 3 click-through · 4 right-click theme picker · 5 CSP + named Stanza · 6 player centred side to side.
 - **M1 Real music (done 2026-10-17, DECISIONS.md M1 R1–R3b):** the GSMTC adapter on `main` (20-track gate passed), position drift ≤ 0.2 s over 5 min, keyboard seek, a "Spotify not running" state with recovery, Spotify's own volume through Core Audio, the lyrics button (contract v6), and a CPU pass (every theme 0.1–0.7 s of CPU per 10 s while playing). The Slice 5/6 real-exe checks passed along the way.
-- **Tests at last full run:** 185 unit (Vitest), 723 e2e + 1 skipped (Playwright, Chromium + WebKit), `cargo test` 15.
+- **Tests at last full run (2026-10-29):** 218 unit (Vitest), 760 e2e + 16 skipped (Playwright, Chromium + WebKit), `cargo test` 15 (last run 2026-10-17; no Rust has changed since).
 - **Open from M1:** R4 tray + hide (added 2026-10-22); the remaining `[NEEDS COPY]` labels (the first ones were filled 2026-10-22); the Store build of Spotify; 125%/150% scaling.
 
 ### v1 phases → milestones
@@ -453,20 +454,20 @@ locally on `main` ("Slice N: …"), never pushed unless you ask. Hour ranges are
 - **R3 Per-app volume (S5) + lyrics button (S6).**
   - S5: Core Audio `IAudioSessionManager2` / `ISimpleAudioVolume` on Spotify's process makes `.mp-volume` real. Gate: moving the slider moves Spotify's level in the Windows volume mixer and not the master; a change made in the mixer reads back.
   - S6: a button brings Spotify's own window (and its lyrics view) to the foreground. Gate: works reliably while Spotify is minimised or behind other windows, not just the first time. Needs a contract part and a copy slot.
-
 - **R4 Tray + hide while Spotify is closed** (added 2026-10-22, your choice, pulled forward from M4; DECISIONS.md). Windows only: it needs `cargo`, which the school Mac doesn't have.
   - A tray icon (the `tray-icon` feature on the `tauri` crate, with the permission in `src-tauri/capabilities/`) with a minimal menu: show/hide and quit. Theme, companion and Reset appearance join it in M4.
   - When the Spotify feed goes `unavailable`, the window hides. When Spotify comes back, it reappears where it was (the saved position, companion margin included). Show/hide in the tray overrides this until Spotify's state next changes.
   - **Blocked on:** copy for the tray menu items (COPY.md "Tray menu items") and a tray icon image (the M4 app icon, or a temporary one you approve).
   - **Gate (real exe):** close Spotify → Stanza's window disappears and the tray icon stays; reopen Spotify → the window comes back in the same place, playing; tray quit exits cleanly; idle CPU while hidden is no worse than while shown.
+
 ### M2 — Companion · ~32–52 h (§4b)
 - **C0 spike** (`spike/c0-companion`) — **done 2026-10-17** (DECISIONS.md): margin window, crisp pixels at 100/125/150/200%, click-through around the pet, pick up and drop, no flicker all passed. The CPU gate failed for a *continuously* walking pet (+2.5–8% of a core); the measurements set the frame-timer architecture and the change budget above.
 - **C1 Renderer + skin format + lab** — **done 2026-10-18** (DECISIONS.md): SVG sprite renderer with JS-timer frames, skin format v1, now v2 (`docs/COMPANION.md`), validator and registry, the "test dummy" skin with all 11 animations and two palettes, and the dev-only Companion lab (`?lab=companion`). Crisp at 100/125/150/200% in Chromium and WebKit after moving the layout onto a 4 px grid.
 - **D1 design round** (with you): three original concepts in the lab; you pick or mix. **Concepts drawn 2026-10-18** (DECISIONS.md, `docs/design/d1-concepts.png`): `pilcrow` (¶ with legs), `bookworm` (a ruled-paper inchworm whose poses are letters), `cassette` (reels for eyes). **You chose all three** as species to pick from; `pilcrow` is the default (DECISIONS.md).
 - **C2 Brain + top edge + contract v7:** idle, walk, sit, sleep, wake, reacting to playback, in the production player. Split in two like R3:
   - **C2a The brain** — **done 2026-10-18** (DECISIONS.md): `src/companion/brain.ts` (pure, seeded; a hard cap of 90 visible changes a minute; asleep and still while the music is off; reduced motion = still poses), `Companion.tsx` (one timer), edge placement (`place.ts`), skin format v2 (`steps`, per-animation `anchor`), and live cards in the lab. Checked by hour-long simulations and a fake-clock e2e.
-  - **C2b In the player:** the window's top margin and position shift, `.mp-companion` on `.mp-window`'s top edge riding its height changes, no-sit stretches measured from the parts, the on/off switch, **contract v7**, the e2e over all themes, and an idle-CPU measurement in the real exe.
-- **C3 All edges:** climbing the sides, hanging under the bottom, corner transitions, riding a moving edge; the production window margin and position shift.
+  - **C2b In the player** — **done 2026-10-29** (DECISIONS.md; code written 2026-10-22 on the school Mac, run and checked on Windows): the window's top margin and position shift, `.mp-companion` on `.mp-window`'s top edge riding its height changes, no-sit stretches measured from the parts, the on/off switch (the cassette icon), **contract v7**, the e2e over all themes, and CPU in the real exe. Known: toggling shows the card one frame off by the margin (accepted for now; DECISIONS.md). Open: the menu icon at 125/150/200% and in a light menu.
+- **C3 All edges:** climbing the sides, hanging under the bottom, corner transitions, riding a moving edge; the production window margin and position shift. Split (DECISIONS.md 2026-10-29): **C3a** the brain travels the outline (lab only), **C3b** production margins on all sides + contract v8, **C3c** corner art with you.
 - **C4 Pick up and react:** drag, drop, fall, land, click reactions; the hit region includes the pet. Real-exe drag check.
 - **C5 Inner ledges:** `theme.json` `companion.shelf` for each theme that has room (some may have none).
 - **C6 Skins, picker, persistence:** species and palettes in the Companion submenu, the app-wide saved setting; a polish pass on each of the three creatures, which replace the dummy.

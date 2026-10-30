@@ -10,3 +10,15 @@
 .mp-pet-c6 { fill: var(--mp-pet-6); }
 .mp-pet-c7 { fill: var(--mp-pet-7); }
 .mp-pet-c8 { fill: var(--mp-pet-8); }
+
+/* The production layer (CompanionLayer): zero-size and fixed at the window's origin, so a theme's positioning or
+   clipping on .mp-root / .mp-window can't reach the pet. Never intercepts input (the pet is not interactive until C4). */
+.mp-companion-layer {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 1;
+}

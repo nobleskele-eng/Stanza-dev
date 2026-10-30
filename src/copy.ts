@@ -34,6 +34,7 @@ export const COPY_LABELS = {
   volume: "Volume slider label",
   lyrics: "Lyrics button label",
   linkOut: "Link-out label",
+  companionToggle: "Companion menu — show/hide item",
 } as const;
 
 export type CopyKey = keyof typeof COPY_LABELS;

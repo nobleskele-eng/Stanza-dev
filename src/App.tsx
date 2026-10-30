@@ -9,6 +9,9 @@ import "../themes/t4-extreme/theme.css";
 import "../themes/t5-kinetic/theme.css";
 import { isTauri } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { SKINS } from "./companion/registry";
+import { artPixelPx, spriteBoxPx } from "./companion/pixel";
+import { useDevicePixelRatio } from "./companion/useDevicePixelRatio";
 import { SpotifyAdapter } from "./adapters/spotifyAdapter";
 import { PlayerStore } from "./store/playerStore";
 import { useInterpolatedPosition, useStoreSnapshot } from "./store/usePlayback";
@@ -52,19 +55,35 @@ function ProductionApp() {
     return a;
   });
   const active = useRef(appearance.theme);
+  const companion = useRef(appearance.companion);
+  companion.current = appearance.companion;
   // Last size asked of the native window, so a switch that already grew it to the new size isn't repeated.
   const sizedTo = useRef("");
-  const sizeWindow = useCallback((size: { width: number; height: number }) => {
-    const key = `${size.width}x${size.height}`;
-    if (key === sizedTo.current) return Promise.resolve();
+  // The companion (M2 C2b): off until turned on, kept across theme switches. On, the window grows by a margin on
+  // top, the height of the pet's box, so it can stand on the card's top edge without the card moving on screen.
+  const dpr = useDevicePixelRatio();
+  const skin = SKINS[appearance.companion.skin];
+  const margin = appearance.companion.on ? spriteBoxPx(skin.grid, artPixelPx(dpr)) : 0;
+  const marginRef = useRef(margin);
+  marginRef.current = margin;
+  // The companion's top margin currently reflected in the window's position (it grows the window upward). It starts
+  // at the launch margin, not 0: tauri-plugin-window-state restores the position saved at the last exit, which already
+  // includes the margin if the companion was on, so shifting again would move the card up a margin on every launch.
+  const shifted = useRef(margin);
+  const sizeWindow = useCallback((size: { width: number; height: number }, margin: number) => {
+    const height = size.height + margin;
+    const key = `${size.width}x${height}`;
+    const moveY = shifted.current - margin;
+    if (key === sizedTo.current && !moveY) return Promise.resolve();
     sizedTo.current = key;
-    return fitWindowToTheme(size);
+    shifted.current = margin;
+    return fitWindowToTheme({ width: size.width, height }, moveY);
   }, []);
   // The native window takes the active theme's declared size. The player is centred side to side
   // and pinned to the top (.app-stage; docs/DECISIONS.md, Slice 6).
   useEffect(() => {
-    void sizeWindow(MANIFESTS[appearance.theme].window);
-  }, [appearance.theme, sizeWindow]);
+    void sizeWindow(MANIFESTS[appearance.theme].window, margin);
+  }, [appearance.theme, margin, sizeWindow]);
   useEffect(() => installWindowDrag(), []);
   // Clicks pass through the transparent part of the window (docs/DECISIONS.md, Slice 3).
   useEffect(() => installHitRegion(), []);
@@ -77,20 +96,32 @@ function ProductionApp() {
       const from = active.current;
       if (id === from || !MANIFESTS[id]) return;
       active.current = id;
-      const next = selectTheme(MANIFESTS, id);
+      const next = selectTheme(MANIFESTS, id, companion.current);
       saveAppearance(window.localStorage, next);
       const a = MANIFESTS[from].window;
       const b = MANIFESTS[id].window;
-      void sizeWindow({ width: Math.max(a.width, b.width), height: Math.max(a.height, b.height) }).then(() =>
+      void sizeWindow({ width: Math.max(a.width, b.width), height: Math.max(a.height, b.height) }, marginRef.current).then(() =>
         setAppearance(next),
       );
     },
     [sizeWindow],
   );
-  useEffect(() => installThemeMenu(MANIFESTS, () => active.current, pickTheme), [pickTheme]);
+  const toggleCompanion = useCallback(() => {
+    const next = { ...companion.current, on: !companion.current.on };
+    companion.current = next;
+    setAppearance((a) => {
+      const updated = { ...a, companion: next };
+      saveAppearance(window.localStorage, updated);
+      return updated;
+    });
+  }, []);
+  useEffect(
+    () => installThemeMenu(MANIFESTS, () => active.current, pickTheme, { isOn: () => companion.current.on, toggle: toggleCompanion }),
+    [pickTheme, toggleCompanion],
+  );
   const dom = variantToDom(appearance.variant);
   return (
-    <div className="app-stage">
+    <div className="app-stage" style={margin ? { paddingTop: margin } : undefined}>
       <Player
         nowPlaying={nowPlaying}
         positionMs={positionMs}
@@ -105,6 +136,7 @@ function ProductionApp() {
         onPrevious={() => store?.previous()}
         onVolume={(level) => store?.setVolume(level)}
         onLyrics={() => store?.showLyrics()}
+        companion={appearance.companion.on ? { skin, palette: appearance.companion.palette } : undefined}
       />
     </div>
   );

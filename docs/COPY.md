@@ -65,6 +65,7 @@ no speech bubbles; its emotes are pixel icons, not text.
 - **Companion skin name — cassette:** [NEEDS COPY]
 - **Companion menu — submenu label:** [NEEDS COPY]
 - **Companion menu — show/hide item:** [NEEDS COPY]
+  — no text by your choice (2026-10-22): the item is the cassette icon, awake = on, asleep = off. This label only shows if the icon fails to load.
 - **Companion menu — skins heading:** [NEEDS COPY]
 - **Companion menu — palettes heading:** [NEEDS COPY]
 - **Companion settings — section title:** [NEEDS COPY]

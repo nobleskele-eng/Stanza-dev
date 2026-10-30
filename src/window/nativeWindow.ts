@@ -2,18 +2,29 @@
 // anywhere on the player (PLAN.md C8; S1 spike, docs/DECISIONS.md 2026-09-16). Every function is
 // a no-op outside Tauri (browser e2e, `vite preview`), so the bundle behaves the same there.
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { LogicalSize } from "@tauri-apps/api/dpi";
+import { LogicalPosition, LogicalSize } from "@tauri-apps/api/dpi";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 /** Pressing inside one of these never starts a window drag (C8). */
 const NO_DRAG_SELECTOR = "button, input, a, [data-no-drag]";
 
-/** Set the native window to a theme's declared `window` size (logical px, so DPI scaling applies). Never rejects. */
-export function fitWindowToTheme(size: { width: number; height: number }): Promise<void> {
-  if (!isTauri()) return Promise.resolve();
-  return getCurrentWindow()
-    .setSize(new LogicalSize(size.width, size.height))
-    .catch((e) => console.error("setSize failed", e));
+/**
+ * Set the native window to a theme's declared `window` size (logical px, so DPI scaling applies), then move it
+ * `moveY` logical px down (negative = up). The companion's top margin grows the window upward by exactly the
+ * margin it adds, so the card stays where it was on screen (M2 C2b). Never rejects.
+ */
+export async function fitWindowToTheme(size: { width: number; height: number }, moveY = 0): Promise<void> {
+  if (!isTauri()) return;
+  const win = getCurrentWindow();
+  try {
+    await win.setSize(new LogicalSize(size.width, size.height));
+    if (moveY) {
+      const [at, scale] = await Promise.all([win.outerPosition(), win.scaleFactor()]);
+      await win.setPosition(new LogicalPosition(at.x / scale, at.y / scale + moveY));
+    }
+  } catch (e) {
+    console.error("fitting the window failed", e);
+  }
 }
 
 /**

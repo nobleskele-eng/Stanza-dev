@@ -3,7 +3,7 @@
   "name": "Extreme",
   "author": "[NEEDS COPY]",
   "version": "1.0.0",
-  "contract": 6,
+  "contract": 7,
   "layout": "card",
   "window": { "width": 282, "height": 529 },
   "colorMode": "static",

@@ -83,6 +83,7 @@ async function fakeTauri(page: import("@playwright/test").Page, opts: { spotify?
     const callbacks = new Map<number, (raw: unknown) => void>();
     let nextCallback = 1;
     let nextRid = 100;
+    let nextImageRid = 500;
     let closeOpenMenu: (() => void) | null = null;
     Object.assign(window, {
       isTauri: true,
@@ -111,6 +112,8 @@ async function fakeTauri(page: import("@playwright/test").Page, opts: { spotify?
           calls.push({ cmd, args: JSON.parse(JSON.stringify(args ?? {})), theme });
           // Resource-creating commands answer [rid, id]; everything else resolves to nothing.
           if (cmd === "plugin:menu|new") return Promise.resolve([nextRid, `menu-${nextRid++}`]);
+          // The companion item's icons: their own rids, so the menu rids above stay 100, 101, …
+          if (cmd === "plugin:image|new") return Promise.resolve(nextImageRid++);
           if (cmd === "plugin:menu|popup") return new Promise((resolve) => (closeOpenMenu = () => resolve(null)));
           if (cmd === "spotify_state") return Promise.resolve(spotify);
           if (cmd === "spotify_volume") return Promise.resolve(volume);
@@ -297,10 +300,19 @@ test("in Tauri, right-click opens a native menu of every theme by name, the acti
   await expect(page.locator(".mp-root")).toHaveAttribute("data-theme", "t1-default");
   await page.evaluate(() => window.addEventListener("contextmenu", (e) => ((window as unknown as { __prevented: boolean }).__prevented = e.defaultPrevented)));
 
-  const items = (await openThemeMenu(page))!;
+  const all = (await openThemeMenu(page))!;
+  const items = all.slice(0, THEME_IDS.length);
   expect(items.map((i) => i.text)).toEqual(THEME_IDS.map((id) => themeJson(id).name));
   expect(items.map((i) => i.checked)).toEqual([true, false, false, false, false]);
   expect(items.map((i) => i.text)).not.toContain("[NEEDS COPY]");
+  // Then the companion's on/off item (M2 C2b): the cassette asleep (it's off), an icon with no text and no check mark.
+  expect(all.slice(THEME_IDS.length)).toEqual([{ item: "Separator" }, { text: "", icon: 500, handler: expect.any(String) }]);
+  const [img] = await ipcCalls(page, "plugin:image|new");
+  // The cassette's 16-px grid at 1 device px per art pixel below 200%, 2 from 200% (companionIcon.ts). The page's own
+  // scaling sets it, not the fake's scale_factor: Desktop Safari runs at 2×.
+  const side = 16 * Math.max(1, Math.floor(await page.evaluate(() => devicePixelRatio)));
+  expect(img.args).toMatchObject({ width: side, height: side });
+  expect((img.args.rgba as number[]).length).toBe(side * side * 4);
   const box = (await page.locator(".mp-window").boundingBox())!;
   expect((await ipcCalls(page, "plugin:menu|popup")).at(-1)!.args.at).toEqual({ Logical: { x: box.x + 20, y: box.y + 20 } });
   expect(await page.evaluate(() => (window as unknown as { __prevented: boolean }).__prevented), "the webview's own menu is suppressed").toBe(true);
