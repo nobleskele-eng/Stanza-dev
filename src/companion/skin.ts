@@ -200,8 +200,37 @@ function checkFrame(frame: unknown, grid: number | null, slots: number, path: st
 /** How long frame `i` of an animation stays up, in ms. */
 export const frameMs = (anim: SkinAnimation, i: number) => anim.durations?.[i] ?? Math.round(1000 / anim.fps);
 
-/** Art pixels the creature moves forward on entering frame `i` (`steps`; absent: 1 for `walk`, else 0). */
-export const stepPx = (name: AnimationName, anim: SkinAnimation, i: number) => anim.steps?.[i] ?? (name === "walk" ? 1 : 0);
+/** Art pixels the creature moves forward on entering frame `i` (`steps`; absent: 1 for `walk` and `climb`, else 0). */
+export const stepPx = (name: AnimationName, anim: SkinAnimation, i: number) =>
+  anim.steps?.[i] ?? (name === "walk" || name === "climb" ? 1 : 0);
 
-/** Where an animation rests on its surface: its own anchor, else the skin's. */
-export const anchorOf = (skin: Skin, name: AnimationName): Anchor => skin.animations[name].anchor ?? skin.anchor;
+/** The opaque pixels' extremes across every frame of an animation, in art px. */
+function opaqueBounds(frames: readonly (readonly string[])[]) {
+  let top = Infinity;
+  let right = -1;
+  for (const f of frames)
+    f.forEach((r, y) => {
+      for (let x = 0; x < r.length; x++)
+        if (r[x] !== ".") {
+          top = Math.min(top, y);
+          right = Math.max(right, x);
+        }
+    });
+  return { top, right };
+}
+
+/**
+ * Where an animation touches its surface: its own anchor, else a default. On the top edge (and everything but `climb`
+ * and `hang`) that's the skin's anchor, whose pixel's bottom edge rests on the edge. `climb` faces a wall on its right
+ * (mirrored on the card's right side): its anchor pixel's right edge touches the wall, and by default it's the
+ * right-most opaque column at the top-most opaque row. `hang`'s anchor pixel's top edge touches the bottom edge: by
+ * default the skin anchor's column at the top-most opaque row (M2 C3a).
+ */
+export function anchorOf(skin: Skin, name: AnimationName): Anchor {
+  const own = skin.animations[name].anchor;
+  if (own) return own;
+  if (name !== "climb" && name !== "hang") return skin.anchor;
+  const { top, right } = opaqueBounds(skin.animations[name].frames);
+  if (top === Infinity) return skin.anchor; // an empty animation: nothing touches anything
+  return name === "climb" ? { x: right, y: top } : { x: skin.anchor.x, y: top };
+}

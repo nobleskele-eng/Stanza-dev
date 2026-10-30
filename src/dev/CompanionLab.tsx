@@ -1,11 +1,12 @@
 // Dev-only Companion lab (`?lab=companion`, PLAN.md §4b/§5 M2): the creatures living on mock cards, run by their
-// brain (C2); each one around a card in every pose (D1); and every skin × palette × animation on light and dark
-// backdrops, at the real size and zoomed, plus each animation's frames side by side (C1). Never in production
-// (DevHarness is DEV-only). `?pause` holds every animation on its first frame (screenshots, crispness checks);
-// `?skin=<id>` shows one skin and leaves out the live cards; `?live` shows only the live cards.
+// brain (C2), on the top edge and around the whole card (C3a); each one around a card in every pose (D1); and every
+// skin × palette × animation on light and dark backdrops, at the real size and zoomed, plus each animation's frames
+// side by side (C1). Never in production (DevHarness is DEV-only). `?pause` holds every animation on its first frame
+// (screenshots, crispness checks); `?skin=<id>` shows one skin and leaves out the live cards; `?live` shows only the
+// top-edge live cards, `?around` only the ones that travel the outline.
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { Companion } from "../companion/Companion";
-import { placeOnEdge } from "../companion/place";
+import { placeAround, type Surface } from "../companion/place";
 import { SKINS } from "../companion/registry";
 import { hashString } from "../fx/beat";
 import { LAYOUT_GRID, artPixelPx } from "../companion/pixel";
@@ -27,30 +28,14 @@ function Playing({ skin, animation, palette, pixel, paused }: { skin: Skin; anim
   return <Sprite skin={skin} animation={animation} frame={frame} palette={palette} pixel={pixel} />;
 }
 
-/** The opaque box of a frame, in art pixels. */
-function opaqueBox(rows: readonly string[]) {
-  let x0 = Infinity;
-  let y0 = Infinity;
-  let x1 = -1;
-  let y1 = -1;
-  rows.forEach((r, y) => {
-    for (let x = 0; x < r.length; x++)
-      if (r[x] !== ".") {
-        x0 = Math.min(x0, x);
-        y0 = Math.min(y0, y);
-        x1 = Math.max(x1, x);
-        y1 = Math.max(y1, y);
-      }
-  });
-  return { x0, y0, x1, y1 };
-}
-
 const SCENE = { w: 352, h: 200, card: { x: 56, y: 56, w: 248, h: 88 } } as const;
 const CARD = {
   light: { face: "#ffffff", edge: "#d9d5cb", art: "#dcd6c9", bar: "#e7e3da" },
   dark: { face: "#24242b", edge: "#35353e", art: "#3a3a45", bar: "#32323b" },
 } as const;
 const TOP_EDGE = { left: SCENE.card.x, top: SCENE.card.y, width: SCENE.card.w };
+/** The card's whole box: the scene leaves 56 px around it, more than any sprite's box. */
+const OUTLINE = { left: SCENE.card.x, top: SCENE.card.y, width: SCENE.card.w, height: SCENE.card.h };
 
 /** A plain mock card on a backdrop, the scene's size; no text (CLAUDE.md: no generated copy). */
 function MockCard({ backdrop, children, ...data }: { backdrop: keyof typeof BACKDROPS; children: ReactNode } & Record<`data-${string}`, string>) {
@@ -76,26 +61,23 @@ function MockCard({ backdrop, children, ...data }: { backdrop: keyof typeof BACK
 /**
  * The creature around the mock card at real size: walking, sitting and asleep on the top edge, hanging under the
  * bottom edge (the owner's sketch), climbing the left side. Sprites sit at the grid-aligned scene origin and move only
- * by `transform`, whole device px: the C2 placement rule. Top-edge poses use the production placement (place.ts);
- * `hang` and `climb` contacts are read off the art until C3 defines them.
+ * by `transform`, whole device px: the C2 placement rule. Every pose uses the brain's placement (place.ts), at a
+ * position given in CSS px along its surface.
  */
 function Scene({ skin, palette, backdrop, paused }: { skin: Skin; palette: string; backdrop: keyof typeof BACKDROPS; paused: boolean }) {
   const dpr = window.devicePixelRatio || 1;
   const px = artPixelPx(dpr);
   const snap = (v: number) => Math.round(v * dpr) / dpr;
-  const { card } = SCENE;
-  const onTop = (animation: AnimationName, at: number) => {
-    const { left, top } = placeOnEdge(skin, animation, Math.round(at / px), 1, px, TOP_EDGE);
+  const at = (animation: AnimationName, surface: Surface, along: number) => {
+    const { left, top } = placeAround(skin, animation, surface, Math.round(along / px), 1, px, TOP_EDGE, OUTLINE);
     return { x: left, y: top };
   };
-  const hangTop = opaqueBox(skin.animations.hang.frames[0]).y0;
-  const climbRight = opaqueBox(skin.animations.climb.frames[0]).x1;
   const poses: { animation: AnimationName; at: { x: number; y: number } }[] = [
-    { animation: "walk", at: onTop("walk", 40) },
-    { animation: "sleep", at: onTop("sleep", 112) },
-    { animation: "sit", at: onTop("sit", 184) },
-    { animation: "hang", at: { x: card.x + 132 - skin.anchor.x * px, y: card.y + card.h - hangTop * px } },
-    { animation: "climb", at: { x: card.x - (climbRight + 1) * px, y: card.y + 20 } },
+    { animation: "walk", at: at("walk", "top", 40) },
+    { animation: "sleep", at: at("sleep", "top", 112) },
+    { animation: "sit", at: at("sit", "top", 184) },
+    { animation: "hang", at: at("hang", "bottom", 132) },
+    { animation: "climb", at: at("climb", "left", 20) },
   ];
   return (
     <MockCard backdrop={backdrop} data-lab-scene={backdrop}>
@@ -111,10 +93,13 @@ function Scene({ skin, palette, backdrop, paused }: { skin: Skin; palette: strin
 type Playback = "playing" | "paused" | "idle";
 
 /**
- * Each creature living on a mock card's top edge, run by its brain (M2 C2): the controls stand in for the music.
- * Lab-only labels; the production player's text comes from COPY.md.
+ * Each creature living on a mock card, run by its brain (M2 C2): on the top edge, or `around` the whole card (C3a:
+ * corners, climbing the sides, hanging under the bottom). The controls stand in for the music. Lab-only labels; the
+ * production player's text comes from COPY.md.
  */
-function Live() {
+function Live({ around = false }: { around?: boolean }) {
+  const section = around ? "data-lab-around" : "data-lab-live";
+  const card = around ? "data-lab-around-skin" : "data-lab-live-skin";
   const [playback, setPlayback] = useState<Playback>("playing");
   const [track, setTrack] = useState(0);
   const controls: [string, () => void][] = [
@@ -124,7 +109,7 @@ function Live() {
     ["next track", () => setTrack((t) => t + 1)],
   ];
   return (
-    <section data-lab-live="" data-lab-playback={playback} style={{ marginBottom: 24 }}>
+    <section {...{ [section]: "" }} data-lab-playback={playback} style={{ marginBottom: 24 }}>
       <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
         {controls.map(([label, act]) => (
           <button key={label} type="button" data-lab-control={label} onClick={act} style={{ font: "inherit", height: 24 }}>
@@ -134,8 +119,16 @@ function Live() {
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
         {Object.values(SKINS).map((skin) => (
-          <MockCard key={skin.id} backdrop="light" data-lab-live-skin={skin.id}>
-            <Companion skin={skin} playing={playback === "playing"} trackKey={String(track)} edge={TOP_EDGE} seed={hashString(skin.id)} />
+          <MockCard key={skin.id} backdrop="light" {...{ [card]: skin.id }}>
+            <Companion
+              skin={skin}
+              playing={playback === "playing"}
+              trackKey={String(track)}
+              edge={TOP_EDGE}
+              outline={around ? OUTLINE : undefined}
+              // Their own seeds, so the two sections don't start as twins.
+              seed={hashString(around ? `${skin.id}/around` : skin.id)}
+            />
           </MockCard>
         ))}
       </div>
@@ -149,15 +142,16 @@ export function CompanionLab() {
   const only = params.get("skin");
   const page: CSSProperties = { padding: 16, fontFamily: "ui-monospace, monospace", fontSize: 11, background: "#fff", color: "#111" };
   // Only the live cards: the gallery's ~570 animated sprites would drown them under a fake clock (DECISIONS.md, C2a).
-  if (params.has("live"))
+  if (params.has("live") || params.has("around"))
     return (
       <div style={page}>
-        <Live />
+        <Live around={params.has("around")} />
       </div>
     );
   return (
     <div style={page}>
       {!only && <Live />}
+      {!only && <Live around />}
       <section data-lab-scenes="" style={{ marginBottom: 24 }}>
         {Object.values(SKINS)
           .filter((s) => !only || s.id === only)

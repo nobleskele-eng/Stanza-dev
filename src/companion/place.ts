@@ -47,14 +47,55 @@ export function placeOnEdge(skin: Skin, animation: AnimationName, x: number, fac
   return { left: edge.left + (x - ax) * px, top: edge.top - (a.y + 1) * px };
 }
 
+/** The card's box, in the creature's container's CSS px: the outline it can travel when it has one (C3a). */
+export interface Outline {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+/** Where the creature is: the surface (an outline's side) and its anchor's position along it, art px. */
+export type Surface = "top" | "right" | "bottom" | "left";
+
 /**
- * How far (CSS px) the sprite can reach sideways of an anchor position, in any pose and either facing. The edge it
- * walks is the card's top edge shortened by this at both ends, so no pose ever pokes out past the card's sides and
- * into the window's clip (C2b; C3 adds side margins and lifts this).
+ * The sprite's top-left (CSS px) and whether it's mirrored, for a pose anywhere on the outline (C3a). The top is
+ * `placeOnEdge` on `top`. The bottom runs from the card's left like the top; the hang anchor's top edge touches it.
+ * The sides run from the card's top down; the climb anchor's right edge touches the left side, and the art is
+ * mirrored on the right side, whichever way it climbs.
+ */
+export function placeAround(
+  skin: Skin,
+  animation: AnimationName,
+  surface: Surface,
+  pos: number,
+  facing: 1 | -1,
+  px: number,
+  top: EdgeBox,
+  card: Outline,
+): { left: number; top: number; mirrored: boolean } {
+  const a = anchorOf(skin, animation);
+  if (surface === "top") return { ...placeOnEdge(skin, animation, pos, facing, px, top), mirrored: facing < 0 };
+  if (surface === "bottom") {
+    const ax = facing > 0 ? a.x : skin.grid - 1 - a.x;
+    return { left: card.left + (pos - ax) * px, top: card.top + card.height - a.y * px, mirrored: facing < 0 };
+  }
+  const y = card.top + (pos - a.y) * px;
+  if (surface === "left") return { left: card.left - (a.x + 1) * px, top: y, mirrored: false };
+  return { left: card.left + card.width - (skin.grid - 1 - a.x) * px, top: y, mirrored: true };
+}
+
+/** Animations shown on the top edge: all but the outline's own (`climb` on the sides, `hang` under the bottom). */
+const ON_TOP = REQUIRED_ANIMATIONS.filter((name) => name !== "climb" && name !== "hang");
+
+/**
+ * How far (CSS px) the sprite can reach sideways of an anchor position, in any pose shown on the top and either facing.
+ * The edge it walks is the card's top edge shortened by this at both ends, so no pose ever pokes out past the card's
+ * sides and into the window's clip (C2b; C3b adds side margins and lifts this).
  */
 export function edgeInset(skin: Skin, px: number): number {
   let reach = 0;
-  for (const name of REQUIRED_ANIMATIONS) {
+  for (const name of ON_TOP) {
     const a = anchorOf(skin, name);
     reach = Math.max(reach, a.x, skin.grid - 1 - a.x);
   }

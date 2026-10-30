@@ -3049,3 +3049,65 @@ one of the skin layers (PLAN.md §4b), so nothing structural changes.
   - The release build above, and the real-exe drive.
   - **Not run:** `cargo test` (no Rust changed).
 - **C2b is done.** Still open, both visual (ready for review): the menu icon at 125/150/200% and in a light menu.
+
+## 2026-10-29 — M2 C3a: the brain travels the card's outline (lab only)
+- **Built from the plan in the C3 entry above.** The work-in-progress file on the USB drive
+  (`E:\stanza-kit\home\tmp\brain.ts.c3a-wip`) was only types and constants, so the logic was written here.
+- **Contacts, with no format change** (`anchorOf`, `src/companion/skin.ts`):
+  - `climb` faces a wall on its right and is mirrored on the card's right side. Its anchor pixel's right edge touches
+    the wall. Default: the right-most opaque column of any frame, at the top-most opaque row of any frame.
+  - `hang`'s anchor pixel's top edge touches the bottom. Default: the skin anchor's column, at the top-most opaque row.
+  - An animation's own `anchor` still wins. No bundled skin gives `climb` or `hang` one, and nothing placed them
+    before, so no skin changes meaning. `climb` without `steps` moves 1 art px a frame, like `walk`.
+  - `edgeInset` now skips `climb` and `hang`, which never show on the top. The insets are unchanged (pinned in
+    `place.test.ts`; at px 2: test-dummy 16, pilcrow 20, bookworm 16, cassette 16).
+- **The brain** (`src/companion/brain.ts`), given `World.around` (each side's and the bottom's length):
+  - On an outline a walk may run out at an end of the top, where it turns the corner half the time (`CORNER_CHANCE`).
+  - Down a side in legs of 10–40 art px, each planned within the change budget (retried 2 s later if it doesn't
+    fit), clinging 2–8 s between legs. At the bottom corner it hangs 8–25 s, then climbs back up the same side.
+  - Music off while off the top: it holds still where it is, in its rest frame. There's no sleeping or reacting off
+    the top. Reduced motion, or losing the outline, puts it back on the top.
+  - Production passes no outline. **Checked identical:** today's committed brain against the new one, no outline,
+    over a scripted 80 minutes (music on and off, track changes, the edge resizing, reduced motion flipping), all 4
+    skins × 5 seeds: all 68,144 logged changes and events matched.
+- **Bug found by the new test, fixed:** starting a climb leg isn't a visible change, so its frame clock still pointed
+  at when the hold began, and the brain caught up 12 overdue frames at once (a 12 px jump). A leg now starts its frame
+  clock when it starts. Resuming the music off the top does the same.
+- **Simulated, an hour × 5 seeds per skin:**
+
+  | Card | Brain steps/min | Top | Sides | Bottom | Corners/h |
+  |---|---|---|---|---|---|
+  | Top only (as today) | 50–59 | 100% | – | – | – |
+  | The lab's card (sides 44 art px) | 50–61 | 89–94% | 5–9% | 1–2% | 10–20 |
+  | T1-sized (sides 274 art px) | 62–68 | 55–77% | 22–44% | 1–2% | 7–14 |
+
+  On a tall card it spends a lot of time climbing at 1 px a frame. Tune for C3b: give `climb` `steps` of 2, longer
+  legs, or fewer descents. Left and right corners came out even across 40 seeds. One pet tends to revisit the corner
+  it last used, so a few seeds can favour one side for a long time.
+- **The lab:** an "around" section (`?lab=companion&around`) with its own seeds (`<id>/around`, so the two live
+  sections don't start as twins), and the static scenes now place `climb` and `hang` with `placeAround` instead of
+  reading contacts off the art. Screenshots at 3×: the pilcrow on the left side, the test dummy on the right and
+  hanging under the bottom-right corner, all touching the card. Visual: ready for review.
+- **Tests:**
+  - `brain.test.ts` (+5): an hour per skin on an outline (budget, every surface across seeds, surface changes only
+    at corners, climbing 1 px a frame); paused off the top holds still and carries on; no reaction off the top;
+    reduced motion and losing the outline go back to the top; a shrinking side.
+  - `place.test.ts` (+10): the insets; for every skin, climb art touches each side from outside and starts level
+    with the top, and hang art touches the bottom from below; an own anchor wins.
+  - `companion-brain.spec.ts` (+2, Chromium): the around cards run until every surface has been visited, each
+    creature's drawn pixels checked against the card every 2 s; and paused off the top: no change for 5 minutes,
+    then moving again.
+  - **Mutation-checked:**
+    - A wrong bottom corner fails the corner test.
+    - Removing "hold still off the top" fails the pause test.
+    - Leaving the right side unmirrored fails the e2e. The first version passed that mutation: in 10 fake minutes no
+      pet had climbed the right side, which first came at 27 minutes. So the test now runs until both sides and the
+      bottom have been seen.
+- **Checks run (Windows):**
+  - `npx tsc --noEmit`: clean.
+  - `npx vitest run`: 22 files, 235 passed.
+  - `npm run build`: passed, check-fixtures-excluded OK.
+  - `npx playwright test`: 762 passed, 18 skipped (Chromium + WebKit; the 2 new skips are the Chromium-only
+    time-lapses in WebKit).
+  - Not run: the real exe (nothing in production changed), `cargo test`.
+- **Next: C3b** (production margins on every side, contract v8, the tuning above), then **C3c** corner art with you.

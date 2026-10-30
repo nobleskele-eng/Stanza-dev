@@ -86,8 +86,8 @@ pixels, so still crisp).
 | `loop` | `true` repeats. `false` plays once and holds the last frame. |
 | `frames` | 1–8 frames. |
 | `durations` | Optional. Milliseconds per frame, one per frame, each 50–10 000. Overrides `fps`, e.g. a long open-eyes frame and then a short blink. |
-| `steps` | Optional (v2). Art pixels the creature moves forward on entering each frame, one per frame, each 0–8. If absent, `walk` moves 1 per frame and every other animation stays put. The pilcrow and cassette walk `[2, 2]`. The bookworm inches with `[4, 0]`: its tail catches up to its planted head (0), then its head reaches forward (4). |
-| `anchor` | Optional (v2). This animation's own resting point, overriding the skin's. `sit` needs one: the creature sits on a row in the middle of its frame and its legs hang below the edge. |
+| `steps` | Optional (v2). Art pixels the creature moves forward on entering each frame, one per frame, each 0–8. If absent, `walk` and `climb` move 1 per frame and every other animation stays put. The pilcrow and cassette walk `[2, 2]`. The bookworm inches with `[4, 0]`: its tail catches up to its planted head (0), then its head reaches forward (4). |
+| `anchor` | Optional (v2). This animation's own contact point, overriding the default. `sit` needs one: the creature sits on a row in the middle of its frame and its legs hang below the edge. `climb` and `hang` touch the card differently (below) and have their own defaults. |
 
 **Required animations** (the brain's states, PLAN.md §4b). What each one should show:
 
@@ -104,6 +104,14 @@ pixels, so still crisp).
 | `held` | Being carried by the pointer | yes |
 | `fall` | Falling after a drop | yes |
 | `land` | Landing | no |
+
+**Where `climb` and `hang` touch the card** (C3a, 2026-10-29). Every other animation stands on an edge: its anchor
+pixel's bottom edge rests on it.
+- `climb` is drawn **facing a wall on its right**, and mirrored on the card's right side. Its anchor pixel's right edge
+  touches the wall, and the pixel's row is its height on the side. Default: the right-most opaque column of any frame,
+  at the top-most opaque row of any frame. So at the side's top it's level with the card's top.
+- `hang`'s anchor pixel's top edge touches the bottom edge from below. Default: the skin anchor's column, at the
+  top-most opaque row of any frame.
 
 A skin that is missing one of these, or has any other error, is rejected as a whole. The companion must be able to
 show every state.
@@ -139,7 +147,9 @@ The budget is about two changes a second on average (C0 spike, docs/DECISIONS.md
 - **Frames:** advanced by JS timers, never by CSS or Web Animations. On the player, the brain owns them (one timer,
   `Companion.tsx`); in the lab's gallery, `useFrame` in `src/companion/Sprite.tsx` does. Any running CSS animation
   costs about 2% of a core in the transparent window, even while it shows nothing new.
-- **Placement on an edge** (`src/companion/place.ts`): the pose's anchor pixel rests on the edge. Positions are whole
+- **Placement on an edge** (`src/companion/place.ts`): the pose's anchor pixel rests on the edge (`placeOnEdge`).
+  Around the whole card (`placeAround`, C3a), the sides run from the card's top down and the bottom from its left; the
+  climb and hang anchors touch them as above. Positions are whole
   art pixels from a grid-aligned origin, applied as a `transform`, so they're whole device px too. Sitting is not
   allowed where the dangling legs would hang over a blocked stretch of the edge (`noSitRanges`, from the frames' rows
   below the sit anchor, both facings).
@@ -149,6 +159,10 @@ The budget is about two changes a second on average (C0 spike, docs/DECISIONS.md
 `?lab=companion` on the dev server (dev builds only) shows:
 - **Live cards** at the top: every skin on a mock card's top edge, run by its brain. Buttons stand in for the music:
   play, pause, stop, next track.
+- **Around cards** (C3a): the same, but each creature travels the card's whole outline. At an end of the top it may
+  turn the corner (half the time), climb down the side in short legs with pauses, hang under the bottom, then climb
+  back up. With the music off it holds still wherever it is; off the top it doesn't sleep or react. They have their own
+  seeds. Production doesn't use the outline yet (C3b).
 - **Each skin in context** at the top, at real size around a plain mock card (no text), on a light and a dark backdrop:
   - walking, asleep and sitting on the top edge;
   - hanging under the bottom edge;
@@ -156,14 +170,12 @@ The budget is about two changes a second on average (C0 spike, docs/DECISIONS.md
 - **Every skin × palette × animation** on a light and a dark backdrop. Each one appears at real size and zoomed,
   and each animation's frames are laid out side by side.
 
-The scene places each pose by its contact with the edge:
-- **Top-edge poses:** the production placement (`placeOnEdge`), with `sit` on its own anchor.
-- **`hang`:** the frame's top-most opaque row, until C3 defines it.
-- **`climb`:** its right-most column, until C3 defines it.
+The scene places each pose with the brain's own placement (`placeAround`): the top-edge poses on their anchors, `hang`
+and `climb` on theirs.
 
 - `?lab=companion&pause` holds every animation on its first frame (for screenshots).
 - `?lab=companion&skin=<id>` shows one skin and leaves out the live cards.
-- `?lab=companion&live` shows only the live cards. The fake-clock e2e uses it: the gallery's ~570 animated sprites would
+- `?lab=companion&live` shows only the live cards, and `?lab=companion&around` only the around cards. The fake-clock e2e uses it: the gallery's ~570 animated sprites would
   otherwise swamp every clock step.
 
 `e2e/companion-lab.spec.ts` checks the lab:
@@ -181,6 +193,9 @@ changes:
 - **Asleep:** about 3 s after the music stops, every creature falls asleep, then shows no changes at all.
 - **Play, track change, stop:** play wakes them, a new track makes them react, and stop sends them to sleep.
 - **Reduced motion:** still poses, and no changes on their own.
+- **Around the card** (Chromium): until every surface has been visited, each creature's drawn pixels touch the card
+  from outside on a side or under the bottom, and stay in the scene.
+- **Paused off the top:** no change at all for 5 minutes, on the same surface; it moves again with the music.
 
 `src/companion/brain.test.ts` simulates whole hours per skin with a seeded generator.
 
@@ -216,9 +231,12 @@ only:
 
 ## Open for later slices
 
-- **`hang` and `climb` anchors (C3).** v2's per-animation `anchor` means "this pixel's bottom edge rests on the
-  surface", which fits poses on top of an edge. C3 decides what it means under an edge and beside one. Until then the
-  lab reads those contacts off the art.
+- **Corner art (C3c).** At a corner the creature switches straight from walking to climbing (or climbing to hanging)
+  in one change. A short transition animation per corner would read better; it's art, designed with the owner.
+- **Moving along the bottom.** `hang` has no step, so it hangs where it came down, at a corner end of the bottom.
 - **Accessory attachment points** for the D2 design round.
+
+`hang` and `climb` contacts were settled in C3a (above) without a format change: no bundled skin gives those
+animations their own `anchor`, and nothing placed them before.
 
 A format change bumps `format` and updates this doc in the same change.

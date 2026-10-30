@@ -65,6 +65,7 @@ describe("companion brain", () => {
         expect(busiestMinute(times), `seed ${seed}: busiest minute`).toBeLessThanOrEqual(BUDGET_PER_MINUTE);
         expect(times.length / 60, `seed ${seed}: changes per minute on average`).toBeLessThan(BUDGET_PER_MINUTE);
         for (const { pose: p } of changes) {
+          expect(p.surface, "without an outline it never leaves the top").toBe("top");
           expect(p.x).toBeGreaterThanOrEqual(0);
           expect(p.x).toBeLessThan(160);
           if (p.animation === "sit") expect(p.x < 40 || p.x > 60, `seed ${seed}: sat at ${p.x}, over a part`).toBe(true);
@@ -170,5 +171,108 @@ describe("companion brain", () => {
     const after = setWorld(b, skin, wide, narrow, 5000);
     expect(pose(after)).toMatchObject({ x: 99, animation: "idle" });
     expect(after.changes.length).toBeGreaterThan(0);
+  });
+});
+
+describe("companion brain around the card (C3a)", () => {
+  // The lab's mock card at 100%: 248 × 88 CSS px at 2 px per art pixel.
+  const around: World = { ...playing, edge: { length: 124, noSit: [[20, 40]] }, around: { side: 44, bottom: 124 } };
+  const lengths = { top: 124, bottom: 124, left: 44, right: 44 };
+  /** Where a surface change must happen: the end it leaves and the end it arrives at. */
+  const CORNERS: Record<string, [number, number]> = {
+    "top>left": [0, 0],
+    "top>right": [123, 0],
+    "left>bottom": [43, 0],
+    "right>bottom": [43, 123],
+    "bottom>left": [0, 43],
+    "bottom>right": [123, 43],
+    "left>top": [0, 0],
+    "right>top": [0, 123],
+  };
+
+  /** Runs until `when` holds for the pose (or `to`), the way `run` does; null if it never did. */
+  function runUntil(skin: Skin, world: World, brain: Brain, to: number, when: (p: Pose) => boolean) {
+    let b = brain;
+    for (;;) {
+      const at = nextChangeAt(b, skin, world);
+      if (at === null || at > to) return null;
+      b = advance(b, skin, world, at);
+      if (when(pose(b))) return { brain: b, t: at };
+    }
+  }
+
+  for (const skin of skins) {
+    it(`${skin.id}: an hour travels the whole outline, within the budget, turning only at corners`, () => {
+      const surfaces = new Set<string>();
+      for (const seed of [1, 2, 3]) {
+        const start = createBrain(skin, around, 0, seed);
+        const { changes } = run(skin, around, start, 0, 60 * MINUTE);
+        const times = changes.map((c) => c.t);
+        expect(busiestMinute(times), `seed ${seed}: busiest minute`).toBeLessThanOrEqual(BUDGET_PER_MINUTE);
+        let prev = pose(start);
+        for (const { pose: p } of changes) {
+          surfaces.add(p.surface);
+          expect(p.x, `seed ${seed}: ${p.surface} position`).toBeGreaterThanOrEqual(0);
+          expect(p.x, `seed ${seed}: ${p.surface} position`).toBeLessThan(lengths[p.surface]);
+          if (p.surface === "left" || p.surface === "right") expect(p.animation).toBe("climb");
+          else if (p.surface === "bottom") expect(p.animation).toBe("hang");
+          else expect(["idle", "walk", "sit", "wake", "react"]).toContain(p.animation);
+          if (p.surface !== prev.surface) {
+            const corner = CORNERS[`${prev.surface}>${p.surface}`];
+            expect(corner, `seed ${seed}: ${prev.surface} → ${p.surface} isn't a corner`).toBeDefined();
+            expect([prev.x, p.x], `seed ${seed}: ${prev.surface} → ${p.surface}`).toEqual(corner);
+          } else if (p.animation === "climb" && prev.animation === "climb") {
+            expect(Math.abs(p.x - prev.x), `seed ${seed}: climbs 1 px a frame`).toBeLessThanOrEqual(1);
+          }
+          prev = p;
+        }
+      }
+      expect([...surfaces].sort(), "every surface, across three seeds").toEqual(["bottom", "left", "right", "top"]);
+    });
+  }
+
+  it("with the music off on a side or under the bottom, it holds still, then carries on when it's back", () => {
+    for (const skin of skins) {
+      for (const where of ["left", "bottom"] as const) {
+        const reached = runUntil(skin, around, createBrain(skin, around, 0, 1), 3 * 60 * MINUTE, (p) =>
+          where === "left" ? p.surface === "left" || p.surface === "right" : p.surface === "bottom",
+        )!;
+        expect(reached, `${skin.id}: reached ${where}`).not.toBeNull();
+        const quiet: World = { ...around, playing: false };
+        const stopped = setWorld(reached.brain, skin, around, quiet, reached.t + 10);
+        expect(pose(stopped), `${skin.id}: in its rest frame`).toMatchObject({ surface: pose(reached.brain).surface, frame: 0 });
+        expect(nextChangeAt(stopped, skin, quiet), `${skin.id} ${where}: still, no sleeping off the top`).toBeNull();
+        const resumed = setWorld(stopped, skin, quiet, around, reached.t + 20 * MINUTE);
+        expect(nextChangeAt(resumed, skin, around), `${skin.id} ${where}: carries on`).not.toBeNull();
+      }
+    }
+  });
+
+  it("off the top it doesn't react to a new track; reduced motion or losing the outline puts it back on the top", () => {
+    const skin = SKINS.cassette;
+    const reached = runUntil(skin, around, createBrain(skin, around, 0, 2), 3 * 60 * MINUTE, (p) => p.surface === "right")!;
+    expect(reached).not.toBeNull();
+    expect(trackChanged(reached.brain, skin, around, reached.t + 1)).toBe(reached.brain);
+
+    const reduced: World = { ...around, reducedMotion: true };
+    const still = setWorld(reached.brain, skin, around, reduced, reached.t + 1);
+    expect(pose(still)).toMatchObject({ surface: "top", x: 123, frame: 0 }); // the right side's top corner
+    expect(["sit", "idle"]).toContain(pose(still).animation);
+    expect(nextChangeAt(still, skin, reduced)).toBeNull();
+
+    const topOnly: World = { ...around, around: undefined };
+    const back = setWorld(reached.brain, skin, around, topOnly, reached.t + 1);
+    expect(pose(back)).toMatchObject({ surface: "top", animation: "idle" });
+  });
+
+  it("a shrinking side keeps it on the card, and at the new end it rounds the corner", () => {
+    const skin = SKINS.pilcrow;
+    const reached = runUntil(skin, around, createBrain(skin, around, 0, 3), 3 * 60 * MINUTE, (p) => p.surface === "left" && p.x > 20)!;
+    expect(reached).not.toBeNull();
+    const short: World = { ...around, around: { side: 10, bottom: 124 } };
+    const b = setWorld(reached.brain, skin, around, short, reached.t + 1);
+    expect(pose(b)).toMatchObject({ surface: "left", x: 9 });
+    const next = runUntil(skin, short, b, reached.t + 10 * MINUTE, (p) => p.surface !== "left")!;
+    expect(pose(next.brain).surface).toMatch(/^(bottom|top)$/);
   });
 });
