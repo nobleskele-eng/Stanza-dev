@@ -424,7 +424,7 @@ locally on `main` ("Slice N: …"), never pushed unless you ask. Hour ranges are
 - **Production slices on `main`:** 1 theme applied + remembered · 2 real frameless transparent window · 3 click-through · 4 right-click theme picker · 5 CSP + named Stanza · 6 player centred side to side.
 - **M1 Real music (done 2026-10-17, DECISIONS.md M1 R1–R3b):** the GSMTC adapter on `main` (20-track gate passed), position drift ≤ 0.2 s over 5 min, keyboard seek, a "Spotify not running" state with recovery, Spotify's own volume through Core Audio, the lyrics button (contract v6), and a CPU pass (every theme 0.1–0.7 s of CPU per 10 s while playing). The Slice 5/6 real-exe checks passed along the way.
 - **Tests at last full run:** 185 unit (Vitest), 723 e2e + 1 skipped (Playwright, Chromium + WebKit), `cargo test` 15.
-- **Open from M1:** `[NEEDS COPY]` labels; the Store build of Spotify; 125%/150% scaling.
+- **Open from M1:** R4 tray + hide (added 2026-10-22); the remaining `[NEEDS COPY]` labels (the first ones were filled 2026-10-22); the Store build of Spotify; 125%/150% scaling.
 
 ### v1 phases → milestones
 
@@ -454,6 +454,11 @@ locally on `main` ("Slice N: …"), never pushed unless you ask. Hour ranges are
   - S5: Core Audio `IAudioSessionManager2` / `ISimpleAudioVolume` on Spotify's process makes `.mp-volume` real. Gate: moving the slider moves Spotify's level in the Windows volume mixer and not the master; a change made in the mixer reads back.
   - S6: a button brings Spotify's own window (and its lyrics view) to the foreground. Gate: works reliably while Spotify is minimised or behind other windows, not just the first time. Needs a contract part and a copy slot.
 
+- **R4 Tray + hide while Spotify is closed** (added 2026-10-22, your choice, pulled forward from M4; DECISIONS.md). Windows only: it needs `cargo`, which the school Mac doesn't have.
+  - A tray icon (the `tray-icon` feature on the `tauri` crate, with the permission in `src-tauri/capabilities/`) with a minimal menu: show/hide and quit. Theme, companion and Reset appearance join it in M4.
+  - When the Spotify feed goes `unavailable`, the window hides. When Spotify comes back, it reappears where it was (the saved position, companion margin included). Show/hide in the tray overrides this until Spotify's state next changes.
+  - **Blocked on:** copy for the tray menu items (COPY.md "Tray menu items") and a tray icon image (the M4 app icon, or a temporary one you approve).
+  - **Gate (real exe):** close Spotify → Stanza's window disappears and the tray icon stays; reopen Spotify → the window comes back in the same place, playing; tray quit exits cleanly; idle CPU while hidden is no worse than while shown.
 ### M2 — Companion · ~32–52 h (§4b)
 - **C0 spike** (`spike/c0-companion`) — **done 2026-10-17** (DECISIONS.md): margin window, crisp pixels at 100/125/150/200%, click-through around the pet, pick up and drop, no flicker all passed. The CPU gate failed for a *continuously* walking pet (+2.5–8% of a core); the measurements set the frame-timer architecture and the change budget above.
 - **C1 Renderer + skin format + lab** — **done 2026-10-18** (DECISIONS.md): SVG sprite renderer with JS-timer frames, skin format v1, now v2 (`docs/COMPANION.md`), validator and registry, the "test dummy" skin with all 11 animations and two palettes, and the dev-only Companion lab (`?lab=companion`). Crisp at 100/125/150/200% in Chromium and WebKit after moving the layout onto a 4 px grid.
@@ -474,7 +479,7 @@ locally on `main` ("Slice N: …"), never pushed unless you ask. Hour ranges are
 - **Gate:** every theme still passes the matrix; swap themes 20× with no flicker (frame-captured this time); memory roughly flat.
 
 ### M4 — Shell and Windows release (v1 Phases 5–6) · ~9–16 h
-- Tray (show/hide, theme, companion, Reset appearance, quit), autostart, single-instance, multi-monitor and DPI handling.
+- Tray: the rest of the menu (theme, companion, Reset appearance) on top of R4's show/hide and quit; autostart, single-instance, multi-monitor and DPI handling.
 - SVG app icon → `npx tauri icon`; NSIS installer; GitHub Actions Windows build; README note that unsigned builds trigger SmartScreen.
 - **Gate:** reboot with autostart on; position and scale correct at 100 / 125 / 150% display scaling; uninstall the dev build, install the CI artifact, full smoke test.
 - **Stop point:** after this you have a complete, shippable Windows project even if macOS never happens.

@@ -586,8 +586,8 @@ test("in Tauri, the lyrics button sits after next, asks Rust to bring Spotify fo
   await expect(root).toHaveAttribute("data-cap-lyrics", "true");
   const order = await page.locator(".mp-controls > button").evaluateAll((els) => els.map((e) => e.className));
   expect(order).toEqual(["mp-btn-prev", "mp-btn-play", "mp-btn-next", "mp-btn-lyrics"]);
-  // Its name comes from COPY.md, still unwritten: [NEEDS COPY], never an invented label.
-  await expect(page.locator(".mp-btn-lyrics")).toHaveAttribute("aria-label", "[NEEDS COPY]");
+  // Its name comes from COPY.md.
+  await expect(page.locator(".mp-btn-lyrics")).toHaveAttribute("aria-label", "Lyrics");
 
   await page.locator(".mp-btn-lyrics").click();
   await expect.poll(async () => (await ipcCalls(page, "spotify_show_window")).length).toBe(1);

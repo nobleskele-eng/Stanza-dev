@@ -1,20 +1,21 @@
 import { expect, test } from "@playwright/test";
 
 // CLAUDE.md: UI strings come from docs/COPY.md; missing strings render "[NEEDS COPY]".
-// While COPY.md has no approved values for these, the rendered UI must say so.
+// The expected strings below are COPY.md's approved values (2026-10-22); a slot still unwritten must say [NEEDS COPY].
 const url = (fixture: string) => `/?fixture=${encodeURIComponent(fixture)}&layout=strip`;
 
-test("idle state and source badge render [NEEDS COPY], not invented text", async ({ page }) => {
+test("idle state and source badge render COPY.md's text", async ({ page }) => {
   await page.goto(url("idle"));
-  await expect(page.locator(".mp-empty")).toHaveText("[NEEDS COPY]");
-  await expect(page.locator(".mp-source-badge")).toHaveText("[NEEDS COPY]");
+  await expect(page.locator(".mp-empty")).toHaveText("idle");
+  await expect(page.locator(".mp-source-badge")).toHaveText("Spotify");
 });
 
-test("transport buttons and volume are labelled [NEEDS COPY] (nothing hardcoded)", async ({ page }) => {
+test("transport buttons and volume are labelled from COPY.md", async ({ page }) => {
   await page.goto(url("typical / all caps"));
-  for (const cls of ["mp-btn-prev", "mp-btn-play", "mp-btn-next", "mp-volume"]) {
-    await expect(page.locator(`.${cls}`)).toHaveAttribute("aria-label", "[NEEDS COPY]");
-  }
+  await expect(page.locator(".mp-btn-prev")).toHaveAttribute("aria-label", "Previous");
+  await expect(page.locator(".mp-btn-play")).toHaveAttribute("aria-label", /^(Play|Pause)$/);
+  await expect(page.locator(".mp-btn-next")).toHaveAttribute("aria-label", "Next");
+  await expect(page.locator(".mp-volume")).toHaveAttribute("aria-label", "Volume");
 });
 
 test("error detail from data is shown as-is; no hardcoded fallback text", async ({ page }) => {

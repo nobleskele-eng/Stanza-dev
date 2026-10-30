@@ -2835,3 +2835,41 @@ one of the skin layers (PLAN.md §4b), so nothing structural changes.
       previous commit, bundled like all copy.
   - The lab in the Browser pane on the real clock, as above.
   - The real exe isn't involved: nothing companion-related is in the production DOM yet (C2b).
+
+## 2026-10-22 — M1 leftover: the first approved copy
+- **Your answers, written into `docs/COPY.md` exactly:** Idle → `idle`; the four transport labels → `Previous`, `Play`,
+  `Pause`, `Next` (you said "just use those", meaning the slot names).
+- **Chosen by me, because you asked for "the standard word" / "the correct badge" (yours to change):**
+  - Source badge → `Spotify`. Only one source exists, so one string works. A second source (SoundCloud) will need
+    per-source badge slots, because C13 says to credit both the uploader and SoundCloud. The official Spotify logo
+    could replace the text later; that's an asset and attribution decision, not copy.
+  - Volume → `Volume`, Lyrics → `Lyrics`, Link-out → `Open`. `Open` names no service because the link-out is
+    meant to serve every source. With Spotify it rarely shows: it only renders when the track has a `permalink`.
+- **Not filled: these answers are behaviour changes, not text, and wait on your reply:**
+  - "Spotify not running" → "Stanza shouldn't be open / shouldn't have an open window." Hiding or quitting the window
+    is a Rust/window change. There's no tray yet (M3/M4), so a hidden Stanza could only be quit from Task Manager.
+    Needs your choice. The slot stays `[NEEDS COPY]`.
+  - Generic error → "error" + a pointer to your Discord `@stayvyxed`. The exact wording is needed. A clickable
+    redirect needs a link: Discord profile URLs use a numeric user ID, not the handle, or an invite link works.
+  - Companion menu toggle → "just icon, no words". Tauri v2's `IconMenuItem` can't be a check item, so on/off
+    would need two icons or a swapped icon. A menu item with no text gives screen readers nothing, and icon menu items
+    are untested on macOS. Needs a decision and an icon.
+- **Tests updated:** `e2e/copy.spec.ts` (idle, badge, transport and volume names) and `e2e/production.spec.ts`
+  (the lyrics button's name). "Spotify not running" (`production.spec.ts:493`) and the menu toggle (`:306`) still
+  expect `[NEEDS COPY]`, correctly.
+- **Checks run (2026-10-22, school Mac):**
+  - `npx tsc --noEmit`: clean.
+  - `npx vitest run`: 21 files, 212 passed (`copy.test.ts` checks that every shipped label is approved COPY.md text).
+  - `npm run build`: passed, check-fixtures-excluded OK.
+  - The two edited specs type-check (`tsc --ignoreConfig`, with a scratch stub for `node:fs`, since `@types/node` isn't
+    installed): clean.
+  - **Not run:** `npx playwright test` (Windows only, see the C2b entry).
+- **Follow-up, same day (your answers):**
+  - Generic error → `error — message @stayvyxed on Discord`. This was my example wording, and you approved it as written.
+    It's plain text, with no link. No e2e checks this slot: the error fixture always carries a detail.
+  - Spotify not running → **hide** the window, with a tray icon to quit and show. Added to PLAN.md as **M1 R4**, pulled
+    forward from M4's tray. Not built here: it needs `cargo` (not on this Mac), copy for the tray menu, and a tray
+    icon image. Once R4 lands, the "Spotify not running" slot only shows in the browser/dev build, so it can stay
+    `[NEEDS COPY]`.
+  - Companion toggle icon: on hold, waiting for you to see what the menu contains.
+  - Re-run after these edits: `npx vitest run` 212 passed; `npm run build` passed, check-fixtures-excluded OK.

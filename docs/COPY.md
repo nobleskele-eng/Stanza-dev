@@ -23,7 +23,7 @@ shows `name`.
 - **Theme name — t5-kinetic:** Kinetic
 
 ## States
-- **Idle / nothing playing:** [NEEDS COPY]
+- **Idle / nothing playing:** idle
 - **Spotify not running:** [NEEDS COPY]
 - **SoundCloud — no link set:** [NEEDS COPY]
 - **SoundCloud — invalid link:** [NEEDS COPY]
@@ -34,8 +34,8 @@ shows `name`.
 ## Settings / chrome
 - **Settings labels:** [NEEDS COPY]
 - **Tray menu items:** [NEEDS COPY]
-- **Source badge wording:** [NEEDS COPY] — must satisfy each service's attribution
-  requirements (see PLAN.md C3, C13).
+- **Source badge wording:** Spotify
+  — must satisfy each service's attribution requirements (see PLAN.md C3, C13).
 - **Customizer labels:** [NEEDS COPY]
 - **Effects section title:** [NEEDS COPY]
 - **Effect label — shapes:** [NEEDS COPY]
@@ -70,14 +70,15 @@ no speech bubbles; its emotes are pixel icons, not text.
 - **Companion settings — section title:** [NEEDS COPY]
 
 ## Player UI
-- **Generic error (no detail available):** [NEEDS COPY]
-- **Previous button label:** [NEEDS COPY]
-- **Play button label:** [NEEDS COPY]
-- **Pause button label:** [NEEDS COPY]
-- **Next button label:** [NEEDS COPY]
-- **Volume slider label:** [NEEDS COPY]
-- **Lyrics button label:** [NEEDS COPY] — the button brings Spotify's own window forward (where its lyrics are); it doesn't show lyrics itself
-- **Link-out label:** [NEEDS COPY]
+- **Generic error (no detail available):** error — message @stayvyxed on Discord
+- **Previous button label:** Previous
+- **Play button label:** Play
+- **Pause button label:** Pause
+- **Next button label:** Next
+- **Volume slider label:** Volume
+- **Lyrics button label:** Lyrics
+  — the button brings Spotify's own window forward (where its lyrics are); it doesn't show lyrics itself
+- **Link-out label:** Open
 
 ## Rules
 - Never generate displayed text procedurally at runtime.
