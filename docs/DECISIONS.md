@@ -3028,7 +3028,8 @@ one of the skin layers (PLAN.md §4b), so nothing structural changes.
     changes in two processes that land in different frames. Kept because it only happens on a deliberate menu click and
     lasts about a frame. **The way to remove it:** keep the margin whether the pet is on or off, so a toggle changes
     only the DOM. That breaks the contract's promise (off = the theme's exact size) and keeps a transparent strip above
-    the card, so it's your call. C3b's margins on every side raise the same question.
+    the card, so it's your call. C3b's margins on every side raise the same question. **Your call (same day): keep
+    it for now.**
   - **CPU** (ms per 10 s, app + WebView2, music playing, windows with a track or play-state change dropped): two runs.
     Off: medians 156 and 125. On: medians 172 and 203, with one 531 window. Under 1% of a core either way; the pet's cost
     is inside the noise. The pet made 6–18 changes per 10 s (React commits, counted as MutationObserver callbacks),
