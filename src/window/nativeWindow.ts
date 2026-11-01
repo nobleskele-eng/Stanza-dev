@@ -48,8 +48,12 @@ export function installWindowDrag(doc: Document = document): () => void {
   return () => doc.removeEventListener("mousedown", onMouseDown);
 }
 
-/** The player's hit area: `.mp-root` and its `.mp-window` (every control is a grid item of the latter). */
-const HIT_PARTS = ".mp-root, .mp-root > .mp-window";
+/**
+ * The player's hit area: `.mp-root` and its `.mp-window` (every control is a grid item of the latter), and the
+ * companion when it's on (M2 C4b: it takes clicks and can be picked up, also out in the window's margin). The pet moves
+ * by its inline style, an attribute change, so each move is re-measured like a part's.
+ */
+const HIT_PARTS = ".mp-root, .mp-root > .mp-window, .mp-root .mp-companion";
 
 /**
  * Click-through (docs/DECISIONS.md, Slice 3): the window is sized for the theme's largest state,

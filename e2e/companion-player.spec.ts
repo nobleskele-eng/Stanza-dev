@@ -28,8 +28,8 @@ const PART_SELECTOR = [
   ".mp-artwork", ".mp-meta", ".mp-progress", ".mp-time-current", ".mp-time-total", ".mp-controls",
   ".mp-volume-wrap", ".mp-link-out", ".mp-source-badge", ".mp-empty", ".mp-error",
 ].join(", ");
-const PET_STATES = ["idle", "walk", "sit", "sleep", "wake", "react", "climb", "hang"]; // contract v8, C3b
-const PET_SURFACES = ["top", "right", "bottom", "left"];
+const PET_STATES = ["idle", "walk", "sit", "sleep", "wake", "react", "climb", "hang", "held", "fall", "land"]; // contract v9, C4b
+const PET_SURFACES = ["top", "right", "bottom", "left", "air"];
 // Where the fake says the window is (physical px, scale 1), so a move reads as a plain offset from it.
 const AT = { x: 100, y: 300 };
 
@@ -216,7 +216,7 @@ test("saved on, a launch sizes the window with the margin but doesn't move it (t
   expect(await ipcCalls(page, "plugin:window|set_position")).toEqual([]);
 });
 
-test("the parts match the contract: where they sit, what they carry, and that they never take input", async ({ page }) => {
+test("the parts match the contract: where they sit, what they carry, and that the pet takes the pointer and the hit region", async ({ page }) => {
   await saveAppearance(page, "t1-default", { on: true, skin: "pilcrow", palette: "default" });
   await fakeTauri(page, spotifyState(Date.now()));
   await page.goto("/");
@@ -232,6 +232,7 @@ test("the parts match the contract: where they sit, what they carry, and that th
       layerPointer: getComputedStyle(layer).pointerEvents,
       petHidden: pet.getAttribute("aria-hidden"),
       petPointer: getComputedStyle(pet).pointerEvents,
+      petNoDrag: pet.hasAttribute("data-no-drag"),
       state: pet.getAttribute("data-pet-state"),
       surface: pet.getAttribute("data-pet-surface"),
       transform: (pet as HTMLElement).style.transform,
@@ -241,17 +242,28 @@ test("the parts match the contract: where they sit, what they carry, and that th
   });
   expect(shape.layerParent).toContain("mp-root");
   expect(shape.afterWindow, ".mp-companion-layer comes after .mp-window").toBe(true);
-  expect(shape).toMatchObject({ layerHidden: "true", layerPointer: "none", petHidden: "true", petPointer: "none" });
+  expect(shape).toMatchObject({ layerHidden: "true", layerPointer: "none", petHidden: "true", petPointer: "auto", petNoDrag: true });
   expect(PET_SURFACES).toContain(shape.surface);
   expect(PET_STATES).toContain(shape.state);
   expect(shape.transform).toMatch(/^translate\(/);
   for (const c of shape.slots) expect(c).toMatch(/^mp-pet-c[1-8]$/);
   expect(shape.vars.length).toBeGreaterThan(0);
   for (const v of shape.vars) expect(v).toMatch(/^--mp-pet-[1-8]$/);
-  // Clicks over the pet reach the card under it, never the pet.
-  const pet = (await page.locator(".mp-companion svg").boundingBox())!;
-  const hit = await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest(".mp-companion") ?? null, [pet.x + pet.width / 2, pet.y + pet.height - 1]);
-  expect(hit).toBeNull();
+  // Clicks over the pet reach the pet (C4b), and its box is part of the window's hit region, so the window takes clicks
+  // there even out in the margin.
+  const pet = (await page.locator(".mp-companion").boundingBox())!;
+  const hit = await page.evaluate(([x, y]) => !!document.elementFromPoint(x, y)?.closest(".mp-companion"), [pet.x + pet.width / 2, pet.y + pet.height / 2]);
+  expect(hit, "the pet takes the click").toBe(true);
+  await expect
+    .poll(async () => {
+      const box = await page.locator(".mp-companion").evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        return { x: r.x, y: r.y, width: r.width, height: r.height };
+      });
+      const rects = last(await ipcCalls(page, "set_hit_region"))?.args.rects as (typeof box)[] | undefined;
+      return rects?.some((r) => Math.abs(r.x - box.x) < 0.01 && Math.abs(r.y - box.y) < 0.01 && r.width === box.width && r.height === box.height);
+    }, { message: "the pet's box is in the hit region" })
+    .toBe(true);
 });
 
 /**
@@ -340,18 +352,20 @@ async function timeLapse(page: Page, theme: string, skin: string) {
 
   const seen = new Set<string>();
   let t = 0;
-  const step = async () => {
-    await page.clock.runFor(STEP);
-    t += STEP;
+  const step = async (ms = STEP) => {
+    await page.clock.runFor(ms);
+    t += ms;
     const s = await snapshot(page);
     seen.add(`${s.surface}/${s.state}`);
     // Collected, then one expect a step: Playwright records every expect call as a step, and one per pixel and
     // part (~600 a step) took a 120 s time-lapse past its 3-minute timeout.
     const wrong = new Set<string>();
+    // Carried or falling (contract v9), it may cross the card and any part but the artwork.
+    const air = s.surface === "air";
     for (const p of s.pixels) {
       if (p.left < -EPS || p.top < -EPS || p.right > view.width + EPS || p.bottom > view.height + EPS) wrong.add("a pixel outside the window");
-      for (const part of s.parts) if (overlaps(p, part)) wrong.add(`a pixel over ${part.part}`);
-      if (s.surface !== "top" && overlaps(p, s.card)) wrong.add("a pixel on the card while off its top");
+      for (const part of s.parts) if ((!air || /\bmp-artwork\b/.test(part.part)) && overlaps(p, part)) wrong.add(`a pixel over ${part.part}`);
+      if (s.surface !== "top" && !air && overlaps(p, s.card)) wrong.add("a pixel on the card while off its top");
     }
     expect([...wrong], `${theme} × ${skin}: ${s.state} on ${s.surface}, t=${t} ms`).toEqual([]);
     return s;
@@ -408,6 +422,81 @@ for (const theme of THEME_IDS)
       tried.push(`${skin}: ${[...run.seen].sort().join(", ")}`);
     }
     expect(tried, "no species climbed a side and hung").toEqual([]);
+  });
+
+/** The pet's box in the page (the layer sits at the window's origin, so the transform the app set is page px). */
+const petBox = (page: Page) =>
+  page.evaluate(() => {
+    const pet = document.querySelector(".mp-companion") as HTMLElement;
+    const size = pet.querySelector("svg")!.width.baseVal.value;
+    const [x, y] = (/translate\(([-\d.]+)px, ([-\d.]+)px\)/.exec(pet.style.transform) ?? []).slice(1).map(Number);
+    return { x, y, size, mid: { x: x + size / 2, y: y + size / 2 } };
+  });
+
+/**
+ * Waits (real time) until no view transition runs. T5's track-change morph wraps the swap in one (Chromium), and while
+ * it runs the browser hit-tests everything as the root, so no part of the page, the pet included, takes the pointer
+ * (DECISIONS.md 2026-11-01). WebKit here has no `:active-view-transition`, and no morph.
+ */
+const noViewTransition = (page: Page) =>
+  page.waitForFunction(() => {
+    try {
+      return !document.documentElement.matches(":active-view-transition");
+    } catch {
+      return true;
+    }
+  });
+
+for (const [i, theme] of THEME_IDS.entries())
+  test(`pointer, ${theme}: a click makes it react; it's carried over the card but never the artwork, without dragging the window; dropped over the card it falls and catches an edge`, async ({ page }) => {
+    test.setTimeout(120_000);
+    const skin = SKIN_IDS[i % SKIN_IDS.length]; // a different species per theme
+    const run = await timeLapse(page, theme, skin);
+    let s = await run.step();
+    expect(["idle", "walk", "sit"], `${theme} × ${skin}: awake on the top to begin with`).toContain(s.state);
+    await noViewTransition(page);
+
+    // A click: a reaction.
+    let { mid } = await petBox(page);
+    await page.mouse.click(mid.x, mid.y);
+    s = await run.step(40);
+    expect(s.state, "a click makes it react").toBe("react");
+
+    // Picked up: in the air, and the window never started dragging.
+    ({ mid } = await petBox(page));
+    await page.mouse.move(mid.x, mid.y);
+    await page.mouse.down();
+    await page.mouse.move(mid.x + 6, mid.y - 4, { steps: 3 });
+    s = await run.step(40);
+    expect(s, "picked up").toMatchObject({ state: "held", surface: "air" });
+
+    // Over the artwork's middle: pushed off it (the step checks every pixel against it).
+    const art = s.parts.find((p) => /\bmp-artwork\b/.test(p.part))!;
+    expect(art, "the fake plays a track with artwork").toBeDefined();
+    await page.mouse.move((art.left + art.right) / 2, (art.top + art.bottom) / 2, { steps: 4 });
+    await run.step(40);
+
+    // Over the card, as far from the artwork as a few candidate points allow, in the card's upper part.
+    const c = s.card;
+    const clear = (x: number, y: number) => x < art.left - 40 || x > art.right + 40 || y < art.top - 40 || y > art.bottom + 40;
+    const spots = [0.8, 0.2, 0.5].flatMap((fx) => [0.35, 0.6].map((fy) => [c.left + fx * (c.right - c.left), c.top + fy * (c.bottom - c.top)]));
+    const spot = spots.find(([x, y]) => clear(x, y));
+    if (spot) {
+      await page.mouse.move(spot[0], spot[1], { steps: 4 });
+      s = await run.step(40);
+      expect(s.pixels.some((p) => overlaps(p, s.card)), "carried over the card").toBe(true);
+    }
+
+    // Let go: through the air (a fall, every step checked), then on an edge of the card, at rest.
+    await page.mouse.up();
+    const states: string[] = [];
+    for (let n = 0; n < 100 && (s = await run.step(40)).surface === "air"; n++) states.push(s.state);
+    expect(["top", "right", "bottom", "left"], `came to rest: ${s.state} on ${s.surface}`).toContain(s.surface);
+    if (spot) {
+      expect(states, "it fell").toContain("fall");
+      expect([`bottom/hang`, `left/climb`, `right/climb`], "it caught an edge of the card").toContain(`${s.surface}/${s.state}`);
+    }
+    expect(await ipcCalls(page, "plugin:window|start_dragging"), "pressing the pet never drags the window").toEqual([]);
   });
 
 test("it rides a moving card: when the window resizes and the card moves under it, the pet follows (real clock)", async ({ page }) => {

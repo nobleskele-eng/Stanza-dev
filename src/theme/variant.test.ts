@@ -143,7 +143,7 @@ describe("validateVariant — whole-file rules", () => {
   });
 
   it("reports every whole-file problem at once", () => {
-    const r = validateVariant({ theme: "x", contract: 9, layout: "pill" }, manifest);
+    const r = validateVariant({ theme: "x", contract: CONTRACT_VERSION + 1, layout: "pill" }, manifest);
     expect(codes(r)).toEqual(["theme-mismatch@theme", "contract-mismatch@contract", "layout-not-offered@layout"]);
   });
 

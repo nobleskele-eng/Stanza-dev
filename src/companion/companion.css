@@ -12,7 +12,7 @@
 .mp-pet-c8 { fill: var(--mp-pet-8); }
 
 /* The production layer (CompanionLayer): zero-size and fixed at the window's origin, so a theme's positioning or
-   clipping on .mp-root / .mp-window can't reach the pet. Never intercepts input (the pet is not interactive until C4). */
+   clipping on .mp-root / .mp-window can't reach the pet. The layer never intercepts input; the pet itself does (C4b). */
 .mp-companion-layer {
   position: fixed;
   left: 0;

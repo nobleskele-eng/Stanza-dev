@@ -3315,3 +3315,69 @@ one of the skin layers (PLAN.md §4b), so nothing structural changes.
   - **Not run:** the real exe (nothing in production changed); `cargo test` (no Rust changed).
 - **For C4b:** the production e2e's "over no part" check has to allow the air states (held and falling may now cross
   parts other than the artwork). It keeps every resting pose to it.
+
+## 2026-11-01 — M2 C4b: the companion takes the pointer in the real player; contract v9
+- **The player:**
+  - `CompanionLayer` turns `interactive` on and measures `.mp-artwork` as what to avoid, alongside the parts it already
+    measures.
+  - `.mp-root .mp-companion` joins the window's hit region (`HIT_PARTS`, `src/window/nativeWindow.ts`). So the window
+    takes clicks on the pet even out in the margin, where it otherwise lets them through. The pet moves by its inline
+    style, an attribute change, so the hit region's observer re-measures it like any part: a re-send only when its box
+    moved.
+  - `data-no-drag` keeps the window-drag handler (C8) off it.
+- **Contract v9:**
+  - `.mp-companion` is `pointer-events: auto` with `data-no-drag`, and is in the hit region.
+  - `data-pet-state` gains `held | fall | land`, and `data-pet-surface` gains `air`.
+  - Carried or falling it may cross any part except `.mp-artwork`; at rest every v8 rule holds.
+  - Nothing renamed or removed; all five themes at `contract: 9`.
+  - A test used `9` as "a mismatched contract". It's now `CONTRACT_VERSION + 1`, as its neighbour already did.
+  - Saved appearances made at v8 lose their variant (the theme stays) on the first v9 launch, as at every bump. Yours
+    was the Default with no overrides, so nothing visible changes.
+- **E2E (`companion-player.spec.ts`):**
+  - The contract test now expects the pet to take the click, with `data-no-drag`, and its box in the hit region the
+    app sends.
+  - The time-lapse's per-step check lets the air states cross parts other than the artwork, still inside the window.
+  - **New, every theme × a species each (Chromium and WebKit):**
+    - A click: `react`.
+    - A pick-up: `held` in the `air`, and the window never starts dragging.
+    - Carried over the artwork's middle: pushed off it.
+    - Carried over the card away from the artwork: over the card.
+    - Dropped there: a real fall, then it catches an edge (`bottom/hang`, or a side's `climb`).
+    - Every 40 ms step is checked: inside the window, never over the artwork, and at rest over no part.
+  - Mutation-checked: dropping `avoid` fails all five themes ("a pixel over mp-artwork"); leaving the pet out of the
+    hit region fails the contract test.
+- **Surprise: T5's morph blocks all pointer input while it runs.** The pointer test failed in T5 on Chromium: a click
+  left the pet `idle`.
+  - Diagnosed before retrying: `elementsFromPoint` over the pet found only `<html>`, and `:active-view-transition` was
+    true. T5 wraps a track change in `document.startViewTransition()` (Chromium/WebView2), and while a view transition
+    runs the browser hit-tests the whole page as the root.
+  - Right after load the first track starts one. 1.5 s later (real time) it had ended and the pet took the click.
+  - So it's not the pet: for the morph's duration nothing in T5 takes the pointer, play/pause included. That has been
+    true since design round 2; left as is, logged here.
+  - The test waits for no view transition (real time) before pressing. Three repeats of the new tests: 36 of 36.
+- **Real exe (ran), `npm run tauri build -- --no-bundle` OK, check-fixtures-excluded OK.**
+  - Neither Stanza nor Spotify was running, so the card showed "Spotify not running" (no artwork) and nothing could
+    touch your music.
+  - Driven over CDP: synthetic input inside WebView2, so your cursor never moved. Reduced motion was emulated so the
+    pet held still and every press landed on it. Your saved appearance was put back as it was.
+  - The pet: `pointer-events: auto`, `data-no-drag`, and the element under its own middle.
+  - Pressed and moved: `held` in the `air`. Let go above the card: resting on the top again (no fall under reduced
+    motion), 112 px along.
+  - IPC, read from the network: 9 `set_hit_region` requests during the drag, the last including the pet's resting box
+    (186, 2, 32×32), and no `start_dragging`. No console errors. Closed with `CloseMainWindow`; nothing left running.
+  - **Surprise:** recording IPC by wrapping `window.__TAURI_INTERNALS__.invoke` silently did nothing (the property is
+    non-writable and non-configurable), so the first probe read "0 sends". Each IPC call is also a request to
+    `ipc.localhost/<command>`, which CDP sees: that's the reliable way.
+- **Not checked yet: a real mouse drag in the real exe.** That needs real input on your screen, with your OK at the
+  time. It's what would show the click-through poller and the pet together: pressing the pet out in the margin, and
+  dragging the cursor off the pet's box mid-drag. The poller turns click-through on whenever the cursor is outside
+  every reported box. If WebView2 holds mouse capture during a press (as Chromium normally does), the drag carries on;
+  if it doesn't, the fix is a Rust change to keep the window solid while a press that began on it is held.
+- **Checks run (Windows):**
+  - `npx tsc --noEmit`: clean.
+  - `npx vitest run`: 22 files, 272 passed.
+  - `npm run build`: passed, check-fixtures-excluded OK.
+  - `npx playwright test`: 789 passed, 23 skipped (Chromium + WebKit; the 10 new are the pointer test per theme in
+    both).
+  - The release build and the CDP drive above.
+  - **Not run:** `cargo test` (no Rust changed); the real-mouse drag (above).

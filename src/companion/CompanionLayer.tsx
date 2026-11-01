@@ -2,7 +2,8 @@
 // the effect filters), in a fixed, zero-size layer at the window's origin, so no theme's positioning or clipping can
 // reach it. The layer measures `.mp-window`'s outline and the parts near its top, and re-measures when any of them
 // move (the card's height changes with its state, T3 reveals its controls on hover), so the pet rides a moving edge.
-// The window's margin on every side (App.tsx) is the room it climbs and hangs in.
+// The window's margin on every side (App.tsx) is the room it climbs and hangs in. The pet takes the pointer (C4b): it
+// can be clicked, and carried over the card and its margin, but never over the artwork, which it's told to avoid.
 import { useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { hashString } from "../fx/beat";
 import { Companion } from "./Companion";
@@ -18,10 +19,14 @@ const PART_SELECTOR = [
   ".mp-volume-wrap", ".mp-link-out", ".mp-source-badge", ".mp-empty", ".mp-error",
 ].join(", ");
 
+/** What a carried or falling pet never covers (CLAUDE.md: nothing interactive over the artwork). */
+const AVOID_SELECTOR = ".mp-artwork";
+
 interface Measured {
   edge: EdgeBox;
   outline: Outline;
   blocked: [number, number][];
+  avoid: Outline[];
 }
 
 const toBox = (r: DOMRect): Box => ({ left: r.left, top: r.top, right: r.right, bottom: r.bottom });
@@ -61,7 +66,11 @@ export function CompanionLayer({
         [...card.querySelectorAll(PART_SELECTOR)].map((el) => toBox(el.getBoundingClientRect())),
         px,
       );
-      const next: Measured = { edge, outline, blocked };
+      const avoid = [...card.querySelectorAll(AVOID_SELECTOR)]
+        .map((el) => el.getBoundingClientRect())
+        .filter((b) => b.width > 0 && b.height > 0)
+        .map((b): Outline => ({ left: b.left, top: b.top, width: b.width, height: b.height }));
+      const next: Measured = { edge, outline, blocked, avoid };
       const key = JSON.stringify(next);
       if (key === sent.current) return;
       sent.current = key;
@@ -105,6 +114,8 @@ export function CompanionLayer({
           blocked={measured.blocked}
           seed={hashString(skin.id)}
           dpr={dpr}
+          interactive
+          avoid={measured.avoid}
         />
       )}
     </div>

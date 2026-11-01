@@ -1,9 +1,9 @@
 # Stanza — Theme Contract
 
-**Contract version: 8**
-**Status:** live at v8. v1 froze 2026-09-22 (every item in "Remaining before this
+**Contract version: 9**
+**Status:** live at v9. v1 froze 2026-09-22 (every item in "Remaining before this
 contract can be frozen" below was checked off); v2 and v3 followed the same day, v4 and v5 the day after,
-v6 on 2026-10-17, v7 on 2026-10-18 and v8 on 2026-10-29, each in the same change as the code that needed it. Any further change to a part,
+v6 on 2026-10-17, v7 on 2026-10-18, v8 on 2026-10-29 and v9 on 2026-11-01, each in the same change as the code that needed it. Any further change to a part,
 attribute or variable name is a version bump made in the same change as the code that
 needs it.
 
@@ -52,6 +52,11 @@ needs it.
   removed: a v7 theme keeps working apart from its `contract` number. The `theme.json` `companion` field is still not
   read: every theme gets all four edges, and the field arrives with the first theme that needs to restrict them or
   with C5's inner shelf.
+- **v9 (2026-11-01):** the companion takes the pointer (M2 C4b). `.mp-companion` now has `pointer-events: auto`
+  and `data-no-drag`, and joins the window's hit region (so it takes clicks out in the margin too). A click makes it
+  react; a drag picks it up. `data-pet-state` gains `held` (carried), `fall` and `land`; `data-pet-surface` gains
+  `air` (carried or falling, on no surface). Carried or falling it may be over the card, but **never over
+  `.mp-artwork`**. Nothing renamed or removed: a v8 theme keeps working apart from its `contract` number.
 
 This file is the source of truth for the class names, data attributes and CSS custom
 properties a Stanza theme may rely on. Most of it is checked by tests, not by hand:
@@ -191,7 +196,7 @@ customization layer.
 
 ---
 
-## Companion (v7–v8, opt-in, app-provided)
+## Companion (v7–v9, opt-in, app-provided)
 A small pixel-art creature (PLAN.md §4b, `docs/COMPANION.md`) that lives on the card's outline: it walks and sits on
 the top edge, climbs the sides and hangs under the bottom. It is **not theme art**:
 the app draws it, a theme only has to leave it room. It is **off until the owner turns it on** (right-click menu), and
@@ -200,10 +205,10 @@ while it is off none of these parts exist.
 - **`.mp-companion-layer`** — a child of `.mp-root` after `.mp-window` (like `.mp-fx-filters`, so it is not a grid item and
   needs no `grid-area`), `aria-hidden`. A zero-size layer fixed at the window's origin, `pointer-events: none`, above the card
   (`z-index: 1`). It measures `.mp-window`'s box and the parts near its top, and follows them when they move.
-- **`.mp-companion`** — inside the layer: the creature. `aria-hidden`, `pointer-events: none` (until pick-up lands in C4).
-  Carries `data-pet-state` (`idle | walk | sit | sleep | wake | react` on the top, `climb` on a side, `hang` under the
-  bottom; the skin format's other names, `held | fall | land`, come with C4) and `data-pet-surface`
-  (`top | right | bottom | left`). Its position is an inline `transform` set by the app.
+- **`.mp-companion`** — inside the layer: the creature. `aria-hidden`, `pointer-events: auto` and `data-no-drag` (v9: it
+  takes the pointer, and pressing it never drags the window). Carries `data-pet-state` (`idle | walk | sit | sleep | wake |
+  react | land` on the top, `climb` on a side, `hang` under the bottom, `held | fall` in the air) and `data-pet-surface`
+  (`top | right | bottom | left | air`). Its position is an inline `transform` set by the app.
 - **`.mp-pet-c1`…`.mp-pet-c8`** — the sprite's colour slots: one SVG `<path>` per colour, filled from `--mp-pet-N`.
 - **`--mp-pet-1`…`--mp-pet-8`** — app-provided, set inline on the sprite, from the chosen skin's palette. Not theme-authored
   and not editable: a palette is part of a skin, not of a theme.
@@ -220,6 +225,12 @@ What a theme can rely on:
 - It rides the outline: when the card's height or a part's box changes (state, T3's hover reveal) it re-measures.
 - It reacts only to playback state (playing, paused, a new track), never to the audio (D16). Off the top it holds still
   while the music is off. Under `prefers-reduced-motion` it holds still poses on the top.
+- **It takes the pointer (v9).** A click on it makes it react. A drag picks it up; the owner can carry it over the card
+  and the margin around it, never over `.mp-artwork` (pushed off the nearest way). Let go, it falls onto the top from
+  above, down the card's face to catch the bottom edge (sliding off the artwork if it's in the way), or grabs a side or
+  the bottom at once. **While carried or falling (`data-pet-surface="air"`) it may pass over any part except the
+  artwork**; at rest it keeps every rule above. Its box is part of the window's hit region, so it takes clicks in the
+  margin, where the window otherwise lets them through.
 - Themes **must not** style, hide or reposition any of these parts. `.mp-companion-layer` and `.mp-companion` are not in the
   **Parts** list because they are absent whenever the companion is off; `e2e/companion-player.spec.ts` checks this section
   against the DOM instead.
