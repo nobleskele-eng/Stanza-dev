@@ -3381,3 +3381,52 @@ one of the skin layers (PLAN.md §4b), so nothing structural changes.
     both).
   - The release build and the CDP drive above.
   - **Not run:** `cargo test` (no Rust changed); the real-mouse drag (above).
+
+## 2026-11-01 — M2 C4b: the real-mouse drag in the exe (ran, your OK)
+
+- **Why:** the CDP probe used synthetic input inside WebView2, which skips the OS click-through poller. Only a real
+  mouse shows the two together: the poller makes the window let clicks through whenever the cursor is outside every
+  reported box, and a drag can take the cursor off the pet's box.
+- **Setup:**
+  - The release exe from 53c84a6: no source file was newer than it.
+  - Stanza wasn't running. Spotify was open; nothing on the card was pressed.
+- **Method:**
+  - The real OS cursor, moved by a per-monitor-DPI-aware PowerShell helper (`SetCursorPos`, `mouse_event`).
+  - CDP only watched: pointer events, the pet's data attributes, and the `ipc.localhost` requests. It also emulated
+    reduced motion for every press, so the pet held still.
+  - The poller's state, read directly: the window's `WS_EX_TRANSPARENT` bit.
+  - Before every press, the cursor went to the pet's middle and four things had to hold:
+    - the page's own `pointermove` arrived at exactly that point, on the pet;
+    - the window was taking clicks;
+    - `WindowFromPoint` there was Stanza.
+  - A press that missed the pet would have been let go in place at once.
+- **Results (T1, 100%):**
+  - **Picked up** from the top, out in the margin: `held` in the `air`, with pointer capture.
+  - **A jump of 1.5 sprite widths in one move:** the pet followed it, and the window never let clicks through.
+  - **Out past where the pet can go, for 0.7 s** (6 px from the window's left edge):
+    - The window let clicks through the whole time.
+    - The page still got every move: 30 of them, 11 outside the pet's room, all on the pet.
+    - The pet stayed `held`, pinned at the edge of its room.
+    - So WebView2 keeps mouse capture while the poller switches click-through on. The Rust latch considered in the
+      C4b entry isn't needed.
+  - **Back, and let go above the card:** resting on the top (reduced motion).
+  - **Motion back on while in the hand, let go over the title** (no control under that point): `fall`, then
+    `bottom/hang`.
+  - **Let go out in the margin, while clicks were passing through:**
+    - The release still reached the pet: a `pointerup` on it.
+    - The pet grabbed the card's left side (`climb`).
+    - The window behind that point was another Chromium-based app. The script would have let go elsewhere if it had
+      been Spotify.
+  - **Throughout:**
+    - No `start_dragging`.
+    - The window didn't move.
+    - No console errors.
+    - Your saved appearance was put back, and so was the cursor.
+    - Closed with `CloseMainWindow`; nothing left running.
+- **Surprises:**
+  - **The first run stopped before dragging.** Chromium fires `gotpointercapture` only with the next pointer event,
+    and the script expected it straight after the press. The script let go in place, which counts as a click on the
+    pet and woke it; nothing else happened. Capture is now checked after the first moves.
+  - **Turning the companion on resizes the window** (its margin). A before/after comparison of the window's rect has
+    to start once it's on; the first run's "the window moved" was that.
+- **Checks run:** the three real-exe runs above. No code changed, so the test suites weren't rerun.
