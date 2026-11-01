@@ -2,18 +2,41 @@
 // its pose: every visible change is one re-render of one small SVG, and nothing runs in between (no CSS or Web
 // Animations, which keep the transparent window's compositor busy: C0 spike). The timer re-arms itself right after
 // each change rather than after React renders, so the brain keeps time even when renders are batched.
+// With `interactive` (C4a) it can be clicked, and picked up, carried and dropped with the pointer.
 // Remount it (a `key`) when the skin changes.
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { advance, createBrain, nextChangeAt, pose, setWorld, trackChanged, type Brain, type Pose, type World } from "./brain";
-import { artPixelPx } from "./pixel";
-import { edgeLength, noSitRanges, placeAround, type EdgeBox, type Outline } from "./place";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
+import {
+  advance,
+  carry,
+  createBrain,
+  drop,
+  nextChangeAt,
+  pickUp,
+  poke,
+  pose,
+  setWorld,
+  trackChanged,
+  type Brain,
+  type Pose,
+  type World,
+} from "./brain";
+import { artPixelPx, spriteBoxPx } from "./pixel";
+import { carryPoint, edgeLength, landingFor, noSitRanges, placeAround, type EdgeBox, type Outline } from "./place";
 import type { Skin } from "./skin";
 import { Sprite } from "./Sprite";
 
 const now = () => performance.now();
 const reduceQuery = () => window.matchMedia("(prefers-reduced-motion: reduce)");
 const samePose = (a: Pose, b: Pose) =>
-  a.animation === b.animation && a.frame === b.frame && a.surface === b.surface && a.x === b.x && a.facing === b.facing;
+  a.animation === b.animation &&
+  a.frame === b.frame &&
+  a.surface === b.surface &&
+  a.x === b.x &&
+  a.facing === b.facing &&
+  a.air?.x === b.air?.x &&
+  a.air?.y === b.air?.y;
+/** A press that moves this far (CSS px) picks the creature up; less is a click. */
+const PICK_UP_PX = 4;
 
 function useReducedMotion(): boolean {
   const [reduce, setReduce] = useState(() => reduceQuery().matches);
@@ -36,6 +59,8 @@ export function Companion({
   blocked = [],
   seed,
   dpr = window.devicePixelRatio || 1,
+  interactive = false,
+  room,
   className,
 }: {
   skin: Skin;
@@ -54,6 +79,13 @@ export function Companion({
   blocked?: readonly (readonly [number, number])[];
   seed: number;
   dpr?: number;
+  /** It takes the pointer (C4a): a click makes it react; a drag picks it up, and letting go drops it. */
+  interactive?: boolean;
+  /**
+   * Where it may be carried, same px; never over the card. Default: a sprite's box around the card (the window's
+   * margin, C3b), or above the top edge when there's no outline.
+   */
+  room?: Outline;
   className?: string;
 }) {
   const px = artPixelPx(dpr);
@@ -95,6 +127,14 @@ export function Companion({
       Math.max(0, at - now()),
     );
   }, [skin, show]);
+  const update = useCallback(
+    (next: Brain) => {
+      brain.current = next;
+      show();
+      schedule();
+    },
+    [show, schedule],
+  );
 
   useEffect(() => {
     if (worldRef.current !== world) {
@@ -110,23 +150,90 @@ export function Companion({
   useEffect(() => {
     if (trackKey === lastTrack.current) return;
     lastTrack.current = trackKey;
-    brain.current = trackChanged(brain.current!, skin, worldRef.current, now());
-    show();
-    schedule();
-  }, [trackKey, skin, show, schedule]);
+    update(trackChanged(brain.current!, skin, worldRef.current, now()));
+  }, [trackKey, skin, update]);
 
   // Without an outline the brain never leaves the top, which needs only the edge.
   const card = outline ?? { left: edge.left, top: edge.top, width: edge.width, height: 0 };
-  const { left, top, mirrored } = placeAround(skin, shown.animation, shown.surface, shown.x, shown.facing, px, edge, card);
+  const placed = shown.air
+    ? { left: card.left + shown.air.x * px, top: card.top + shown.air.y * px, mirrored: shown.facing < 0 }
+    : placeAround(skin, shown.animation, shown.surface, shown.x, shown.facing, px, edge, card);
+  const { left, top, mirrored } = placed;
   const snap = (v: number) => Math.round(v * dpr) / dpr;
+
+  // The pointer (C4a). A press is a click until it moves PICK_UP_PX; then the creature is in the pointer's hand,
+  // keeping the spot it was grabbed by, until the press ends and it's dropped.
+  const press = useRef<{ id: number; x: number; y: number; grab: { x: number; y: number }; held: boolean } | null>(null);
+  const box = spriteBoxPx(skin.grid, px);
+  const carryRoom =
+    room ??
+    (outline
+      ? { left: card.left - box, top: card.top - box, width: card.width + 2 * box, height: card.height + 2 * box }
+      : { left: edge.left - box, top: edge.top - box, width: edge.width + 2 * box, height: box });
+  /** The pointer in the container's px (the creature's own box is placed in them). */
+  const local = (e: PointerEvent<HTMLDivElement>) => {
+    const r = e.currentTarget.offsetParent?.getBoundingClientRect();
+    return { x: e.clientX - (r?.left ?? 0), y: e.clientY - (r?.top ?? 0) };
+  };
+  const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0 || press.current) return;
+    e.preventDefault(); // no text selection while it's carried
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const p = local(e);
+    press.current = { id: e.pointerId, ...p, grab: { x: p.x - left, y: p.y - top }, held: false };
+  };
+  const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
+    const g = press.current;
+    if (!g || e.pointerId !== g.id) return;
+    const p = local(e);
+    if (!g.held && Math.hypot(p.x - g.x, p.y - g.y) < PICK_UP_PX) return;
+    const b = brain.current!;
+    const at = carryPoint(skin, { left: p.x - g.grab.x, top: p.y - g.grab.y }, b.facing < 0, px, card, carryRoom);
+    if (g.held) {
+      brain.current = carry(b, at);
+      show();
+    } else {
+      g.held = true;
+      update(pickUp(b, skin, worldRef.current, now(), at));
+    }
+  };
+  const release = (e: PointerEvent<HTMLDivElement>, click: boolean) => {
+    const g = press.current;
+    if (!g || e.pointerId !== g.id) return;
+    press.current = null;
+    const b = brain.current!;
+    if (g.held && b.air) {
+      // Under reduced motion it lives on the top only (C3a), so that's where it lands.
+      const to = landingFor(skin, b.air, b.facing, px, edge, outline && !reducedMotion ? card : null);
+      update(drop(b, skin, worldRef.current, now(), to));
+    } else if (click && !g.held) update(poke(b, skin, worldRef.current, now()));
+  };
+
   return (
     <div
       className={className ? `mp-companion ${className}` : "mp-companion"}
       data-pet-state={shown.animation}
-      data-pet-surface={shown.surface}
+      data-pet-surface={shown.air ? "air" : shown.surface}
       aria-hidden="true"
-      // Not interactive until picking it up lands (C4).
-      style={{ position: "absolute", left: 0, top: 0, pointerEvents: "none", transform: `translate(${snap(left)}px, ${snap(top)}px)` }}
+      {...(interactive
+        ? {
+            // The window-drag handler (C8) leaves it alone.
+            "data-no-drag": "",
+            onPointerDown,
+            onPointerMove,
+            onPointerUp: (e: PointerEvent<HTMLDivElement>) => release(e, true),
+            onPointerCancel: (e: PointerEvent<HTMLDivElement>) => release(e, false),
+            onLostPointerCapture: (e: PointerEvent<HTMLDivElement>) => release(e, false),
+          }
+        : {})}
+      style={{
+        position: "absolute",
+        left: 0,
+        top: 0,
+        pointerEvents: interactive ? "auto" : "none",
+        ...(interactive ? { touchAction: "none", cursor: shown.animation === "held" ? "grabbing" : "grab" } : {}),
+        transform: `translate(${snap(left)}px, ${snap(top)}px)`,
+      }}
     >
       <Sprite skin={skin} animation={shown.animation} frame={shown.frame} palette={palette} dpr={dpr} mirrored={mirrored} />
     </div>

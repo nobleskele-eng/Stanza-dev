@@ -3176,3 +3176,81 @@ one of the skin layers (PLAN.md §4b), so nothing structural changes.
     in a window 404×664 instead of 340×632).
 - **Open:** the one-frame jump on toggling now goes sideways as well as up (your "keep it for now" stands). C3c corner
   art with you. How often trips should happen, if you want more.
+
+## 2026-11-01 — M2 C4a: click it, pick it up, drop it (lab only)
+- **C4 split like C2 and C3.** C3c (corner art) needs you, so C4 came next.
+  - **C4a (this):** the brain and the `Companion` component take the pointer, in the lab only.
+  - **C4b:** the production player. `interactive` on, `.mp-companion` in the hit region, contract v9
+    (`data-pet-state` `held | fall | land`, `data-pet-surface` `air`), the e2e over the five themes, and a real-exe
+    drag check. That check needs real mouse input on your screen, so it needs your OK at the time.
+- **The brain** (`src/companion/brain.ts`): `poke`, `pickUp`, `carry` and `drop`. `held`, `fall` and `land` are now
+  states, so `Mode` is every animation. Off every surface it has `air`: its sprite box, in art px from the card's
+  top-left.
+  - **A click** on the top while idle, walking or sitting: `react`. Asleep: `wake`, then back to sleep.
+    - Found while writing it: the drowsy timer had to start over at the click, or it cut the wake off at once.
+    - A click does nothing mid-reaction, waking or landing, off the top, in the air, or under reduced motion.
+  - **Held:** it plays `held` as the budget allows. The music and new tracks don't touch it, and it doesn't doze off
+    in the hand.
+  - **The budget:** changes the pointer causes always happen, like the music's: a click's reaction, a pick-up, a fall,
+    a landing. Being carried moves it with the pointer. Those moves aren't the creature's own changes, so the cap
+    doesn't count them. Dragging it costs what dragging any element costs, for as long as you drag.
+  - **Let go:**
+    - Over the top it falls onto it. The fall moves on its own clock, a step every 40 ms of 2, 3, 4 … up to 8 art px.
+      It plays `land`, then it's idle, or asleep with the music off.
+    - Beside a side it clings there and climbs back up. Under the card it hangs from the bottom. With the music off it
+      holds still there, as in C3a.
+    - Under reduced motion it rests on the top with no fall. Reduced motion turning on mid-fall lands it at once.
+- **Where it can be carried: my call, say if you want it different.** Within a sprite's box around the card (the
+  window's margin from C3b; above the top edge where there's no outline), and **never over the card**. Pointing over
+  the card pushes it out the shortest way (`carryPoint`, `src/companion/place.ts`).
+  - Why: CLAUDE.md says nothing interactive may sit over the artwork, and the pet becomes interactive. Keeping it off
+    the whole card also keeps it off every part, so C3b's "over no part" check holds even in your hand. And a fall
+    never has to cross the card.
+  - The cost: in the player the margin above the card is one sprite's box, so falls are short, about 1–4 art px at
+    100%. A drop mostly reads as "it lands". The alternative is to carry it over the card except the artwork. Falls
+    would be longer, but a fall from over the card would cross other parts.
+- **Where it lands** (`landingFor`): the surface nearest its sprite box. It falls onto the top **only from above it**
+  (its held and fall art clear of the top's line). Otherwise a drop just beside the card, a little lower than its top,
+  could pick the top's end as nearest, and the diagonal fall would clip the card's corner. On a side it faces up.
+- **Surprise: the bookworm's fall frame reaches 2 rows lower than its held frame.** So the carried box keeps both the
+  held and the fall art off the card, or the first fall frame would dip onto it. The art rule that follows (`fall`'s
+  lowest opaque row no lower than `land`'s anchor row) is in COMPANION.md. It isn't validated: the property test
+  below checks it for every bundled skin.
+- **The lab:** both kinds of live card take the pointer (`interactive`). While it's in the air, `data-pet-surface` is
+  `air` (lab only until C4b's contract).
+- **Production unchanged, checked:**
+  - The brain: the C3b brain (HEAD) against the new one with no pointer events, side by side. 80 scripted minutes:
+    music on and off, track changes, the edge resizing, reduced motion flipping, the outline coming and going.
+    4 skins × top-only and around × 5 seeds. All 150,458 steps matched: pose, change count, timers, generator state
+    and every due time.
+  - Mutation-checked: one changed constant (an idle's longest time, 20,000 → 20,001 ms) failed all 8 runs.
+  - The component without `interactive` renders the same DOM: `pointer-events: none`, no handlers, no
+    `data-no-drag`. `companion-player.spec.ts` still checks the pet's `pointer-events`.
+- **Tests:**
+  - `brain.test.ts` (+7): a click per skin, awake and asleep; a click that does nothing; carried for an hour within the
+    budget, uncounted; a fall per skin with the music on and off (straight down, one step a tick, speeding up, then
+    `land`); grabbing a side and the bottom; reduced motion; the music, tracks and the outline while it's in the hand.
+  - `place.test.ts` (+12): for every skin at 2 and 2.4 px per art px, carried to ~3,000 wanted places each (inside,
+    around and beyond its room, both facings). Its held and fall art always stays in the room and off the card. Then
+    it's dropped there, and every step of the brain's fall stays off the card and ends where `landingFor` said. All
+    four surfaces get landings. Plus the nearest-surface cases by hand, the corner rule, no outline, and the push-out.
+  - `e2e/companion-pointer.spec.ts` (new, 4 tests, Chromium and WebKit): the mouse on the lab's around cards, on the
+    fake clock. Positions come from the inline transform, after C3b's stale-WebKit lesson.
+  - **Mutation-checked:**
+    - Letting the top be a landing from anywhere fails the property test ("falls over the card", 7 of 8 runs).
+    - Skipping the push-out fails the property test (8 of 8) and the e2e ("a pixel over the card").
+    - Dropping the click's reaction fails the e2e.
+    - On the way, an unused import from one mutation broke the preview build, so that run printed nothing. Rerun with
+      a mutation that compiles, it failed as it should.
+- **Checks run (Windows):**
+  - `npx tsc --noEmit`: clean.
+  - `npx vitest run`: 22 files, 253 passed.
+  - `npm run build`: passed, check-fixtures-excluded OK.
+  - `npx playwright test`: 775 passed, 23 skipped (Chromium + WebKit; the 8 new are the pointer spec in both).
+  - The lab in the app's browser pane (Chromium, 100%), real mouse drags on the real clock: the test dummy dropped
+    under its card hangs from the bottom, the bookworm dropped beside the left side clings there, the cassette dropped
+    above its card lands on the top. No console errors. Visual: ready for review.
+  - **Not run:** the real exe (nothing in production changed); `cargo test` (no Rust changed).
+- **Open, your calls:**
+  - Carrying it over the card (except the artwork) for longer falls, instead of keeping it off the card.
+  - C3c corner art.

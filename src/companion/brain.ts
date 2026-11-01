@@ -1,18 +1,38 @@
 // The companion's brain (PLAN.md §4b, M2 C2): a pure, seeded state machine. It decides what the creature does on the
 // player's top edge, frame by frame, and when the next visible change is due. Given the card's outline (`World.around`,
 // C3a) it also turns the top's corners, climbs the sides in short legs and hangs under the bottom; without one it lives
-// on the top edge exactly as before. The component only renders `pose()` and sets one timer for `nextChangeAt()`.
-// Plain data in, plain data out, so an hour can be simulated in a unit test.
+// on the top edge exactly as before. It can be clicked, picked up, carried and dropped (C4a: `poke`, `pickUp`, `carry`,
+// `drop`); the component works out where a carried creature may go and where it lands (place.ts). The component only
+// renders `pose()` and sets one timer for `nextChangeAt()`. Plain data in, plain data out, so an hour can be simulated
+// in a unit test.
 //
 // The change budget (C0 spike, docs/DECISIONS.md 2026-10-17): every visible change re-composites the whole
 // transparent window (~3–6 ms of CPU), so the creature is still most of the time. Optional changes (blinks, sleepy
 // "z"s, walks, climbs) only start when the last minute's changes leave room for all of them; changes caused by the
-// music (falling asleep, waking, a track-change reaction) always happen.
+// music (falling asleep, waking, a track-change reaction) or by the pointer (a click, a pick-up, a fall) always happen.
+// Being carried moves it with the pointer, which isn't one of its own changes: the budget doesn't count those.
 import type { Surface } from "./place";
-import { REQUIRED_ANIMATIONS, frameMs, stepPx, type AnimationName, type Skin } from "./skin";
+import { MAX_STEP, REQUIRED_ANIMATIONS, frameMs, stepPx, type AnimationName, type Skin } from "./skin";
 
-export type Mode = Extract<AnimationName, "idle" | "walk" | "sit" | "sleep" | "wake" | "react" | "climb" | "hang">;
+/** Every animation is a state of the brain (C4a added the last three: held, fall, land). */
+export type Mode = AnimationName;
 export type { Surface };
+
+/** A sprite box's top-left in art px from the card's top-left (the top edge's start): where it is off every surface. */
+export interface Point {
+  x: number;
+  y: number;
+}
+
+/** Where a drop ends (the component finds it: `landingFor`, place.ts). */
+export interface Landing {
+  surface: Surface;
+  /** The position along the surface, art px. */
+  x: number;
+  facing: 1 | -1;
+  /** The landing pose's sprite box, like `Brain.air`. */
+  at: Point;
+}
 
 export interface Edge {
   /** Anchor positions the creature can stand at, in art px along the edge: 0 … length − 1. */
@@ -45,12 +65,16 @@ export interface Brain {
   holding: boolean;
   /** When the current frame went up. */
   frameAt: number;
-  /** Idle, sit, hang and a climb's hold: when the mode ends. */
+  /** Idle, sit, hang and a climb's hold: when the mode ends. A fall: when its frame ends. */
   until: number;
   /** Walk and climb: where it's heading. */
   target: number;
   /** Loops completed in the current mode. */
   loops: number;
+  /** Held or falling (C4a): where its sprite box is; null on a surface. */
+  air: Point | null;
+  /** Falling: where it lands, and how far its next step goes (art px; it speeds up as it falls). */
+  fall: { to: Landing; step: number } | null;
   /** Frames are held: nothing changes until the music or the edge does. */
   still: boolean;
   /** When the music stopped (it falls asleep DROWSY_MS later); null while playing. */
@@ -67,6 +91,8 @@ export interface Pose {
   surface: Surface;
   x: number;
   facing: 1 | -1;
+  /** Held or falling: the sprite box, which then places it instead of `surface` and `x`. */
+  air: Point | null;
 }
 
 /** Visible changes allowed in any rolling minute: 1.5 a second (~1% of a core at C0's cost per change). */
@@ -95,6 +121,10 @@ export const CORNER_CHANCE = 0.5;
 const RETRY_MS = 2000;
 /** The top's modes: what it does there, and what the music can change (sleep, wake, a reaction). */
 const AWAKE: readonly Mode[] = ["idle", "walk", "sit", "wake", "react"];
+/** A fall moves this often, whatever the `fall` animation's frame rate: falls are short. */
+export const FALL_TICK_MS = 40;
+/** A fall's first step, art px; each step after is 1 px longer, up to the skin format's longest step. */
+const FALL_FIRST = 2;
 
 /** One mulberry32 step: [a number in [0, 1), the next state]. */
 function random(state: number): [number, number] {
@@ -105,7 +135,8 @@ function random(state: number): [number, number] {
   return [((t ^ (t >>> 14)) >>> 0) / 4294967296, a];
 }
 
-const poseKey = (b: Pick<Brain, "mode" | "frame" | "surface" | "x" | "facing">) => `${b.mode}/${b.frame}/${b.surface}/${b.x}/${b.facing}`;
+type Shown = "mode" | "frame" | "surface" | "x" | "facing" | "air";
+const poseKey = (b: Pick<Brain, Shown>) => `${b.mode}/${b.frame}/${b.surface}/${b.x}/${b.facing}/${b.air ? `${b.air.x},${b.air.y}` : ""}`;
 
 /** A surface's length in positions (art px). */
 function lengthOf(world: World, surface: Surface): number {
@@ -147,7 +178,7 @@ class Draft {
     return over <= 0 ? now : recent[over - 1] + MINUTE;
   }
   /** Sets the pose; records a change when anything visible differs. */
-  show(now: number, next: Partial<Pick<Brain, "mode" | "frame" | "surface" | "x" | "facing">>) {
+  show(now: number, next: Partial<Pick<Brain, Shown>>) {
     const before = poseKey(this.b);
     Object.assign(this.b, next);
     this.b.frameAt = now;
@@ -288,12 +319,53 @@ class Draft {
     this.b.until = now + this.between(HOLD_MS);
     this.show(now, { surface: side, x: lengthOf(this.world, side) - 1, facing: -1, mode: "climb", frame: 0 });
   }
+  /** One step of a fall: it speeds up as it goes, and lands when the next step would reach its landing. */
+  fallStep(now: number) {
+    const { air, fall } = this.b;
+    if (!air || !fall) return this.rest(now); // never happens; it must not get stuck in the air if it does
+    const dx = fall.to.at.x - air.x;
+    const dy = fall.to.at.y - air.y;
+    const far = Math.hypot(dx, dy);
+    if (far <= fall.step) return this.settle(now, fall.to);
+    const anim = this.skin.animations.fall;
+    let frame = this.b.frame;
+    if (now >= this.b.until) {
+      frame = (frame + 1) % anim.frames.length;
+      this.b.until = now + frameMs(anim, frame);
+    }
+    const k = fall.step / far;
+    this.b.fall = { to: fall.to, step: Math.min(MAX_STEP, fall.step + 1) };
+    this.show(now, { frame, air: { x: air.x + dx * k, y: air.y + dy * k } });
+  }
+  /**
+   * On a surface after a drop (C4a): landing on the top, clinging to a side or hanging under the bottom. Under reduced
+   * motion, or on a side or the bottom that's no longer there, it rests on the top instead.
+   */
+  settle(now: number, to: Landing) {
+    this.b.fall = null;
+    this.b.loops = 0;
+    this.b.still = false;
+    const on = { air: null, surface: to.surface, x: this.clampX(to.x, to.surface), facing: to.facing };
+    if (this.world.reducedMotion || (to.surface !== "top" && !this.world.around)) {
+      // Not shown on its own: rest() shows where it ends up, one change.
+      Object.assign(this.b, on);
+      return this.rest(now);
+    }
+    if (to.surface === "top") return this.show(now, { ...on, mode: "land", frame: 0 });
+    if (to.surface === "bottom") {
+      this.b.until = now + this.between(HANG_MS);
+      return this.show(now, { ...on, mode: "hang", frame: 0 });
+    }
+    this.b.holding = true;
+    this.b.until = now + this.between(HOLD_MS);
+    this.show(now, { ...on, mode: "climb", frame: 0 });
+  }
   /** Advances the current mode by one frame, or ends it. */
   nextFrame(now: number) {
     const { mode, frame } = this.b;
     const anim = this.skin.animations[mode];
     const last = frame === anim.frames.length - 1;
-    // Wake and react play once. A climb always cycles: its frames are what move it.
+    // Wake, react and land play once. A climb always cycles: its frames are what move it.
     if (last && !anim.loop && mode !== "climb") return this.rest(now);
     const next = last ? 0 : frame + 1;
     if (next === 0) this.b.loops++;
@@ -311,12 +383,15 @@ class Draft {
   }
 }
 
-type DueKind = "drowsy" | "arrive" | "until" | "frame";
+type DueKind = "drowsy" | "arrive" | "until" | "frame" | "fall";
 
 /** The next due change and its kind; on a tie the earlier kind in this order wins. */
 function nextDue(b: Brain, skin: Skin, world: World): { at: number; kind: DueKind } | null {
-  // Off the top with the music off, it holds where it is: there's no sleeping on a side (C3a).
-  if (b.surface !== "top" && !world.playing) return null;
+  // A fall always finishes, music or not: the pointer caused it.
+  if (b.mode === "fall") return { at: b.frameAt + FALL_TICK_MS, kind: "fall" };
+  // Off the top with the music off, it holds where it is: there's no sleeping on a side (C3a). Carried, it dangles
+  // whatever the music does.
+  if (b.surface !== "top" && !world.playing && !b.air) return null;
   const d = new Draft(b, skin, world);
   const candidates: [number, DueKind][] = [];
   if (AWAKE.includes(b.mode) && !world.playing && b.quietSince !== null) candidates.push([b.quietSince + DROWSY_MS, "drowsy"]);
@@ -344,7 +419,7 @@ function nextDue(b: Brain, skin: Skin, world: World): { at: number; kind: DueKin
 }
 
 export function pose(b: Brain): Pose {
-  return { animation: b.mode, frame: b.frame, surface: b.surface, x: b.x, facing: b.facing };
+  return { animation: b.mode, frame: b.frame, surface: b.surface, x: b.x, facing: b.facing, air: b.air };
 }
 
 /** A new brain somewhere on the top edge: awake if the music is playing, asleep if not. */
@@ -362,6 +437,8 @@ export function createBrain(skin: Skin, world: World, now: number, seed: number)
       until: now,
       target: 0,
       loops: 0,
+      air: null,
+      fall: null,
       still: false,
       quietSince: null,
       rng: seed >>> 0,
@@ -396,6 +473,7 @@ export function advance(b: Brain, skin: Skin, world: World, now: number): Brain 
 function step(b: Brain, skin: Skin, world: World, t: number, kind: DueKind): Brain {
   const d = new Draft(b, skin, world);
   if (kind === "drowsy") d.rest(t); // the music is off: it falls asleep
+  else if (kind === "fall") d.fallStep(t);
   else if (kind === "arrive") {
     if (b.mode === "climb") d.climbArrived(t);
     // At the top's end, on an outline, it may turn the corner (the walk planner let it run out there).
@@ -418,16 +496,24 @@ function step(b: Brain, skin: Skin, world: World, t: number, kind: DueKind): Bra
 export function setWorld(b: Brain, skin: Skin, prev: World, world: World, now: number): Brain {
   const d = new Draft(b, skin, world);
   d.b.target = d.clampX(b.target);
-  if (d.clampX(b.x) !== b.x) d.show(now, { x: d.clampX(b.x) });
-  // Reduced motion puts it back on the top in a still pose; so does losing the outline it was on.
+  // In the air, `x` is where it was: it isn't shown, and a drop finds a new place anyway.
+  if (!b.air && d.clampX(b.x) !== b.x) d.show(now, { x: d.clampX(b.x) });
+  // Reduced motion puts it back on the top in a still pose; so does losing the outline it was on. Falling, it lands
+  // now (settle() rests it on the top). Carried, it stays in the pointer's hand.
   if (world.reducedMotion !== prev.reducedMotion || (b.surface !== "top" && !world.around)) {
-    d.rest(now);
-    return d.b;
+    if (b.fall) {
+      d.settle(now, b.fall.to);
+      return d.b;
+    }
+    if (!b.air) {
+      d.rest(now);
+      return d.b;
+    }
   }
   if (world.playing && !prev.playing) {
     d.b.quietSince = null;
     d.b.until = Math.max(d.b.until, now); // an idle that ran out during a short pause ends now, not in the past
-    if (b.surface !== "top") d.b.frameAt = now; // held still off the top: its frames start again from now
+    if (b.surface !== "top" && !b.air) d.b.frameAt = now; // held still off the top: its frames start again from now
     if (b.mode === "sleep") {
       if (world.reducedMotion) d.rest(now);
       else {
@@ -439,7 +525,7 @@ export function setWorld(b: Brain, skin: Skin, prev: World, world: World, now: n
   } else if (!world.playing && prev.playing) {
     d.b.quietSince = now;
     // Off the top it holds still where it is: clinging in a climb's rest frame, or in the hang's (C3a).
-    if (b.surface !== "top") {
+    if (b.surface !== "top" && !b.air) {
       if (b.mode === "climb") d.b.holding = true;
       d.show(now, { frame: 0 });
     }
@@ -455,5 +541,57 @@ export function trackChanged(b: Brain, skin: Skin, world: World, now: number): B
   d.b.loops = 0;
   d.b.still = false;
   d.show(now, { mode: "react", frame: 0 });
+  return d.b;
+}
+
+/**
+ * Clicked (C4a): a reaction, if it's awake on the top. Asleep, it stirs (`wake`) and, with the music still off, dozes
+ * off again. Nothing while it's reacting or waking already, off the top or in the air, or under reduced motion.
+ */
+export function poke(b: Brain, skin: Skin, world: World, now: number): Brain {
+  const ready = b.mode === "idle" || b.mode === "walk" || b.mode === "sit" || b.mode === "sleep";
+  if (world.reducedMotion || b.surface !== "top" || b.air || !ready) return b;
+  const d = new Draft(b, skin, world);
+  d.b.loops = 0;
+  d.b.still = false;
+  if (b.mode === "sleep") {
+    // The drowsy timer starts over, or it would cut the wake short at once.
+    if (!world.playing) d.b.quietSince = now;
+    d.show(now, { mode: "wake", frame: 0 });
+  } else d.show(now, { mode: "react", frame: 0 });
+  return d.b;
+}
+
+/** Picked up (C4a): it dangles at `at` until it's dropped, playing `held` as the budget allows. */
+export function pickUp(b: Brain, skin: Skin, world: World, now: number, at: Point): Brain {
+  const d = new Draft(b, skin, world);
+  d.b.holding = false;
+  d.b.fall = null;
+  d.b.loops = 0;
+  d.b.still = false;
+  d.show(now, { mode: "held", frame: 0, air: at });
+  return d.b;
+}
+
+/** Carried to `at`: it follows the pointer, which isn't one of its own changes, so the budget doesn't count it. */
+export function carry(b: Brain, at: Point): Brain {
+  if (b.mode !== "held" || (b.air?.x === at.x && b.air.y === at.y)) return b;
+  return { ...b, air: at };
+}
+
+/**
+ * Let go (C4a). Over the top it falls onto it and lands. Beside a side or under the bottom it grabs on at once:
+ * there's nothing there to fall onto. Under reduced motion it rests on the top with no fall.
+ */
+export function drop(b: Brain, skin: Skin, world: World, now: number, to: Landing): Brain {
+  if (b.mode !== "held" || !b.air) return b;
+  const d = new Draft(b, skin, world);
+  if (world.reducedMotion || to.surface !== "top" || Math.hypot(to.at.x - b.air.x, to.at.y - b.air.y) <= FALL_FIRST) {
+    d.settle(now, to);
+    return d.b;
+  }
+  d.b.fall = { to, step: FALL_FIRST };
+  d.b.until = now + frameMs(skin.animations.fall, 0);
+  d.show(now, { mode: "fall", frame: 0 });
   return d.b;
 }

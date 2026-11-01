@@ -1,5 +1,6 @@
 // Dev-only Companion lab (`?lab=companion`, PLAN.md §4b/§5 M2): the creatures living on mock cards, run by their
-// brain (C2), on the top edge and around the whole card (C3a); each one around a card in every pose (D1); and every
+// brain (C2), on the top edge and around the whole card (C3a), and taking the pointer (C4a: click, pick up, drop);
+// each one around a card in every pose (D1); and every
 // skin × palette × animation on light and dark backdrops, at the real size and zoomed, plus each animation's frames
 // side by side (C1). Never in production (DevHarness is DEV-only). `?pause` holds every animation on its first frame
 // (screenshots, crispness checks); `?skin=<id>` shows one skin and leaves out the live cards; `?live` shows only the
@@ -94,8 +95,9 @@ type Playback = "playing" | "paused" | "idle";
 
 /**
  * Each creature living on a mock card, run by its brain (M2 C2): on the top edge, or `around` the whole card (C3a:
- * corners, climbing the sides, hanging under the bottom). The controls stand in for the music. Lab-only labels; the
- * production player's text comes from COPY.md.
+ * corners, climbing the sides, hanging under the bottom). The controls stand in for the music. Each creature takes the
+ * pointer (C4a): click it, or pick it up and drop it, within a sprite's box around the card (the production window's
+ * margin) or, on the top-edge cards, above the edge. Lab-only labels; the production player's text comes from COPY.md.
  */
 function Live({ around = false }: { around?: boolean }) {
   const section = around ? "data-lab-around" : "data-lab-live";
@@ -128,6 +130,7 @@ function Live({ around = false }: { around?: boolean }) {
               outline={around ? OUTLINE : undefined}
               // Their own seeds, so the two sections don't start as twins.
               seed={hashString(around ? `${skin.id}/around` : skin.id)}
+              interactive
             />
           </MockCard>
         ))}

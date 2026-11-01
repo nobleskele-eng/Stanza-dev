@@ -1,12 +1,32 @@
 import { describe, expect, it } from "vitest";
-import { BUDGET_PER_MINUTE, DROWSY_MS, SLEEP_LOOPS, advance, createBrain, nextChangeAt, pose, setWorld, trackChanged, type Brain, type Pose, type World } from "./brain";
+import {
+  BUDGET_PER_MINUTE,
+  DROWSY_MS,
+  FALL_TICK_MS,
+  SLEEP_LOOPS,
+  advance,
+  carry,
+  createBrain,
+  drop,
+  nextChangeAt,
+  pickUp,
+  poke,
+  pose,
+  setWorld,
+  trackChanged,
+  type Brain,
+  type Landing,
+  type Pose,
+  type World,
+} from "./brain";
 import { SKINS } from "./registry";
-import { stepPx, type Skin } from "./skin";
+import { MAX_STEP, stepPx, type Skin } from "./skin";
 
 const MINUTE = 60_000;
 const playing: World = { playing: true, reducedMotion: false, edge: { length: 160, noSit: [] } };
 const paused: World = { ...playing, playing: false };
-const key = (p: Pose) => `${p.animation}/${p.frame}/${p.x}/${p.facing}`;
+// In the air the sprite box places it, so its point is part of what's shown (C4a).
+const key = (p: Pose) => `${p.animation}/${p.frame}/${p.x}/${p.facing}${p.air ? `@${p.air.x},${p.air.y}` : ""}`;
 
 interface Run {
   brain: Brain;
@@ -276,5 +296,152 @@ describe("companion brain around the card (C3a)", () => {
     expect(pose(b)).toMatchObject({ surface: "left", x: 9 });
     const next = runUntil(skin, short, b, reached.t + 10 * MINUTE, (p) => p.surface !== "left")!;
     expect(pose(next.brain).surface).toMatch(/^(bottom|top)$/);
+  });
+});
+
+describe("companion brain in the pointer's hand (C4a)", () => {
+  const around: World = { ...playing, edge: { length: 124, noSit: [] }, around: { side: 44, bottom: 124 } };
+  /** Landed on the top at 30, its sprite box 15 art px above the top's line (where place.ts would put it). */
+  const onTop: Landing = { surface: "top", x: 30, facing: 1, at: { x: 20, y: -15 } };
+  /** Awake on the top, idling. */
+  const idling = (skin: Skin, world: World) => {
+    const b = createBrain(skin, world, 0, 6);
+    expect(pose(b).animation).toBe("idle");
+    return b;
+  };
+
+  it("a click makes it react on the top, once at a time; asleep, it stirs and dozes off again", () => {
+    for (const skin of skins) {
+      const b = idling(skin, playing);
+      const reacting = poke(b, skin, playing, 100);
+      expect(pose(reacting), skin.id).toMatchObject({ animation: "react", frame: 0 });
+      expect(reacting.changes.length, "a click is a change that always happens").toBe(b.changes.length + 1);
+      expect(poke(reacting, skin, playing, 200), "not again mid-reaction").toBe(reacting);
+      const after = run(skin, playing, reacting, 100, MINUTE).changes;
+      expect(after.find((c) => c.pose.animation !== "react")!.pose.animation, skin.id).toBe("idle");
+
+      const asleep = run(skin, paused, createBrain(skin, paused, 0, 6), 0, 5 * MINUTE).brain;
+      expect(nextChangeAt(asleep, skin, paused), "asleep and still").toBeNull();
+      const stirred = poke(asleep, skin, paused, 5 * MINUTE);
+      expect(pose(stirred).animation, skin.id).toBe("wake");
+      const { changes, brain } = run(skin, paused, stirred, 5 * MINUTE, 10 * MINUTE);
+      const wakeFrames = skin.animations.wake.frames.length;
+      // The whole wake plays (the drowsy timer starts over), then it's back asleep: a few loops, then still.
+      expect(changes.slice(0, wakeFrames - 1).every((c) => c.pose.animation === "wake"), skin.id).toBe(true);
+      expect(changes[wakeFrames - 1].pose.animation, skin.id).toBe("sleep");
+      // The rest of the wake, falling asleep, then the sleep's loops.
+      expect(changes.length, skin.id).toBe(wakeFrames - 1 + 1 + SLEEP_LOOPS * skin.animations.sleep.frames.length);
+      expect(nextChangeAt(brain, skin, paused)).toBeNull();
+    }
+  });
+
+  it("a click does nothing under reduced motion, off the top or in the air", () => {
+    const skin = SKINS.pilcrow;
+    const reduced: World = { ...playing, reducedMotion: true };
+    const still = createBrain(skin, reduced, 0, 6);
+    expect(poke(still, skin, reduced, 10)).toBe(still);
+    const onSide = { ...idling(skin, around), surface: "left" as const, mode: "climb" as const, holding: true };
+    expect(poke(onSide, skin, around, 10)).toBe(onSide);
+    const held = pickUp(idling(skin, playing), skin, playing, 10, { x: 4, y: -20 });
+    expect(poke(held, skin, playing, 20)).toBe(held);
+  });
+
+  it("picked up it dangles where it's carried; carrying isn't counted against the budget", () => {
+    for (const skin of skins) {
+      const b = idling(skin, playing);
+      const held = pickUp(b, skin, playing, 100, { x: 10, y: -20 });
+      expect(pose(held), skin.id).toMatchObject({ animation: "held", frame: 0, air: { x: 10, y: -20 } });
+      expect(held.changes.length).toBe(b.changes.length + 1);
+      const carried = carry(held, { x: 40, y: -18 });
+      expect(pose(carried).air).toEqual({ x: 40, y: -18 });
+      expect(carried.changes, "the pointer's moves aren't its own changes").toBe(held.changes);
+      expect(carry(carried, { x: 40, y: -18 }), "the same point is no change at all").toBe(carried);
+      expect(carry(b, { x: 1, y: 1 }), "only a held creature is carried").toBe(b);
+      // Held for an hour, its dangling stays within the budget.
+      const { changes } = run(skin, playing, carried, 100, 60 * MINUTE + 100);
+      expect(changes.every((c) => c.pose.animation === "held"), skin.id).toBe(true);
+      expect(busiestMinute(changes.map((c) => c.t)), skin.id).toBeLessThanOrEqual(BUDGET_PER_MINUTE);
+    }
+  });
+
+  it("dropped over the top it falls, faster and faster, then lands and carries on", () => {
+    for (const skin of skins) {
+      for (const world of [playing, paused]) {
+        const held = pickUp(idling(skin, playing), skin, world, 100, { x: 20, y: -45 });
+        const falling = drop(held, skin, world, 200, onTop);
+        expect(pose(falling), skin.id).toMatchObject({ animation: "fall", air: { x: 20, y: -45 } });
+        const { changes } = run(skin, world, falling, 200, 200 + MINUTE);
+        const fall = changes.filter((c) => c.pose.animation === "fall");
+        expect(fall.length, `${skin.id}: 30 art px is a few steps`).toBeGreaterThanOrEqual(3);
+        let prev = pose(falling).air!;
+        let prevStep = 0;
+        for (const [i, c] of fall.entries()) {
+          expect(c.t, "one step a tick").toBe(200 + (i + 1) * FALL_TICK_MS);
+          const step = c.pose.air!.y - prev.y;
+          expect(c.pose.air!.x, "straight down").toBe(20);
+          expect(step, "speeding up").toBeGreaterThan(prevStep);
+          expect(step).toBeLessThanOrEqual(MAX_STEP);
+          [prev, prevStep] = [c.pose.air!, step];
+        }
+        const landed = changes[fall.length];
+        expect(landed.t).toBe(200 + (fall.length + 1) * FALL_TICK_MS);
+        expect(landed.pose, skin.id).toMatchObject({ animation: "land", frame: 0, surface: "top", x: 30, facing: 1, air: null });
+        // Land plays once; then it's idle with the music on, asleep with it off.
+        const rest = changes.find((c) => c.pose.animation !== "land" && c.t > landed.t)!;
+        expect(rest.pose.animation, skin.id).toBe(world.playing ? "idle" : "sleep");
+      }
+    }
+  });
+
+  it("dropped beside a side or under the bottom it grabs on at once, and carries on from there", () => {
+    for (const skin of skins) {
+      const held = pickUp(idling(skin, around), skin, around, 100, { x: -20, y: 10 });
+      const side = drop(held, skin, around, 200, { surface: "left", x: 20, facing: -1, at: { x: -16, y: 8 } });
+      expect(pose(side), skin.id).toMatchObject({ animation: "climb", surface: "left", x: 20, facing: -1, frame: 0, air: null });
+      expect(side.holding).toBe(true);
+      const up = run(skin, around, side, 200, 10 * MINUTE).changes;
+      expect(up.find((c) => c.pose.surface !== "left")!.pose, `${skin.id}: climbs back up to the top`).toMatchObject({ surface: "top", x: 0 });
+
+      const under = drop(held, skin, around, 200, { surface: "bottom", x: 90, facing: 1, at: { x: 80, y: 44 } });
+      expect(pose(under), skin.id).toMatchObject({ animation: "hang", surface: "bottom", x: 90, air: null });
+      expect(nextChangeAt(under, skin, around)).toBeGreaterThan(200);
+      // With the music off it holds still there, as it would have got there on its own (C3a).
+      const quiet: World = { ...around, playing: false };
+      expect(nextChangeAt(drop(pickUp(idling(skin, around), skin, quiet, 100, { x: 80, y: 50 }), skin, quiet, 200, { surface: "bottom", x: 90, facing: 1, at: { x: 80, y: 44 } }), skin, quiet)).toBeNull();
+    }
+  });
+
+  it("under reduced motion it can still be carried, holding still, and a drop rests it on the top with no fall", () => {
+    for (const skin of skins) {
+      const reduced: World = { ...around, reducedMotion: true };
+      const held = pickUp(createBrain(skin, reduced, 0, 6), skin, reduced, 100, { x: 20, y: -45 });
+      expect(nextChangeAt(held, skin, reduced), "no dangling frames").toBeNull();
+      const top = drop(held, skin, reduced, 200, onTop);
+      expect(pose(top), skin.id).toMatchObject({ surface: "top", x: 30, frame: 0, air: null });
+      expect(["sit", "idle"]).toContain(pose(top).animation);
+      expect(nextChangeAt(top, skin, reduced)).toBeNull();
+      // A side that somehow got through still ends on the top: at its corner.
+      const fromSide = drop(held, skin, reduced, 200, { surface: "right", x: 10, facing: -1, at: { x: 124, y: 0 } });
+      expect(pose(fromSide)).toMatchObject({ surface: "top", x: 123, air: null });
+    }
+  });
+
+  it("in the hand, the music and new tracks don't move it; falling, it always finishes", () => {
+    const skin = SKINS.cassette;
+    const held = pickUp(idling(skin, playing), skin, playing, 100, { x: 20, y: -45 });
+    const stopped = setWorld(held, skin, playing, paused, 200);
+    expect(pose(stopped)).toMatchObject({ animation: "held", air: { x: 20, y: -45 } });
+    expect(trackChanged(stopped, skin, paused, 300)).toBe(stopped);
+    const still = run(skin, paused, stopped, 200, 10 * MINUTE).changes;
+    expect(still.every((c) => c.pose.animation === "held"), "dangles, doesn't doze off in the hand").toBe(true);
+    // Reduced motion turning on mid-fall lands it at once, on the top, in a still pose.
+    const falling = drop(held, skin, playing, 400, onTop);
+    const reduced: World = { ...playing, reducedMotion: true };
+    const landed = setWorld(falling, skin, playing, reduced, 420);
+    expect(pose(landed)).toMatchObject({ surface: "top", x: 30, air: null });
+    expect(nextChangeAt(landed, skin, reduced)).toBeNull();
+    // Losing the outline while it's carried keeps it in the hand.
+    const heldAround = pickUp(idling(skin, around), skin, around, 100, { x: -20, y: 10 });
+    expect(pose(setWorld(heldAround, skin, around, playing, 200))).toMatchObject({ animation: "held", air: { x: -20, y: 10 } });
   });
 });
