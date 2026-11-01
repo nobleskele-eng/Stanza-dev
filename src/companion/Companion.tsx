@@ -2,8 +2,8 @@
 // its pose: every visible change is one re-render of one small SVG, and nothing runs in between (no CSS or Web
 // Animations, which keep the transparent window's compositor busy: C0 spike). The timer re-arms itself right after
 // each change rather than after React renders, so the brain keeps time even when renders are batched.
-// With `interactive` (C4a) it can be clicked, and picked up, carried and dropped with the pointer.
-// Remount it (a `key`) when the skin changes.
+// With `interactive` (C4a) it can be clicked, and picked up, carried and dropped with the pointer. With a `shelf` (C5a)
+// it also lives on a ledge inside the card. Remount it (a `key`) when the skin changes.
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import {
   advance,
@@ -20,6 +20,7 @@ import {
   type Pose,
   type World,
 } from "./brain";
+import type { Shelf } from "./measure";
 import { artPixelPx, spriteBoxPx } from "./pixel";
 import { carryPoint, edgeLength, landingFor, noSitRanges, placeAround, type EdgeBox, type Outline } from "./place";
 import type { Skin } from "./skin";
@@ -62,6 +63,7 @@ export function Companion({
   interactive = false,
   room,
   avoid = [],
+  shelf,
   className,
 }: {
   skin: Skin;
@@ -89,6 +91,11 @@ export function Companion({
   room?: Outline;
   /** Boxes, same px, it never covers while carried or falling: the artwork (CLAUDE.md). */
   avoid?: readonly Outline[];
+  /**
+   * A shelf inside the card (C5a), same px, as `measureShelf` trims it: it steps on and off at its doors from a climb,
+   * and a drop can land on it. Used only with `outline`.
+   */
+  shelf?: Shelf | null;
   className?: string;
 }) {
   const px = artPixelPx(dpr);
@@ -97,14 +104,25 @@ export function Companion({
   const blockedKey = JSON.stringify(blocked);
   const side = outline ? edgeLength(outline.height, px) : 0;
   const bottom = outline ? edgeLength(outline.width, px) : 0;
+  const ledge = outline ? shelf : null;
+  // Its positions from the top's (the card's left), and the side position whose climb anchor is level with its stand.
+  const shelfKey = ledge
+    ? JSON.stringify({
+        length: edgeLength(ledge.edge.width, px),
+        left: Math.round((ledge.edge.left - edge.left) / px),
+        doors: ledge.doors,
+        at: Math.round((ledge.edge.top - outline!.top) / px) - 1,
+      })
+    : "";
   const world = useMemo<World>(
     () => ({
       playing,
       reducedMotion,
       edge: { length, noSit: noSitRanges(skin, JSON.parse(blockedKey), px) },
       ...(side ? { around: { side, bottom } } : {}),
+      ...(side && shelfKey ? { shelf: JSON.parse(shelfKey) } : {}),
     }),
-    [playing, reducedMotion, length, blockedKey, skin, px, side, bottom],
+    [playing, reducedMotion, length, blockedKey, skin, px, side, bottom, shelfKey],
   );
 
   const brain = useRef<Brain | null>(null);
@@ -160,7 +178,7 @@ export function Companion({
   const card = outline ?? { left: edge.left, top: edge.top, width: edge.width, height: 0 };
   const placed = shown.air
     ? { left: card.left + shown.air.x * px, top: card.top + shown.air.y * px, mirrored: shown.facing < 0 }
-    : placeAround(skin, shown.animation, shown.surface, shown.x, shown.facing, px, edge, card);
+    : placeAround(skin, shown.animation, shown.surface, shown.x, shown.facing, px, edge, card, ledge?.edge);
   const { left, top, mirrored } = placed;
   const snap = (v: number) => Math.round(v * dpr) / dpr;
 
@@ -208,7 +226,7 @@ export function Companion({
     const b = brain.current!;
     if (g.held && b.air) {
       // Under reduced motion it lives on the top only (C3a), so that's where it lands.
-      const to = landingFor(skin, b.air, b.facing, px, edge, outline && !reducedMotion ? card : null, avoid);
+      const to = landingFor(skin, b.air, b.facing, px, edge, outline && !reducedMotion ? card : null, avoid, ledge?.edge ?? null);
       update(drop(b, skin, worldRef.current, now(), to));
     } else if (click && !g.held) update(poke(b, skin, worldRef.current, now()));
   };

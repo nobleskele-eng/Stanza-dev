@@ -26,12 +26,14 @@ const settle = (page: Page) =>
       });
   });
 
-/** The lab's live cards: on the top edge (`live`), or travelling the whole outline (`around`, C3a). */
-async function open(page: Page, section: "live" | "around" = "live") {
+/** The lab's live cards: on the top edge (`live`), travelling the whole outline (`around`, C3a), or with a shelf (`shelf`, C5a). */
+async function open(page: Page, section: "live" | "around" | "shelf" = "live") {
   await page.clock.install({ time: 0 });
   await page.goto(`/?lab=companion&${section}`);
   await page.locator(`[data-lab-${section}] .mp-companion`).first().waitFor();
-  await page.clock.pauseAt(1000); // from here on, time moves only when the test moves it
+  // From here on, time moves only when the test moves it: at 1 s, or just after now if the dev server was slow to load
+  // the page (it can be, right after an edit: pausing in the past throws, DECISIONS.md C5a).
+  await page.clock.pauseAt(Math.max(1000, (await page.evaluate(() => Date.now())) + 100));
   await settle(page);
   // One record per mutation batch: React commits a pose change as one batch.
   await page.evaluate((section) => {
@@ -85,8 +87,8 @@ function busiestMinute(times: number[]): number {
   return most;
 }
 
-/** Every live creature on the top rests its anchor pixel on the card's top edge, within the edge's length. */
-async function expectOnEdge(page: Page, section = "live") {
+/** Every live creature on `surface` rests its anchor pixel on `edge` (the card's top, or the lab's shelf), within its length. */
+async function expectOnEdge(page: Page, section = "live", surface = "top", edge = EDGE) {
   const pets = await page.$$eval(`[data-lab-${section}-skin]`, (cards, section) =>
     cards.map((card) => {
       const pet = card.querySelector(".mp-companion")!;
@@ -102,15 +104,15 @@ async function expectOnEdge(page: Page, section = "live") {
       };
     }),
   section);
-  for (const p of pets.filter((p) => p.surface === "top")) {
+  for (const p of pets.filter((p) => p.surface === surface)) {
     const skin = SKINS.find((s) => s.id === p.id)!;
     const px = Math.round(2 * p.dpr) / p.dpr;
     const a = skin.animations[p.state as keyof Skin["animations"]].anchor ?? skin.anchor;
     const ax = p.mirrored ? skin.grid - 1 - a.x : a.x;
     const anchorLeft = p.left + ax * px;
-    expect(anchorLeft, `${p.id} ${p.state}: anchor left of the edge`).toBeGreaterThanOrEqual(EDGE.left - 0.01);
-    expect(anchorLeft + px, `${p.id} ${p.state}: anchor right of the edge`).toBeLessThanOrEqual(EDGE.left + EDGE.width + 0.01);
-    expect(p.top + (a.y + 1) * px, `${p.id} ${p.state}: not resting on the edge`).toBeCloseTo(EDGE.top, 2);
+    expect(anchorLeft, `${p.id} ${p.state}: anchor left of the ${surface}`).toBeGreaterThanOrEqual(edge.left - 0.01);
+    expect(anchorLeft + px, `${p.id} ${p.state}: anchor right of the ${surface}`).toBeLessThanOrEqual(edge.left + edge.width + 0.01);
+    expect(p.top + (a.y + 1) * px, `${p.id} ${p.state}: not resting on the ${surface}`).toBeCloseTo(edge.top, 2);
   }
 }
 
@@ -191,8 +193,8 @@ test("under reduced motion they hold still poses and never change on their own",
  * The creatures travelling the whole outline (C3a), read from what's drawn: each one's art pixels (the SVG's 1-high
  * runs, `M x y h w`, mirrored within the grid when flipped) against its card's box, in the page's CSS px.
  */
-const aroundPets = (page: Page) =>
-  page.$$eval("[data-lab-around-skin]", (scenes) =>
+const aroundPets = (page: Page, section = "around") =>
+  page.$$eval(`[data-lab-${section}-skin]`, (scenes, section) =>
     scenes.map((scene) => {
       const card = scene.firstElementChild!.getBoundingClientRect();
       const box = scene.getBoundingClientRect();
@@ -211,24 +213,26 @@ const aroundPets = (page: Page) =>
         }
       const rect = (r: DOMRect) => ({ left: r.left, top: r.top, right: r.right, bottom: r.bottom });
       return {
-        id: scene.getAttribute("data-lab-around-skin")!,
+        id: scene.getAttribute(`data-lab-${section}-skin`)!,
         state: pet.getAttribute("data-pet-state")!,
         surface: pet.getAttribute("data-pet-surface")!,
         card: rect(card),
         scene: rect(box),
         pixels,
+        // The mock card's parts (C5a: nothing on the shelf may cover them).
+        parts: [...scene.querySelectorAll("[data-lab-art], [data-lab-bar], [data-lab-badge]")].map((e) => rect(e.getBoundingClientRect())),
       };
     }),
-  );
+  section);
 
 /**
  * Off the top, the art touches the card from outside: a side from beside it, the bottom from below; and all of it
  * stays in view. Problems are collected and asserted once: Playwright records every expect call as a step, and one per
  * check per pet made a 40-minute time-lapse take over a minute. Returns the pets, for the caller's own records.
  */
-async function expectAround(page: Page) {
+async function expectAround(page: Page, section = "around") {
   const E = 0.01;
-  const pets = await aroundPets(page);
+  const pets = await aroundPets(page, section);
   const wrong: string[] = [];
   for (const p of pets) {
     const xs = p.pixels;
@@ -240,6 +244,13 @@ async function expectAround(page: Page) {
     };
     check(min((b) => b.left) >= p.scene.left - E && max((b) => b.right) <= p.scene.right + E && max((b) => b.bottom) <= p.scene.bottom + E, "out of the scene");
     if (p.surface === "top") continue; // expectOnEdge's anchor check
+    if (p.surface === "shelf") {
+      // expectOnEdge checks it stands on the line; here, that it's on its feet and covers no part.
+      check(["idle", "walk", "sit", "sleep", "wake", "react", "land"].includes(p.state), "not standing");
+      const over = (b: (typeof xs)[number], q: (typeof p.parts)[number]) => b.left < q.right - E && b.right > q.left + E && b.top < q.bottom - E && b.bottom > q.top + E;
+      check(!xs.some((b) => p.parts.some((q) => over(b, q))), "a pixel over a part");
+      continue;
+    }
     if (p.surface === "bottom") {
       check(p.state === "hang", "not hanging");
       check(near(min((b) => b.top), p.card.bottom), "not touching the bottom from below");
@@ -297,4 +308,55 @@ test("pausing while off the top: it holds where it is without a single change, a
   await run(page, 60_000, COARSE);
   const resumed = await changes(page);
   for (const { id } of off) expect(resumed[id].length - after[id].length, `${id}: moving again`).toBeGreaterThan(0);
+});
+
+/** The lab's shelf (CompanionLab.tsx `SHELF_LINE`): from the card's left side, level with the mock badge's foot. */
+const SHELF = { left: 56, top: 192, width: 112 };
+
+/** Picks a shelf card's creature up and lets it go above the shelf, clear of the artwork (companion-pointer.spec.ts checks the fall). */
+async function dropOnShelf(page: Page, id: string) {
+  const at = await page.evaluate((id) => {
+    const scene = document.querySelector(`[data-lab-shelf-skin="${id}"]`)!;
+    const r = scene.querySelector(".mp-companion")!.getBoundingClientRect();
+    const s = scene.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2, to: { x: s.left + 96, y: s.top + 152 } };
+  }, id);
+  await page.mouse.move(at.x, at.y);
+  await page.mouse.down();
+  await page.mouse.move(at.x + 6, at.y - 4, { steps: 3 });
+  await settle(page);
+  await page.mouse.move(at.to.x, at.to.y, { steps: 4 });
+  await settle(page);
+  await page.mouse.up();
+  await settle(page);
+}
+
+test("with a shelf (C5a): they live on it, on its line and over no part, and leave and come back only by its door", async ({ page, browserName }) => {
+  // How often each one finds the shelf on its own is up to its travels round the card (about every 45 simulated
+  // minutes in the lab's card, 2026-11-01); the unit tests check every skin's way on and off it over hours. Here they
+  // start on it, dropped there, and the time-lapse checks every 2 s until one has left and come back.
+  test.skip(browserName === "webkit", "engine-independent time-lapse; Chromium covers it");
+  test.setTimeout(240_000);
+  await open(page, "shelf");
+  for (const s of SKINS) await dropOnShelf(page, s.id);
+  await run(page, 3000, COUNT);
+  const start = await aroundPets(page, "shelf");
+  expect(Object.fromEntries(start.map((p) => [p.id, p.surface])), "all on the shelf").toEqual(Object.fromEntries(SKINS.map((s) => [s.id, "shelf"])));
+  const last = new Map(start.map((p) => [p.id, p.surface]));
+  const moves = new Set<string>();
+  const states = new Set<string>();
+  for (let t = 0; t < 40 * 60_000 && !(moves.has("left>shelf") && states.has("walk")); t += COARSE) {
+    await run(page, COARSE, COARSE);
+    await expectOnEdge(page, "shelf");
+    await expectOnEdge(page, "shelf", "shelf", SHELF);
+    for (const p of await expectAround(page, "shelf")) {
+      if (p.surface === "shelf") states.add(p.state);
+      const before = last.get(p.id)!;
+      if (before !== p.surface && (before === "shelf" || p.surface === "shelf")) moves.add(`${before}>${p.surface}`);
+      last.set(p.id, p.surface);
+    }
+  }
+  expect([...moves].sort(), "on and off only by the door, on the left side").toEqual(["left>shelf", "shelf>left"]);
+  expect([...states], "it walks on the shelf").toContain("walk");
+  expect(await page.evaluate(() => document.getAnimations().length)).toBe(0);
 });

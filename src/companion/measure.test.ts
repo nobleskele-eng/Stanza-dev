@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { measureOutline, type Box } from "./measure";
-import { sitDepth } from "./place";
+import { measureOutline, measureShelf, type Box } from "./measure";
+import { FLOOR_ANIMATIONS, placeOnEdge, sitDepth } from "./place";
 import { SKINS } from "./registry";
 
 const card: Box = { left: 40, top: 100, right: 340, bottom: 500 };
@@ -36,5 +36,53 @@ describe.each(Object.entries(SKINS))("measureOutline · %s", (_id, skin) => {
     const { outline, edge } = measureOutline(skin, box(10, 10, 10, 10), [], px);
     expect(outline).toMatchObject({ width: px, height: px });
     expect(edge.width).toBe(px);
+  });
+});
+
+describe.each(Object.entries(SKINS))("measureShelf · %s", (_id, skin) => {
+  const px = 2;
+  const card: Box = { left: 40, top: 100, right: 340, bottom: 400 };
+  /** Every floor pose at every position on `shelf`, facing both ways: the opaque pixels as boxes. */
+  const drawnOn = (shelf: { left: number; top: number; width: number }) => {
+    const out: Box[] = [];
+    for (let s = 0; s < Math.floor(shelf.width / px); s++)
+      for (const animation of FLOOR_ANIMATIONS)
+        for (const facing of [1, -1] as const) {
+          const at = placeOnEdge(skin, animation, s, facing, px, shelf);
+          for (const f of skin.animations[animation].frames)
+            f.forEach((r, y) => {
+              for (let x = 0; x < r.length; x++)
+                if (r[x] !== ".") {
+                  const l = at.left + (facing < 0 ? skin.grid - 1 - x : x) * px;
+                  out.push(box(l, at.top + y * px, l + px, at.top + (y + 1) * px));
+                }
+            });
+        }
+    return out;
+  };
+  const overlaps = (a: Box, b: Box) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+
+  it("keeps a clear shelf whole, with a door on each side it touches", () => {
+    expect(measureShelf(skin, card, { left: 40, top: 300, width: 120 }, [], px)).toEqual({ edge: { left: 40, top: 300, width: 120 }, doors: ["left"] });
+    expect(measureShelf(skin, card, { left: 220, top: 300, width: 120 }, [], px)).toEqual({ edge: { left: 220, top: 300, width: 120 }, doors: ["right"] });
+    expect(measureShelf(skin, card, { left: 40, top: 300, width: 300 }, [], px)?.doors).toEqual(["left", "right"]);
+  });
+
+  it("trims the end near a part, so no floor pose anywhere on it covers the part", () => {
+    const part = box(140, 280, 200, 300); // beside the shelf's far end, on its line
+    const shelf = measureShelf(skin, card, { left: 40, top: 300, width: 160 }, [part], px)!;
+    expect(shelf.doors).toEqual(["left"]);
+    expect(shelf.edge.left).toBe(40);
+    expect(shelf.edge.width).toBeLessThan(160);
+    expect(drawnOn(shelf.edge).some((b) => overlaps(b, part)), "a pose covers the part").toBe(false);
+    // One more position would.
+    expect(drawnOn({ ...shelf.edge, width: shelf.edge.width + px }).some((b) => overlaps(b, part))).toBe(true);
+  });
+
+  it("is no shelf without a door: touching no side, or a part at the end that touches one", () => {
+    expect(measureShelf(skin, card, { left: 100, top: 300, width: 120 }, [], px)).toBeNull();
+    expect(measureShelf(skin, card, { left: 40, top: 300, width: 120 }, [box(40, 280, 70, 300)], px)).toBeNull();
+    // A full-width shelf blocked at its left end keeps its right door.
+    expect(measureShelf(skin, card, { left: 40, top: 300, width: 300 }, [box(40, 280, 70, 300)], px)?.doors).toEqual(["right"]);
   });
 });

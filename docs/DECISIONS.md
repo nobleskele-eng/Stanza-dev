@@ -3430,3 +3430,75 @@ one of the skin layers (PLAN.md §4b), so nothing structural changes.
   - **Turning the companion on resizes the window** (its margin). A before/after comparison of the window's rect has
     to start once it's on; the first run's "the window moved" was that.
 - **Checks run:** the three real-exe runs above. No code changed, so the test suites weren't rerun.
+
+## 2026-11-01 — M2 C5a: a shelf inside the card (lab only)
+
+- **Split like C3 and C4:** no theme declares a shelf yet, so C5a builds the behaviour in the lab and leaves the
+  production player unchanged. C5b puts shelves in the themes with contract v10, with you: which themes get one and
+  where, whether a theme draws it, and how often the creature should find it.
+- **What a shelf is (my design, for your review in the lab):**
+  - A fifth surface, `shelf`: a floor inside the card. The creature idles, walks, sits, sleeps and reacts there as on
+    the top, and a click or a new track makes it react there too.
+  - **Doors.** A shelf must touch a side of the card (within an art pixel), and that end is its door. Climbing that
+    side, a leg that would pass the shelf stops level with it, and half the time the creature steps in. Walking to the
+    door end, half the time it steps out onto the side and climbs on, up or down. Same odds as turning a corner (C3a).
+  - **No shelf without a door.** One touching no side could only be reached by a drop, and the creature could never
+    leave it. `measureShelf` returns none.
+  - **Trimmed to fit.** `measureShelf` keeps only the positions where none of its floor poses (both facings, every
+    frame) puts an opaque pixel over a part, and of those, the stretch from the door. So it can sit anywhere on it,
+    and it needs no "no-sit" stretches the way the top edge does. The lab's 112 px shelf is trimmed to 88–90 px beside
+    its mock badge.
+  - **Drops.** Falling down the card's face, the shelf catches it unless something to slide off (the artwork) is
+    higher up. Feet within 3 art px below its line step up onto it, as on the top.
+  - **Reduced motion, or the shelf going away:** back on the top, straight above where it was.
+  - **Rejected for now:** hopping down to the shelf from the top. It needs a fall the budget must pay for, and a path
+    checked against the artwork, for a ledge that's usually far below. The door keeps every move a single change.
+- **Code:**
+  - `brain.ts`: `World.shelf` (length, the top's position above it, doors, the side position level with it); floors
+    (`top`, `shelf`) where it sleeps and reacts; `stepIn` and `stepOut`.
+  - `place.ts`: `placeAround` and `landingFor` take the shelf; `FLOOR_ANIMATIONS`.
+  - `measure.ts`: `measureShelf`.
+  - `Companion.tsx`: a `shelf` prop.
+  - `CompanionLab.tsx`: `?lab=companion&shelf`, taller cards with a mock badge and the shelf drawn as a line (lab
+    only).
+- **Production unchanged, checked change for change.** The C4b brain (from git) and the new one, driven side by side
+  with no shelf, 79,986 states compared:
+  - 4 skins × the top-only and around worlds × 5 seeds × 80 minutes, with music changes, track changes, clicks,
+    pick-ups with drops onto every kind of surface, reduced-motion switches and shrinking edges;
+  - every state identical, and every due time;
+  - a mutation (the corner chance 0.5 → 0.6) failed 3 of the 9 comparisons;
+  - the comparison was temporary and is deleted.
+- **Surprises:**
+  - **The door was almost never used.** A climb moves in strides and may overshoot its target by part of one, so a leg
+    stopped "at" the door usually ended a pixel or two past it. Diagnosed with a trace before changing anything. A
+    climb heading for a door now stops exactly level with it (only when there's a door: production unchanged).
+  - **How often it finds the shelf on its own is slow.** It only gets there from the left side, and in the lab's card
+    it climbs the left side about once every 35 minutes.
+    - Simulated over 9 seeds per skin, its first visit took a median 30–45 minutes of music, sometimes over two hours.
+    - That's a tuning question for C5b, with you: more door chances, a second door, or leave it rare.
+    - The e2e therefore starts them on the shelf (dropped there) and checks they leave and come back by the door. The
+      unit tests check every skin's door moves over hours.
+  - **A test helper paused the fake clock in the past.** The lab specs pause at 1 s after the page loads. Twice, right
+    after edits, the dev server took over 1 s to serve the page, and Playwright threw.
+    - Diagnosed with a timed probe: both sections load in ~220 ms when warm.
+    - Both specs now pause at 1 s or just after the current fake time, whichever is later; nothing depends on the
+      exact second.
+  - **My first "standing on the shelf" check was wrong.** It used the lowest drawn pixel, but the test dummy's
+    reaction lifts it off its feet. It now checks the animation's anchor against the line, as the top edge's check
+    does.
+  - **The new WebKit drop test timed out in the full run** (90 s, under the whole suite's load; 44 s alone). My check
+    called `expect` once per drawn pixel per part every half second, about 80,000 recorded steps, the same cost
+    C3a's time-lapse ran into. It now collects problems and asserts once per creature: 2.6 s in Chromium and 28 s in
+    WebKit, alone.
+- **Checks run (Windows):**
+  - `npx tsc --noEmit`: clean.
+  - `npx vitest run`: 22 files, 305 passed (33 new: shelf placement and drops, `measureShelf`, the brain with a
+    shelf).
+  - `npm run build`: passed, check-fixtures-excluded OK.
+  - `npx playwright test`: 792 passed, 24 skipped (Chromium + WebKit; new: the shelf time-lapse, Chromium only like
+    the other time-lapses, and the shelf drop in both engines).
+  - The lab by hand (Chromium, 100%): each creature dropped above its shelf with the mouse falls onto it and stands
+    on its line beside the badge.
+  - **Not run:** `cargo test` and the real exe: no Rust changed and nothing in production changed.
+- **Ready for your review in the lab:** `?lab=companion&shelf`. Your calls for C5b: which themes get a shelf and
+  where, whether a theme draws it, and how often it should find it.

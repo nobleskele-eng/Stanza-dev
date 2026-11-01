@@ -197,7 +197,7 @@ describe("companion brain", () => {
 describe("companion brain around the card (C3a)", () => {
   // The lab's mock card at 100%: 248 × 88 CSS px at 2 px per art pixel.
   const around: World = { ...playing, edge: { length: 124, noSit: [[20, 40]] }, around: { side: 44, bottom: 124 } };
-  const lengths = { top: 124, bottom: 124, left: 44, right: 44 };
+  const lengths: Record<string, number> = { top: 124, bottom: 124, left: 44, right: 44 };
   /** Where a surface change must happen: the end it leaves and the end it arrives at. */
   const CORNERS: Record<string, [number, number]> = {
     "top>left": [0, 0],
@@ -479,5 +479,139 @@ describe("companion brain in the pointer's hand (C4a)", () => {
     // Losing the outline while it's carried keeps it in the hand.
     const heldAround = pickUp(idling(skin, around), skin, around, 100, { x: -20, y: 10 });
     expect(pose(setWorld(heldAround, skin, around, playing, 200))).toMatchObject({ animation: "held", air: { x: -20, y: 10 } });
+  });
+});
+
+describe("companion brain with a shelf (C5a)", () => {
+  // The lab's shelf card at 100%: 248 × 152 CSS px; the shelf (trimmed beside the mock badge) runs 44 art px from the
+  // card's left side, 68 art px down, so its door on the left side is at 67.
+  const shelfWorld: World = {
+    ...playing,
+    edge: { length: 124, noSit: [[20, 40]] },
+    around: { side: 76, bottom: 124 },
+    shelf: { length: 44, left: 0, doors: ["left"], at: 67 },
+  };
+  const lengths: Record<string, number> = { top: 124, bottom: 124, left: 76, right: 76, shelf: 44 };
+  /** Where a surface change must happen: the end or door it leaves and where it arrives. */
+  const MOVES: Record<string, [number, number]> = {
+    "top>left": [0, 0],
+    "top>right": [123, 0],
+    "left>bottom": [75, 0],
+    "right>bottom": [75, 123],
+    "bottom>left": [0, 75],
+    "bottom>right": [123, 75],
+    "left>top": [0, 0],
+    "right>top": [0, 123],
+    "left>shelf": [67, 0],
+    "shelf>left": [0, 67],
+  };
+  const FLOOR = ["idle", "walk", "sit", "wake", "react"];
+
+  function runUntil(skin: Skin, world: World, brain: Brain, to: number, when: (p: Pose) => boolean) {
+    let b = brain;
+    for (;;) {
+      const at = nextChangeAt(b, skin, world);
+      if (at === null || at > to) return null;
+      b = advance(b, skin, world, at);
+      if (when(pose(b))) return { brain: b, t: at };
+    }
+  }
+  const toShelf = (skin: Skin, seed = 1) => runUntil(skin, shelfWorld, createBrain(skin, shelfWorld, 0, seed), 6 * 60 * MINUTE, (p) => p.surface === "shelf");
+
+  for (const skin of skins) {
+    it(`${skin.id}: an hour with a shelf, within the budget, on and off it only at its door, living on it as on the top`, () => {
+      const surfaces = new Set<string>();
+      let walksOnShelf = 0;
+      for (const seed of [1, 2, 3]) {
+        const start = createBrain(skin, shelfWorld, 0, seed);
+        const { changes } = run(skin, shelfWorld, start, 0, 60 * MINUTE);
+        expect(busiestMinute(changes.map((c) => c.t)), `seed ${seed}: busiest minute`).toBeLessThanOrEqual(BUDGET_PER_MINUTE);
+        let prev = pose(start);
+        for (const { pose: p } of changes) {
+          surfaces.add(p.surface);
+          expect(p.x, `seed ${seed}: ${p.surface} position`).toBeGreaterThanOrEqual(0);
+          expect(p.x, `seed ${seed}: ${p.surface} position`).toBeLessThan(lengths[p.surface]);
+          if (p.surface === "shelf") {
+            expect(FLOOR, `seed ${seed}: on the shelf`).toContain(p.animation);
+            if (p.animation === "walk") walksOnShelf++;
+          }
+          if (p.surface !== prev.surface) {
+            const move = MOVES[`${prev.surface}>${p.surface}`];
+            expect(move, `seed ${seed}: ${prev.surface} → ${p.surface} isn't a corner or a door`).toBeDefined();
+            expect([prev.x, p.x], `seed ${seed}: ${prev.surface} → ${p.surface}`).toEqual(move);
+          }
+          prev = p;
+        }
+      }
+      expect([...surfaces].sort(), "every surface, across three seeds").toEqual(["bottom", "left", "right", "shelf", "top"]);
+      expect(walksOnShelf, "it walks on the shelf").toBeGreaterThan(0);
+    });
+  }
+
+  it("with the music off on the shelf it falls asleep there, and wakes there when it's back", () => {
+    for (const skin of skins) {
+      const reached = toShelf(skin)!;
+      expect(reached, `${skin.id}: reached the shelf`).not.toBeNull();
+      const quiet: World = { ...shelfWorld, playing: false };
+      let b = setWorld(reached.brain, skin, shelfWorld, quiet, reached.t + 10);
+      b = run(skin, quiet, b, reached.t + 10, reached.t + 10 * MINUTE).brain;
+      expect(pose(b), `${skin.id}: asleep on the shelf`).toMatchObject({ animation: "sleep", surface: "shelf" });
+      expect(nextChangeAt(b, skin, quiet), `${skin.id}: then still`).toBeNull();
+      b = setWorld(b, skin, quiet, shelfWorld, reached.t + 20 * MINUTE);
+      expect(pose(b), `${skin.id}: waking on the shelf`).toMatchObject({ animation: "wake", surface: "shelf" });
+    }
+  });
+
+  it("on the shelf a click or a new track makes it react there", () => {
+    const skin = SKINS.bookworm;
+    const reached = toShelf(skin, 2)!;
+    const awake = runUntil(skin, shelfWorld, reached.brain, reached.t + 30 * MINUTE, (p) => p.surface === "shelf" && (p.animation === "idle" || p.animation === "sit"))!;
+    expect(awake).not.toBeNull();
+    expect(pose(poke(awake.brain, skin, shelfWorld, awake.t + 1))).toMatchObject({ animation: "react", surface: "shelf" });
+    expect(pose(trackChanged(awake.brain, skin, shelfWorld, awake.t + 1))).toMatchObject({ animation: "react", surface: "shelf" });
+  });
+
+  it("reduced motion, or the shelf going away, puts it on the top straight above where it was", () => {
+    const skin = SKINS.cassette;
+    const reached = runUntil(skin, shelfWorld, createBrain(skin, shelfWorld, 0, 3), 6 * 60 * MINUTE, (p) => p.surface === "shelf" && p.x > 5)!;
+    expect(reached).not.toBeNull();
+    const x = pose(reached.brain).x;
+    const reduced: World = { ...shelfWorld, reducedMotion: true };
+    const still = setWorld(reached.brain, skin, shelfWorld, reduced, reached.t + 1);
+    expect(pose(still)).toMatchObject({ surface: "top", x });
+    expect(nextChangeAt(still, skin, reduced)).toBeNull();
+    const moved: World = { ...shelfWorld, shelf: { ...shelfWorld.shelf!, left: 30 } };
+    expect(pose(setWorld(reached.brain, skin, shelfWorld, { ...moved, shelf: undefined }, reached.t + 1))).toMatchObject({ surface: "top" });
+    // Straight above: the top's position over the shelf's.
+    const shifted = setWorld(reached.brain, skin, shelfWorld, moved, reached.t + 1);
+    expect(pose(setWorld(shifted, skin, moved, { ...moved, reducedMotion: true }, reached.t + 2))).toMatchObject({ surface: "top", x: x + 30 });
+  });
+
+  it("dropped onto the shelf it falls there, lands, and lives there", () => {
+    for (const skin of skins) {
+      const b0 = pickUp(createBrain(skin, shelfWorld, 0, 1), skin, shelfWorld, 0, { x: 10, y: 20 });
+      const onShelf: Landing = { surface: "shelf", x: 20, facing: 1, at: { x: 10, y: 52 }, via: [] };
+      let b = drop(b0, skin, shelfWorld, 0, onShelf);
+      expect(pose(b).animation).toBe("fall");
+      const landed = runUntil(skin, shelfWorld, b, 10_000, (p) => p.animation === "land")!;
+      expect(pose(landed.brain), skin.id).toMatchObject({ surface: "shelf", x: 20, air: null });
+      // It lives there until it leaves by the door.
+      const off = run(skin, shelfWorld, landed.brain, landed.t, landed.t + 30 * MINUTE).changes.find((c) => c.pose.surface !== "shelf");
+      if (off) expect([off.pose.surface, off.pose.x], `${skin.id}: left by the door`).toEqual(["left", 67]);
+    }
+  });
+
+  it("a shelf with its door on the right is reached from the right side, at its far end", () => {
+    const skin = SKINS.pilcrow;
+    const right: World = { ...shelfWorld, shelf: { length: 44, left: 80, doors: ["right"], at: 67 } };
+    const moves = new Set<string>();
+    for (const seed of [1, 2, 3, 4]) {
+      let prev = pose(createBrain(skin, right, 0, seed));
+      for (const { pose: p } of run(skin, right, createBrain(skin, right, 0, seed), 0, 60 * MINUTE).changes) {
+        if (p.surface !== prev.surface && (p.surface === "shelf" || prev.surface === "shelf")) moves.add(`${prev.surface}@${prev.x}>${p.surface}@${p.x}`);
+        prev = p;
+      }
+    }
+    expect([...moves].sort()).toEqual(["right@67>shelf@43", "shelf@43>right@67"]);
   });
 });

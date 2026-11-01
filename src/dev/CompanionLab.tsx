@@ -1,13 +1,14 @@
 // Dev-only Companion lab (`?lab=companion`, PLAN.md §4b/§5 M2): the creatures living on mock cards, run by their
-// brain (C2), on the top edge and around the whole card (C3a), and taking the pointer (C4a: click, pick up, drop);
-// each one around a card in every pose (D1); and every
+// brain (C2), on the top edge, around the whole card (C3a) and on a shelf inside a taller card (C5a), and taking the
+// pointer (C4a: click, pick up, drop); each one around a card in every pose (D1); and every
 // skin × palette × animation on light and dark backdrops, at the real size and zoomed, plus each animation's frames
 // side by side (C1). Never in production (DevHarness is DEV-only). `?pause` holds every animation on its first frame
 // (screenshots, crispness checks); `?skin=<id>` shows one skin and leaves out the live cards; `?live` shows only the
-// top-edge live cards, `?around` only the ones that travel the outline.
+// top-edge live cards, `?around` only the ones that travel the outline, `?shelf` only the ones with a shelf.
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { Companion } from "../companion/Companion";
-import { placeAround, type Surface } from "../companion/place";
+import { measureShelf, type Box } from "../companion/measure";
+import { placeAround, type EdgeBox, type Surface } from "../companion/place";
 import { SKINS } from "../companion/registry";
 import { hashString } from "../fx/beat";
 import { LAYOUT_GRID, artPixelPx } from "../companion/pixel";
@@ -41,22 +42,56 @@ const OUTLINE = { left: SCENE.card.x, top: SCENE.card.y, width: SCENE.card.w, he
 const ART = { x: 12, y: 12, size: 64 } as const;
 /** The artwork in the scene's px: what a carried or falling creature never covers (C4a). */
 const ART_BOX = { left: SCENE.card.x + 1 + ART.x, top: SCENE.card.y + 1 + ART.y, width: ART.size, height: ART.size };
+/** The mock text bars, in the card's padding box: [top, width], each 8 px high from 88 px in. */
+const BARS = [
+  [20, 120],
+  [36, 84],
+  [60, 136],
+] as const;
+
+/**
+ * The shelf cards (C5a): the same card, taller, with a mock source badge at its foot and a shelf from the left side
+ * to beside the badge, level with its foot. The shelf is drawn here only to show where it is; whether a theme draws
+ * one is C5b's question. Scene px.
+ */
+const SHELF_SCENE = { w: 352, h: 264, card: { x: 56, y: 56, w: 248, h: 152 } } as const;
+const SHELF_OUTLINE = { left: SHELF_SCENE.card.x, top: SHELF_SCENE.card.y, width: SHELF_SCENE.card.w, height: SHELF_SCENE.card.h };
+const SHELF_TOP_EDGE = { left: SHELF_OUTLINE.left, top: SHELF_OUTLINE.top, width: SHELF_OUTLINE.width };
+const BADGE_BOX = { left: 160, top: 172, width: 40, height: 20 };
+/** Declared a little past the badge's left side, so `measureShelf` has to trim its end. */
+const SHELF_LINE: EdgeBox = { left: SHELF_OUTLINE.left, top: BADGE_BOX.top + BADGE_BOX.height, width: 112 };
+/** Every part on the shelf card, scene px: no floor pose on the shelf may cover one. */
+const SHELF_PARTS: Box[] = [
+  ART_BOX,
+  ...BARS.map(([top, width]) => ({ left: SHELF_SCENE.card.x + 1 + 88, top: SHELF_SCENE.card.y + 1 + top, width, height: 8 })),
+  BADGE_BOX,
+].map((b) => ({ left: b.left, top: b.top, right: b.left + b.width, bottom: b.top + b.height }));
 
 /** A plain mock card on a backdrop, the scene's size; no text (CLAUDE.md: no generated copy). */
-function MockCard({ backdrop, children, ...data }: { backdrop: keyof typeof BACKDROPS; children: ReactNode } & Record<`data-${string}`, string>) {
-  const { card } = SCENE;
+function MockCard({
+  backdrop,
+  shelf = false,
+  children,
+  ...data
+}: { backdrop: keyof typeof BACKDROPS; shelf?: boolean; children: ReactNode } & Record<`data-${string}`, string>) {
+  const scene = shelf ? SHELF_SCENE : SCENE;
+  const { card } = scene;
   const c = CARD[backdrop];
+  // The shelf card's extras are placed in scene px; inside the card that's 1 px less (its border).
+  const inCard = (b: { left: number; top: number }) => ({ left: b.left - card.x - 1, top: b.top - card.y - 1 });
   return (
-    <div {...data} style={{ position: "relative", width: SCENE.w, height: SCENE.h, background: BACKDROPS[backdrop], overflow: "hidden" }}>
+    <div {...data} style={{ position: "relative", width: scene.w, height: scene.h, background: BACKDROPS[backdrop], overflow: "hidden" }}>
       <div style={{ position: "absolute", left: card.x, top: card.y, width: card.w, height: card.h, boxSizing: "border-box", background: c.face, border: `1px solid ${c.edge}`, borderRadius: 12 }}>
         <div data-lab-art="" style={{ position: "absolute", left: ART.x, top: ART.y, width: ART.size, height: ART.size, borderRadius: 4, background: c.art }} />
-        {[
-          [20, 120],
-          [36, 84],
-          [60, 136],
-        ].map(([top, width]) => (
-          <div key={top} style={{ position: "absolute", left: 88, top, width, height: 8, borderRadius: 4, background: c.bar }} />
+        {BARS.map(([top, width]) => (
+          <div key={top} data-lab-bar="" style={{ position: "absolute", left: 88, top, width, height: 8, borderRadius: 4, background: c.bar }} />
         ))}
+        {shelf && (
+          <>
+            <div data-lab-badge="" style={{ position: "absolute", ...inCard(BADGE_BOX), width: BADGE_BOX.width, height: BADGE_BOX.height, borderRadius: 10, background: c.bar }} />
+            <div data-lab-shelf-line="" style={{ position: "absolute", ...inCard(SHELF_LINE), width: SHELF_LINE.width, height: 2, background: c.edge }} />
+          </>
+        )}
       </div>
       {children}
     </div>
@@ -96,17 +131,20 @@ function Scene({ skin, palette, backdrop, paused }: { skin: Skin; palette: strin
 }
 
 type Playback = "playing" | "paused" | "idle";
+const toBox = (o: { left: number; top: number; width: number; height: number }): Box => ({ left: o.left, top: o.top, right: o.left + o.width, bottom: o.top + o.height });
 
 /**
- * Each creature living on a mock card, run by its brain (M2 C2): on the top edge, or `around` the whole card (C3a:
- * corners, climbing the sides, hanging under the bottom). The controls stand in for the music. Each creature takes the
- * pointer (C4a): click it, or pick it up and drop it, over the card and a sprite's box around it (the production
- * window's margin) but never over the artwork, or, on the top-edge cards, above the edge. Lab-only labels; the
- * production player's text comes from COPY.md.
+ * Each creature living on a mock card, run by its brain (M2 C2): on the top edge, `around` the whole card (C3a:
+ * corners, climbing the sides, hanging under the bottom), or around a taller card with a `shelf` (C5a: stepping onto it
+ * from the left side). The controls stand in for the music. Each creature takes the pointer (C4a): click it, or pick it
+ * up and drop it, over the card and a sprite's box around it (the production window's margin) but never over the
+ * artwork, or, on the top-edge cards, above the edge. Lab-only labels; the production player's text comes from COPY.md.
  */
-function Live({ around = false }: { around?: boolean }) {
-  const section = around ? "data-lab-around" : "data-lab-live";
-  const card = around ? "data-lab-around-skin" : "data-lab-live-skin";
+function Live({ around = false, shelf = false }: { around?: boolean; shelf?: boolean }) {
+  const name = shelf ? "shelf" : around ? "around" : "live";
+  const section = `data-lab-${name}`;
+  const card = `data-lab-${name}-skin`;
+  const px = artPixelPx(window.devicePixelRatio || 1);
   const [playback, setPlayback] = useState<Playback>("playing");
   const [track, setTrack] = useState(0);
   const controls: [string, () => void][] = [
@@ -126,17 +164,18 @@ function Live({ around = false }: { around?: boolean }) {
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
         {Object.values(SKINS).map((skin) => (
-          <MockCard key={skin.id} backdrop="light" {...{ [card]: skin.id }}>
+          <MockCard key={skin.id} backdrop="light" shelf={shelf} {...{ [card]: skin.id }}>
             <Companion
               skin={skin}
               playing={playback === "playing"}
               trackKey={String(track)}
-              edge={TOP_EDGE}
-              outline={around ? OUTLINE : undefined}
-              // Their own seeds, so the two sections don't start as twins.
-              seed={hashString(around ? `${skin.id}/around` : skin.id)}
+              edge={shelf ? SHELF_TOP_EDGE : TOP_EDGE}
+              outline={shelf ? SHELF_OUTLINE : around ? OUTLINE : undefined}
+              // Their own seeds, so the sections don't start as triplets.
+              seed={hashString(name === "live" ? skin.id : `${skin.id}/${name}`)}
               interactive
               avoid={[ART_BOX]}
+              shelf={shelf ? measureShelf(skin, toBox(SHELF_OUTLINE), SHELF_LINE, SHELF_PARTS, px) : null}
             />
           </MockCard>
         ))}
@@ -151,16 +190,17 @@ export function CompanionLab() {
   const only = params.get("skin");
   const page: CSSProperties = { padding: 16, fontFamily: "ui-monospace, monospace", fontSize: 11, background: "#fff", color: "#111" };
   // Only the live cards: the gallery's ~570 animated sprites would drown them under a fake clock (DECISIONS.md, C2a).
-  if (params.has("live") || params.has("around"))
+  if (params.has("live") || params.has("around") || params.has("shelf"))
     return (
       <div style={page}>
-        <Live around={params.has("around")} />
+        <Live around={params.has("around")} shelf={params.has("shelf")} />
       </div>
     );
   return (
     <div style={page}>
       {!only && <Live />}
       {!only && <Live around />}
+      {!only && <Live shelf />}
       <section data-lab-scenes="" style={{ marginBottom: 24 }}>
         {Object.values(SKINS)
           .filter((s) => !only || s.id === only)

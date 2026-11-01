@@ -1,7 +1,9 @@
 // The companion's brain (PLAN.md §4b, M2 C2): a pure, seeded state machine. It decides what the creature does on the
 // player's top edge, frame by frame, and when the next visible change is due. Given the card's outline (`World.around`,
 // C3a) it also turns the top's corners, climbs the sides in short legs and hangs under the bottom; without one it lives
-// on the top edge exactly as before. It can be clicked, picked up, carried and dropped (C4a: `poke`, `pickUp`, `carry`,
+// on the top edge exactly as before. Given a shelf inside the card too (`World.shelf`, C5a) it steps onto it from a
+// climb at the shelf's door and lives there as on the top, until it steps back out. It can be clicked, picked up,
+// carried and dropped (C4a: `poke`, `pickUp`, `carry`,
 // `drop`); the component works out where a carried creature may go and where it lands (place.ts). The component only
 // renders `pose()` and sets one timer for `nextChangeAt()`. Plain data in, plain data out, so an hour can be simulated
 // in a unit test.
@@ -11,6 +13,7 @@
 // "z"s, walks, climbs) only start when the last minute's changes leave room for all of them; changes caused by the
 // music (falling asleep, waking, a track-change reaction) or by the pointer (a click, a pick-up, a fall) always happen.
 // Being carried moves it with the pointer, which isn't one of its own changes: the budget doesn't count those.
+import type { Door } from "./measure";
 import type { Surface } from "./place";
 import { MAX_STEP, REQUIRED_ANIMATIONS, frameMs, stepPx, type AnimationName, type Skin } from "./skin";
 
@@ -56,6 +59,19 @@ export interface World {
    * bottom's from the card's left. Absent: it lives on the top only.
    */
   around?: { side: number; bottom: number };
+  /**
+   * A shelf inside the card (C5a), used only with `around`: a floor like the top, reached from a climb at its doors.
+   * The layer trims it so that every floor pose fits anywhere on it (measure.ts `measureShelf`).
+   */
+  shelf?: {
+    /** Anchor positions along it, art px: 0 … length − 1. */
+    length: number;
+    /** The top's position straight above its first: where it goes back up to (reduced motion, or the shelf is gone). */
+    left: number;
+    /** The sides it touches, where it steps on and off, and the position on those sides level with it. */
+    doors: readonly Door[];
+    at: number;
+  };
 }
 
 export interface Brain {
@@ -64,7 +80,7 @@ export interface Brain {
   surface: Surface;
   /** The anchor's position along its surface, art px. */
   x: number;
-  /** On the top and bottom, which way it faces; on a side, which way it climbs (1 = down). */
+  /** On the top, the bottom and the shelf, which way it faces; on a side, which way it climbs (1 = down). */
   facing: 1 | -1;
   /** Climb: clinging still between legs, until `until`. */
   holding: boolean;
@@ -127,8 +143,10 @@ const HANG_MS: Range = [8000, 25_000];
 export const CORNER_CHANCE = 0.5;
 /** A climb leg the budget can't cover yet is tried again this much later. */
 const RETRY_MS = 2000;
-/** The top's modes: what it does there, and what the music can change (sleep, wake, a reaction). */
+/** A floor's modes (the top's, or a shelf's): what it does there, and what the music can change (sleep, wake, a reaction). */
 const AWAKE: readonly Mode[] = ["idle", "walk", "sit", "wake", "react"];
+/** Where it stands rather than clings or hangs: it sleeps and reacts only there. */
+const isFloor = (s: Surface) => s === "top" || s === "shelf";
 /** A fall moves this often, whatever the `fall` animation's frame rate: falls are short. */
 export const FALL_TICK_MS = 40;
 /** A fall's first step, art px; each step after is 1 px longer, up to the skin format's longest step. */
@@ -148,6 +166,7 @@ const poseKey = (b: Pick<Brain, Shown>) => `${b.mode}/${b.frame}/${b.surface}/${
 
 /** A surface's length in positions (art px). */
 function lengthOf(world: World, surface: Surface): number {
+  if (surface === "shelf") return Math.max(1, world.shelf?.length ?? 1);
   if (surface === "top" || !world.around) return world.edge.length;
   return Math.max(1, surface === "bottom" ? world.around.bottom : world.around.side);
 }
@@ -193,7 +212,19 @@ class Draft {
     if (poseKey(this.b) !== before) this.b.changes = [...this.recent(now), now];
   }
   canSitAt(x: number): boolean {
+    // Anywhere on a shelf: the layer trims it to where every floor pose fits (measureShelf).
+    if (this.b.surface === "shelf") return true;
     return !this.world.edge.noSit.some(([from, to]) => x >= from && x <= to);
+  }
+  /** On a side with a shelf's door (C5a), the position on it level with the shelf; else null. */
+  doorOn(surface: Surface): number | null {
+    const s = this.world.shelf;
+    if (!s || !this.world.around || (surface !== "left" && surface !== "right") || !s.doors.includes(surface)) return null;
+    return Math.max(0, Math.min(lengthOf(this.world, surface) - 1, s.at));
+  }
+  /** On the shelf, whether the end it's facing is a door. */
+  doorAhead(facing: 1 | -1): boolean {
+    return this.b.surface === "shelf" && this.doorOn(facing < 0 ? "left" : "right") !== null;
   }
   clampX(x: number, surface: Surface = this.b.surface): number {
     return Math.max(0, Math.min(lengthOf(this.world, surface) - 1, x));
@@ -206,12 +237,16 @@ class Draft {
     const end = lengthOf(this.world, "top") - 1;
     if (surface === "left") this.show(now, { surface: "top", x: 0, facing: 1 });
     else if (surface === "right") this.show(now, { surface: "top", x: end, facing: -1 });
+    else if (surface === "shelf") this.show(now, { surface: "top", x: this.clampX(Math.round((this.world.shelf?.left ?? 0) + this.b.x), "top") });
     else this.show(now, { surface: "top", x: this.clampX(this.b.x, "top") });
   }
-  /** Settles into the resting pose for the current music on the top, starting a fresh mode. */
+  /**
+   * Settles into the resting pose for the current music on its floor, starting a fresh mode: on the top, or on the
+   * shelf it's on (C5a) while there is one and motion is allowed (else the top only, C3a).
+   */
   rest(now: number) {
     const { playing, reducedMotion } = this.world;
-    this.toTop(now);
+    if (!(this.b.surface === "shelf" && this.world.shelf && this.world.around && !reducedMotion)) this.toTop(now);
     this.b.loops = 0;
     this.b.still = reducedMotion;
     if (!playing) {
@@ -263,11 +298,14 @@ class Draft {
   }
   /** A walk that fits the edge and the budget, or null. */
   planWalk(now: number): { target: number; facing: 1 | -1 } | null {
-    const room = (f: 1 | -1) => (f > 0 ? this.world.edge.length - 1 - this.b.x : this.b.x);
+    const length = lengthOf(this.world, this.b.surface);
+    const room = (f: 1 | -1) => (f > 0 ? length - 1 - this.b.x : this.b.x);
     let facing: 1 | -1 = this.rand() < 0.5 ? -1 : 1;
     const wanted = this.between(WALK_PX);
-    // On an outline, a walk may run out at the top's end, where the corner is (C3a); on the top alone it turns back.
-    if (room(facing) < wanted && !(this.world.around && room(facing) > 0)) facing = facing > 0 ? -1 : 1;
+    // On an outline, a walk may run out at the top's end, where the corner is (C3a), or at a shelf's door (C5a);
+    // anywhere else it turns back.
+    const turns = (f: 1 | -1) => (this.b.surface === "shelf" ? this.doorAhead(f) : !!this.world.around);
+    if (room(facing) < wanted && !(turns(facing) && room(facing) > 0)) facing = facing > 0 ? -1 : 1;
     const distance = Math.min(wanted, room(facing));
     // Each walk frame is one change; the start and the stop are two more.
     const { frames, moved } = this.framesFor("walk", distance, now, 2);
@@ -285,7 +323,10 @@ class Draft {
   climbLeg(now: number) {
     const room = this.b.facing > 0 ? lengthOf(this.world, this.b.surface) - 1 - this.b.x : this.b.x;
     if (room === 0) return this.climbArrived(now); // the side shrank under it: it's at the corner already
-    const distance = Math.min(this.between(CLIMB_PX), room);
+    // A leg that would pass a shelf's door stops level with it (C5a), where it may step in.
+    const door = this.doorOn(this.b.surface);
+    const toDoor = door !== null && (this.b.facing > 0 ? door > this.b.x : door < this.b.x) ? Math.abs(door - this.b.x) : Infinity;
+    const distance = Math.min(this.between(CLIMB_PX), room, toDoor);
     // Each frame is a change, and stopping to cling (frame 0 again) is one more.
     const { frames, moved } = this.framesFor("climb", distance, now, 1);
     if (moved === 0 || (frames < MIN_WALK_FRAMES && moved < distance)) {
@@ -298,7 +339,7 @@ class Draft {
     // hold began: else every frame since then would come due at once, a jump.
     this.b.frameAt = now;
   }
-  /** A climb leg arrived: on round the next corner at a side's end, else cling a while. */
+  /** A climb leg arrived: on round the next corner at a side's end, maybe in at a shelf's door, else cling a while. */
   climbArrived(now: number) {
     const { surface, x, facing } = this.b;
     const left = surface === "left";
@@ -313,11 +354,32 @@ class Draft {
       this.b.until = now + this.between(IDLE_MS);
       const topEnd = lengthOf(this.world, "top") - 1;
       this.show(now, { surface: "top", x: left ? 0 : topEnd, facing: left ? 1 : -1, mode: "idle", frame: 0 });
+    } else if (x === this.doorOn(surface) && this.rand() < CORNER_CHANCE) {
+      this.stepIn(now);
     } else {
       this.b.holding = true;
       this.b.until = now + this.between(HOLD_MS);
       this.show(now, { frame: 0 });
     }
+  }
+  /** Level with a shelf's door on a climb (C5a): in onto the shelf's end there, facing along it. */
+  stepIn(now: number) {
+    const left = this.b.surface === "left";
+    this.b.holding = false;
+    this.b.loops = 0;
+    this.b.until = now + this.between(IDLE_MS);
+    this.show(now, { surface: "shelf", x: left ? 0 : lengthOf(this.world, "shelf") - 1, facing: left ? 1 : -1, mode: "idle", frame: 0 });
+  }
+  /** At a shelf's door (C5a): out onto that side, clinging there before it climbs on, up or down. */
+  stepOut(now: number) {
+    const side: Surface = this.b.facing < 0 ? "left" : "right";
+    const last = lengthOf(this.world, side) - 1;
+    const x = this.doorOn(side) ?? 0;
+    const down = x === 0 ? true : x === last ? false : this.rand() < 0.5;
+    this.b.loops = 0;
+    this.b.holding = true;
+    this.b.until = now + this.between(HOLD_MS);
+    this.show(now, { surface: side, x, facing: down ? 1 : -1, mode: "climb", frame: 0 });
   }
   /** Done hanging: back up the side it came down. */
   leaveBottom(now: number) {
@@ -355,20 +417,20 @@ class Draft {
     this.show(now, { frame, air: { x: air.x + dx * k, y: air.y + dy * k } });
   }
   /**
-   * On a surface after a drop (C4a): landing on the top, clinging to a side or hanging under the bottom. Under reduced
-   * motion, or on a side or the bottom that's no longer there, it rests on the top instead.
+   * On a surface after a drop (C4a): landing on the top or a shelf (C5a), clinging to a side or hanging under the
+   * bottom. Under reduced motion, or on a surface that's no longer there, it rests on the top instead.
    */
   settle(now: number, to: Landing) {
     this.b.fall = null;
     this.b.loops = 0;
     this.b.still = false;
     const on = { air: null, surface: to.surface, x: this.clampX(to.x, to.surface), facing: to.facing };
-    if (this.world.reducedMotion || (to.surface !== "top" && !this.world.around)) {
+    if (this.world.reducedMotion || (to.surface !== "top" && !this.world.around) || (to.surface === "shelf" && !this.world.shelf)) {
       // Not shown on its own: rest() shows where it ends up, one change.
       Object.assign(this.b, on);
       return this.rest(now);
     }
-    if (to.surface === "top") return this.show(now, { ...on, mode: "land", frame: 0 });
+    if (isFloor(to.surface)) return this.show(now, { ...on, mode: "land", frame: 0 });
     if (to.surface === "bottom") {
       this.b.until = now + this.between(HANG_MS);
       return this.show(now, { ...on, mode: "hang", frame: 0 });
@@ -389,7 +451,10 @@ class Draft {
     if (mode === "walk" || mode === "climb") {
       const from = this.b.x;
       const want = this.b.facing * stepPx(mode, anim, next);
-      const x = this.clampX(from + want);
+      let x = this.clampX(from + want);
+      // A climb heading for a shelf's door stops level with it (C5a), not a stride past, where it may step in.
+      const door = mode === "climb" ? this.doorOn(this.b.surface) : null;
+      if (door !== null && this.b.target === door && (this.b.facing > 0 ? x > door : x < door)) x = door;
       const arrived = this.b.facing > 0 ? x >= this.b.target : x <= this.b.target;
       this.show(now, { frame: next, x });
       if (arrived || (want !== 0 && x === from)) this.b.target = x; // there, or stopped by the end of the edge
@@ -406,9 +471,9 @@ type DueKind = "drowsy" | "arrive" | "until" | "frame" | "fall";
 function nextDue(b: Brain, skin: Skin, world: World): { at: number; kind: DueKind } | null {
   // A fall always finishes, music or not: the pointer caused it.
   if (b.mode === "fall") return { at: b.frameAt + FALL_TICK_MS, kind: "fall" };
-  // Off the top with the music off, it holds where it is: there's no sleeping on a side (C3a). Carried, it dangles
+  // Off a floor with the music off, it holds where it is: there's no sleeping on a side (C3a). Carried, it dangles
   // whatever the music does.
-  if (b.surface !== "top" && !world.playing && !b.air) return null;
+  if (!isFloor(b.surface) && !world.playing && !b.air) return null;
   const d = new Draft(b, skin, world);
   const candidates: [number, DueKind][] = [];
   if (AWAKE.includes(b.mode) && !world.playing && b.quietSince !== null) candidates.push([b.quietSince + DROWSY_MS, "drowsy"]);
@@ -492,9 +557,12 @@ function step(b: Brain, skin: Skin, world: World, t: number, kind: DueKind): Bra
   if (kind === "drowsy") d.rest(t); // the music is off: it falls asleep
   else if (kind === "fall") d.fallStep(t);
   else if (kind === "arrive") {
+    const end = b.facing < 0 ? b.x === 0 : b.x === lengthOf(world, b.surface) - 1;
     if (b.mode === "climb") d.climbArrived(t);
-    // At the top's end, on an outline, it may turn the corner (the walk planner let it run out there).
-    else if (world.around && (b.facing < 0 ? b.x === 0 : b.x === world.edge.length - 1) && d.rand() < CORNER_CHANCE) d.turnDown(t);
+    // At a shelf's door it may step out onto the side (C5a); at the top's end, on an outline, it may turn the corner
+    // (the walk planner let it run out there).
+    else if (b.surface === "shelf" && end && d.doorAhead(b.facing) && d.rand() < CORNER_CHANCE) d.stepOut(t);
+    else if (b.surface === "top" && world.around && end && d.rand() < CORNER_CHANCE) d.turnDown(t);
     else {
       d.b.loops = 0;
       d.b.until = t + d.between(IDLE_MS);
@@ -515,9 +583,9 @@ export function setWorld(b: Brain, skin: Skin, prev: World, world: World, now: n
   d.b.target = d.clampX(b.target);
   // In the air, `x` is where it was: it isn't shown, and a drop finds a new place anyway.
   if (!b.air && d.clampX(b.x) !== b.x) d.show(now, { x: d.clampX(b.x) });
-  // Reduced motion puts it back on the top in a still pose; so does losing the outline it was on. Falling, it lands
-  // now (settle() rests it on the top). Carried, it stays in the pointer's hand.
-  if (world.reducedMotion !== prev.reducedMotion || (b.surface !== "top" && !world.around)) {
+  // Reduced motion puts it back on the top in a still pose; so does losing the outline or the shelf it was on. Falling,
+  // it lands now (settle() rests it on the top). Carried, it stays in the pointer's hand.
+  if (world.reducedMotion !== prev.reducedMotion || (b.surface !== "top" && !world.around) || (b.surface === "shelf" && !world.shelf)) {
     if (b.fall) {
       d.settle(now, b.fall.to);
       return d.b;
@@ -530,7 +598,7 @@ export function setWorld(b: Brain, skin: Skin, prev: World, world: World, now: n
   if (world.playing && !prev.playing) {
     d.b.quietSince = null;
     d.b.until = Math.max(d.b.until, now); // an idle that ran out during a short pause ends now, not in the past
-    if (b.surface !== "top" && !b.air) d.b.frameAt = now; // held still off the top: its frames start again from now
+    if (!isFloor(b.surface) && !b.air) d.b.frameAt = now; // held still off a floor: its frames start again from now
     if (b.mode === "sleep") {
       if (world.reducedMotion) d.rest(now);
       else {
@@ -541,8 +609,8 @@ export function setWorld(b: Brain, skin: Skin, prev: World, world: World, now: n
     }
   } else if (!world.playing && prev.playing) {
     d.b.quietSince = now;
-    // Off the top it holds still where it is: clinging in a climb's rest frame, or in the hang's (C3a).
-    if (b.surface !== "top" && !b.air) {
+    // Off a floor it holds still where it is: clinging in a climb's rest frame, or in the hang's (C3a).
+    if (!isFloor(b.surface) && !b.air) {
       if (b.mode === "climb") d.b.holding = true;
       d.show(now, { frame: 0 });
     }
@@ -551,9 +619,9 @@ export function setWorld(b: Brain, skin: Skin, prev: World, world: World, now: n
   return d.b;
 }
 
-/** A new track started: a little reaction, if it's awake on the top and motion is allowed. */
+/** A new track started: a little reaction, if it's awake on a floor and motion is allowed. */
 export function trackChanged(b: Brain, skin: Skin, world: World, now: number): Brain {
-  if (world.reducedMotion || !world.playing || b.surface !== "top" || !AWAKE.includes(b.mode)) return b;
+  if (world.reducedMotion || !world.playing || !isFloor(b.surface) || !AWAKE.includes(b.mode)) return b;
   const d = new Draft(b, skin, world);
   d.b.loops = 0;
   d.b.still = false;
@@ -562,12 +630,13 @@ export function trackChanged(b: Brain, skin: Skin, world: World, now: number): B
 }
 
 /**
- * Clicked (C4a): a reaction, if it's awake on the top. Asleep, it stirs (`wake`) and, with the music still off, dozes
- * off again. Nothing while it's reacting or waking already, off the top or in the air, or under reduced motion.
+ * Clicked (C4a): a reaction, if it's awake on a floor (the top, or a shelf: C5a). Asleep, it stirs (`wake`) and, with
+ * the music still off, dozes off again. Nothing while it's reacting or waking already, off a floor or in the air, or
+ * under reduced motion.
  */
 export function poke(b: Brain, skin: Skin, world: World, now: number): Brain {
   const ready = b.mode === "idle" || b.mode === "walk" || b.mode === "sit" || b.mode === "sleep";
-  if (world.reducedMotion || b.surface !== "top" || b.air || !ready) return b;
+  if (world.reducedMotion || !isFloor(b.surface) || b.air || !ready) return b;
   const d = new Draft(b, skin, world);
   d.b.loops = 0;
   d.b.still = false;
@@ -603,8 +672,8 @@ export function carry(b: Brain, at: Point): Brain {
 export function drop(b: Brain, skin: Skin, world: World, now: number, to: Landing): Brain {
   if (b.mode !== "held" || !b.air) return b;
   const d = new Draft(b, skin, world);
-  // On a side it grabs on from the last turn: the fall's last leg is only to the top or the bottom.
-  const path = to.via ? [...to.via, ...(to.surface === "top" || to.surface === "bottom" ? [to.at] : [])] : [];
+  // On a side it grabs on from the last turn: the fall's last leg is only to the top, a shelf or the bottom.
+  const path = to.via ? [...to.via, ...(to.surface === "left" || to.surface === "right" ? [] : [to.at])] : [];
   const short = path.length === 1 && Math.hypot(path[0].x - b.air.x, path[0].y - b.air.y) <= FALL_FIRST;
   if (world.reducedMotion || !path.length || short) {
     d.settle(now, to);

@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 
 // Picking the companion up, carrying it, dropping it and clicking it (M2 C4a), in the Companion lab's cards that travel
@@ -6,6 +7,11 @@ import { expect, test, type Page } from "@playwright/test";
 
 const SKINS = ["test-dummy", "pilcrow", "bookworm", "cassette"];
 const EPS = 0.01;
+/** The art row a pose rests on its surface by (the skin's per-animation anchor, else its own). */
+const anchorRow = (id: string, state: string) => {
+  const skin = JSON.parse(readFileSync(new URL(`../companions/${id}/companion.json`, import.meta.url), "utf8"));
+  return (skin.animations[state].anchor ?? skin.anchor).y as number;
+};
 
 /** Lets React finish what it has queued (see companion-brain.spec.ts: DevTools commands overtake React's commits). */
 const settle = (page: Page) =>
@@ -18,11 +24,17 @@ const settle = (page: Page) =>
       });
   });
 
-async function open(page: Page) {
+/** The lab section the helpers read: the cards that travel the outline, or the taller ones with a shelf (C5a). */
+let section: "around" | "shelf" = "around";
+
+async function open(page: Page, which: typeof section = "around") {
+  section = which;
   await page.clock.install({ time: 0 });
-  await page.goto("/?lab=companion&around");
-  await page.locator("[data-lab-around] .mp-companion").first().waitFor();
-  await page.clock.pauseAt(1000); // from here on, time moves only when the test moves it
+  await page.goto(`/?lab=companion&${which}`);
+  await page.locator(`[data-lab-${which}] .mp-companion`).first().waitFor();
+  // From here on, time moves only when the test moves it: at 1 s, or just after now if the dev server was slow to load
+  // the page (it can be, right after an edit: pausing in the past throws, DECISIONS.md C5a).
+  await page.clock.pauseAt(Math.max(1000, (await page.evaluate(() => Date.now())) + 100));
   await settle(page);
 }
 
@@ -37,8 +49,8 @@ type Box = { left: number; top: number; right: number; bottom: number };
 
 /** One creature: its state, its sprite box, every drawn pixel (page px), its mock card and the card's artwork. */
 const pet = (page: Page, id: string) =>
-  page.evaluate((id) => {
-    const scene = document.querySelector(`[data-lab-around-skin="${id}"]`)!;
+  page.evaluate(([id, section]) => {
+    const scene = document.querySelector(`[data-lab-${section}-skin="${id}"]`)!;
     const s = scene.getBoundingClientRect();
     const face = scene.firstElementChild!.getBoundingClientRect();
     const art = scene.querySelector("[data-lab-art]")!.getBoundingClientRect();
@@ -64,11 +76,19 @@ const pet = (page: Page, id: string) =>
       pointer: getComputedStyle(el).pointerEvents,
       center: { x: left + size / 2, y: top + size / 2 },
       size,
+      /** The sprite box's top and an art pixel's size, page px: where its anchor row is. */
+      boxTop: top,
+      px,
       pixels,
       card: { left: face.left, top: face.top, right: face.right, bottom: face.bottom },
       art: { left: art.left, top: art.top, right: art.right, bottom: art.bottom },
+      parts: [...scene.querySelectorAll("[data-lab-art], [data-lab-bar], [data-lab-badge]")].map((e) => {
+        const r = e.getBoundingClientRect();
+        return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+      }),
+      shelfLine: scene.querySelector("[data-lab-shelf-line]")?.getBoundingClientRect().top ?? null,
     };
-  }, id);
+  }, [id, section] as const);
 
 const off = (p: Box, b: Box) => p.right <= b.left + EPS || p.left >= b.right - EPS || p.bottom <= b.top + EPS || p.top >= b.bottom - EPS;
 
@@ -229,4 +249,35 @@ test("a click makes it react; asleep, it stirs and goes back to sleep", async ({
   }
   await run(page, 2000);
   for (const id of SKINS) expect((await pet(page, id)).state, `${id}: back to sleep`).toBe("sleep");
+});
+
+test("dropped above the shelf (C5a), it falls onto it and lives there, over no part", async ({ page }) => {
+  test.setTimeout(90_000);
+  await open(page, "shelf");
+  for (const id of SKINS) {
+    await pickUp(page, id);
+    const { card, shelfLine } = await pet(page, id);
+    expect(shelfLine, "the lab draws its shelf").not.toBeNull();
+    // Above the shelf's middle, clear of the artwork above it.
+    await page.mouse.move(card.left + 40, shelfLine! - 40, { steps: 4 });
+    await settle(page);
+    await page.mouse.up();
+    await settle(page);
+    const fell = await fallUntil(page, id, "land");
+    expect(fell.some((p) => p.state === "fall"), `${id}: a real fall`).toBe(true);
+    const landed = fell.at(-1)!;
+    expect([landed.state, landed.surface], id).toEqual(["land", "shelf"]);
+    // Standing on the shelf's line, and for a while after: no pixel over a part. Problems are collected and asserted
+    // once: an expect() per pixel per part (Playwright records each as a step) timed this out in WebKit.
+    const wrong: string[] = [];
+    for (let t = 0; t < 20_000; t += 500) {
+      const p = await pet(page, id);
+      if (p.surface !== "shelf") break; // it may step out at the door
+      if (p.pixels.some((px) => p.parts.some((part) => !off(px, part)))) wrong.push(`${t} ms, ${p.state}: a pixel over a part`);
+      const anchor = p.boxTop + (anchorRow(id, p.state) + 1) * p.px;
+      if (Math.abs(anchor - shelfLine!) > EPS) wrong.push(`${t} ms, ${p.state}: its anchor ${anchor} isn't on the shelf's line ${shelfLine}`);
+      await run(page, 500, 500);
+    }
+    expect(wrong, id).toEqual([]);
+  }
 });

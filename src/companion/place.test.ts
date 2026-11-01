@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { advance, createBrain, drop, nextChangeAt, pickUp, pose, type World } from "./brain";
 import { spriteBoxPx } from "./pixel";
-import { carryPoint, edgeLength, landingFor, noSitRanges, placeAround, placeOnEdge, type Surface } from "./place";
+import { measureShelf } from "./measure";
+import { FLOOR_ANIMATIONS, carryPoint, edgeLength, landingFor, noSitRanges, placeAround, placeOnEdge, type Surface } from "./place";
 import { SKINS } from "./registry";
 import { anchorOf, type AnimationName, type Skin } from "./skin";
 
@@ -257,5 +258,110 @@ describe("companion placement in the pointer's hand (C4a)", () => {
     expect(carryPoint(skin, { left: card.left + 60, top: card.top + 2 }, false, px, card, room, lab)).toEqual({ x: 37, y: 1 });
     // Above the card, in the room: where it was wanted, in whole art px.
     expect(carryPoint(skin, { left: card.left + 61, top: card.top - 32 }, false, px, card, room, lab)).toEqual({ x: 31, y: -16 });
+  });
+});
+
+describe("companion placement with a shelf (C5a)", () => {
+  // The lab's shelf card at 100%: 248 × 152 CSS px, the mock artwork, and the shelf trimmed beside the mock badge.
+  const card = { left: 56, top: 56, width: 248, height: 152 };
+  const top = { left: card.left, top: card.top, width: card.width };
+  const art = { left: 69, top: 69, width: 64, height: 64 };
+  const badge = { left: 160, top: 172, right: 200, bottom: 192 };
+  const line = { left: card.left, top: 192, width: 112 };
+  const toBox = (b: typeof art) => ({ left: b.left, top: b.top, right: b.left + b.width, bottom: b.top + b.height });
+
+  for (const px of [2, 2.4])
+    for (const skin of Object.values(SKINS)) {
+      it(`${skin.id} at ${px} px: dropped anywhere over the card, some land on the shelf; every fall stays off the artwork`, () => {
+        const shelf = measureShelf(skin, toBox(card), line, [toBox(art), badge], px)!;
+        expect(shelf, "the lab's shelf fits every skin").not.toBeNull();
+        const at = Math.round((shelf.edge.top - card.top) / px) - 1;
+        const world: World = {
+          playing: true,
+          reducedMotion: false,
+          edge: { length: edgeLength(card.width, px), noSit: [] },
+          around: { side: edgeLength(card.height, px), bottom: edgeLength(card.width, px) },
+          shelf: { length: edgeLength(shelf.edge.width, px), left: 0, doors: shelf.doors, at },
+        };
+        const box = spriteBoxPx(skin.grid, px);
+        const room = { left: card.left - box, top: card.top - box, width: card.width + 2 * box, height: card.height + 2 * box };
+        const EPS = 1e-6;
+        const wrong: string[] = [];
+        let onShelf = 0;
+        for (const facing of [1, -1] as const)
+          for (let wy = card.top; wy <= card.top + card.height; wy += 6)
+            for (let wx = card.left - 10; wx <= card.left + card.width; wx += 7) {
+              const where = `facing ${facing}, wanted (${wx}, ${wy})`;
+              const from = carryPoint(skin, { left: wx, top: wy }, facing < 0, px, card, room, [art]);
+              const to = landingFor(skin, from, facing, px, top, card, [art], shelf.edge);
+              let b = drop(pickUp({ ...createBrain(skin, world, 0, 1), facing }, skin, world, 0, from), skin, world, 0, to);
+              for (let guard = 0; pose(b).air && guard < 200; guard++) {
+                const air = pose(b).air!;
+                const o = { x0: card.left + air.x * px, y0: card.top + air.y * px };
+                for (const f of skin.animations.fall.frames)
+                  f.forEach((r, y) => {
+                    for (let x = 0; x < r.length; x++) {
+                      if (r[x] === ".") continue;
+                      const l = o.x0 + (facing < 0 ? skin.grid - 1 - x : x) * px;
+                      const t = o.y0 + y * px;
+                      if (l < art.left + art.width - EPS && l + px > art.left + EPS && t < art.top + art.height - EPS && t + px > art.top + EPS)
+                        wrong.push(`${where}: falls over the artwork`);
+                    }
+                  });
+                b = advance(b, skin, world, nextChangeAt(b, skin, world)!);
+                const next = pose(b).air;
+                if (next && next.y < air.y - EPS) wrong.push(`${where}: falls upwards`);
+              }
+              const p = pose(b);
+              if (p.air || p.surface !== to.surface || p.x !== to.x) wrong.push(`${where}: didn't land where it was headed`);
+              if (to.surface !== "shelf") continue;
+              onShelf++;
+              const placed = placeAround(skin, "land", "shelf", to.x, to.facing, px, top, card, shelf.edge);
+              if (Math.abs(placed.left - (card.left + to.at.x * px)) > EPS || Math.abs(placed.top - (card.top + to.at.y * px)) > EPS)
+                wrong.push(`${where}: the landing's box isn't the landed pose's`);
+            }
+        expect(wrong.slice(0, 10)).toEqual([]);
+        expect(onShelf, "some drops land on the shelf").toBeGreaterThan(20);
+      }, 30_000);
+    }
+
+  const skin = SKINS.pilcrow; // held and fall art: rows 2–13, so its feet are 14 art px below its box's top
+  const px = 2;
+  const shelf = measureShelf(skin, toBox(card), line, [toBox(art), badge], px)!;
+  const LINE = (shelf.edge.top - card.top) / px; // 68 art px down
+  const n = edgeLength(shelf.edge.width, px);
+
+  it("places a pose on the shelf as on an edge of its own", () => {
+    for (const animation of FLOOR_ANIMATIONS)
+      for (const facing of [1, -1] as const)
+        expect(placeAround(skin, animation, "shelf", 7, facing, px, top, card, shelf.edge)).toEqual({
+          ...placeOnEdge(skin, animation, 7, facing, px, shelf.edge),
+          mirrored: facing < 0,
+        });
+  });
+
+  it("over the shelf it falls onto it; feet a little below its line step up onto it; lower, it falls past", () => {
+    const fallen = landingFor(skin, { x: 10, y: 40 }, 1, px, top, card, [], shelf.edge);
+    expect(fallen.surface).toBe("shelf");
+    expect(fallen.via, "fallen to").toBeDefined();
+    expect(fallen.at.y + anchorOf(skin, "land").y + 1, "its anchor on the line").toBe(LINE);
+    const stepped = landingFor(skin, { x: 10, y: LINE - 14 + 2 }, 1, px, top, card, [], shelf.edge);
+    expect(stepped.surface).toBe("shelf");
+    expect(stepped.via, "stepped up onto, not fallen to").toBeUndefined();
+    expect(landingFor(skin, { x: 10, y: LINE - 14 + 4 }, 1, px, top, card, [], shelf.edge).surface).toBe("bottom");
+  });
+
+  it("past the shelf's end it falls on to the bottom; off the artwork's left side it lands on the shelf", () => {
+    const past = landingFor(skin, { x: n + 2, y: 40 }, 1, px, top, card, [art], shelf.edge);
+    expect(past.surface).toBe("bottom");
+    const slid = landingFor(skin, { x: 10, y: -10 }, 1, px, top, card, [art], shelf.edge);
+    expect(slid.surface).toBe("shelf");
+    expect(slid.via!.length, "onto the artwork, off its side, down to the shelf").toBeGreaterThanOrEqual(2);
+  });
+
+  it("without a shelf, or without the outline, nothing changes", () => {
+    for (const air of [{ x: 10, y: 40 }, { x: 10, y: -10 }, { x: 60, y: 10 }])
+      expect(landingFor(skin, air, 1, px, top, card, [art], null)).toEqual(landingFor(skin, air, 1, px, top, card, [art]));
+    expect(landingFor(skin, { x: 10, y: 40 }, 1, px, top, null, [], shelf.edge).surface).toBe("top");
   });
 });

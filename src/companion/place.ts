@@ -1,5 +1,5 @@
-// Where the companion goes on the card's outline (PLAN.md §4b, M2 C2, C3), and where it goes in the pointer's hand and
-// when it's let go (C4a). Pure: CSS px and art px in, CSS px or art px out.
+// Where the companion goes on the card's outline (PLAN.md §4b, M2 C2, C3) and on a shelf inside it (C5a), and where it
+// goes in the pointer's hand and when it's let go (C4a). Pure: CSS px and art px in, CSS px or art px out.
 import type { Landing, Point } from "./brain";
 import { anchorOf, type AnimationName, type Skin } from "./skin";
 
@@ -57,14 +57,20 @@ export interface Outline {
   height: number;
 }
 
-/** Where the creature is: the surface (an outline's side) and its anchor's position along it, art px. */
-export type Surface = "top" | "right" | "bottom" | "left";
+/**
+ * Where the creature is: the surface (an outline's side, or the shelf inside the card, C5a) and its anchor's position
+ * along it, art px.
+ */
+export type Surface = "top" | "right" | "bottom" | "left" | "shelf";
+
+/** What it does standing on a floor (the top or a shelf): every pose a shelf must leave room for. */
+export const FLOOR_ANIMATIONS: readonly AnimationName[] = ["idle", "walk", "sit", "sleep", "wake", "react", "land"];
 
 /**
  * The sprite's top-left (CSS px) and whether it's mirrored, for a pose anywhere on the outline (C3a). The top is
- * `placeOnEdge` on `top`. The bottom runs from the card's left like the top; the hang anchor's top edge touches it.
- * The sides run from the card's top down; the climb anchor's right edge touches the left side, and the art is
- * mirrored on the right side, whichever way it climbs.
+ * `placeOnEdge` on `top`, and the shelf (C5a) is `placeOnEdge` on `shelf`. The bottom runs from the card's left like
+ * the top; the hang anchor's top edge touches it. The sides run from the card's top down; the climb anchor's right edge
+ * touches the left side, and the art is mirrored on the right side, whichever way it climbs.
  */
 export function placeAround(
   skin: Skin,
@@ -75,9 +81,11 @@ export function placeAround(
   px: number,
   top: EdgeBox,
   card: Outline,
+  shelf?: EdgeBox,
 ): { left: number; top: number; mirrored: boolean } {
   const a = anchorOf(skin, animation);
-  if (surface === "top") return { ...placeOnEdge(skin, animation, pos, facing, px, top), mirrored: facing < 0 };
+  if (surface === "top" || surface === "shelf")
+    return { ...placeOnEdge(skin, animation, pos, facing, px, surface === "shelf" && shelf ? shelf : top), mirrored: facing < 0 };
   if (surface === "bottom") {
     const ax = facing > 0 ? a.x : skin.grid - 1 - a.x;
     return { left: card.left + (pos - ax) * px, top: card.top + card.height - a.y * px, mirrored: facing < 0 };
@@ -88,7 +96,7 @@ export function placeAround(
 }
 
 /** Opaque pixels' bounds across some animations' frames, art px, inclusive, as drawn facing right or mirrored. */
-function opaqueBounds(skin: Skin, animations: readonly AnimationName[], mirrored: boolean) {
+export function opaqueBounds(skin: Skin, animations: readonly AnimationName[], mirrored: boolean) {
   let [x0, y0, x1, y1] = [Infinity, Infinity, -Infinity, -Infinity];
   for (const name of animations)
     for (const f of skin.animations[name].frames)
@@ -168,6 +176,8 @@ const REACH = 3;
  * - **Over the card:** its feet within REACH of the top catch it. Lower, it falls down the card's face and catches the
  *   bottom edge, hanging. Something in `avoid` in the way (the artwork) stops the fall: it slides off the nearer side
  *   and falls on. Slid off the card's side, it grabs that side instead.
+ * - **Over a shelf** (C5a: its land anchor above one of the shelf's positions): the shelf catches the fall, unless
+ *   something to slide off is higher up. Feet within REACH below the shelf's line step up onto it.
  * - **Beside the card or under it:** it grabs the nearest side, or the bottom, at once: nothing to fall onto.
  *
  * A landing it falls to has `via`: the turns on the way (none for a straight fall). Without `via` it's grabbed at once.
@@ -181,6 +191,7 @@ export function landingFor(
   top: EdgeBox,
   card: Outline | null,
   avoid: readonly Outline[] = [],
+  shelf: EdgeBox | null = null,
 ): Landing {
   const box = card ?? { left: top.left, top: top.top, width: top.width, height: 0 };
   const o = opaqueBounds(skin, ["held", "fall"], facing < 0);
@@ -188,18 +199,28 @@ export function landingFor(
   const ch = box.height / px;
   const overSpan = (p: Point) => p.x + o.x1 + 1 > EPS && p.x + o.x0 < cw - EPS;
   const feet = (p: Point) => p.y + o.y1 + 1;
+  /** Where along `surface` a sprite box at `from` is, before it's kept to the surface's length. */
+  const alongOf = (surface: Surface, from: Point) => {
+    const a = anchorOf(skin, surface === "top" || surface === "shelf" ? "land" : surface === "bottom" ? "hang" : "climb");
+    const ax = facing > 0 ? a.x : skin.grid - 1 - a.x;
+    if (surface === "shelf") return from.x + ax - (shelf!.left - box.left) / px;
+    return surface === "top" || surface === "bottom" ? from.x + ax : from.y + a.y;
+  };
   /** The landing on `surface` level with `from`, and how far its sprite box is from there. */
   const on = (surface: Surface, from: Point): { landing: Landing; far: number } => {
-    const animation: AnimationName = surface === "top" ? "land" : surface === "bottom" ? "hang" : "climb";
-    const a = anchorOf(skin, animation);
-    const ax = facing > 0 ? a.x : skin.grid - 1 - a.x;
-    const length = edgeLength(surface === "top" ? top.width : surface === "bottom" ? box.width : box.height, px);
-    const along = surface === "top" || surface === "bottom" ? from.x + ax : from.y + a.y;
-    const x = Math.max(0, Math.min(length - 1, Math.round(along)));
+    const animation: AnimationName = surface === "top" || surface === "shelf" ? "land" : surface === "bottom" ? "hang" : "climb";
+    const width = surface === "top" ? top.width : surface === "shelf" ? shelf!.width : surface === "bottom" ? box.width : box.height;
+    const x = Math.max(0, Math.min(edgeLength(width, px) - 1, Math.round(alongOf(surface, from))));
     const f: 1 | -1 = surface === "left" || surface === "right" ? -1 : facing;
-    const p = placeAround(skin, animation, surface, x, f, px, top, box);
+    const p = placeAround(skin, animation, surface, x, f, px, top, box, shelf ?? undefined);
     const at = { x: (p.left - box.left) / px, y: (p.top - box.top) / px };
     return { landing: { surface, x, facing: f, at }, far: Math.hypot(at.x - from.x, at.y - from.y) };
+  };
+  /** The shelf's line (art px from the card's top), if a sprite box at `p` is over one of the shelf's positions. */
+  const shelfUnder = (p: Point): number | null => {
+    if (!shelf || !card) return null;
+    const s = Math.round(alongOf("shelf", p));
+    return s >= 0 && s <= edgeLength(shelf.width, px) - 1 ? (shelf.top - box.top) / px : null;
   };
   /** The nearest of `surfaces`; ties go to the earlier one. */
   const nearest = (surfaces: Surface[], from: Point) =>
@@ -213,15 +234,25 @@ export function landingFor(
   }
   if (overSpan(air) && feet(air) <= REACH + EPS) return on("top", air).landing;
   if (!overSpan(air) || air.y + o.y0 >= ch - EPS) return nearest(["left", "right", "bottom"], air);
+  const line = shelfUnder(air);
+  if (line !== null && feet(air) > line + EPS && feet(air) <= line + REACH + EPS) return on("shelf", air).landing;
 
-  // Down the card's face, sliding off anything to avoid.
+  // Down the card's face, sliding off anything to avoid, until the shelf or the bottom catches it.
   const boxes = avoid.map((b) => artBox(b, box, px));
   const via: Point[] = [];
+  /** Lands where `catcher` is level with `p`: straight down to its level, then along if its end held it back. */
+  const fallTo = (catcher: Surface, p: Point): Landing => {
+    const landing = on(catcher, p).landing;
+    if (Math.abs(landing.at.x - p.x) > EPS) via.push({ x: p.x, y: landing.at.y });
+    return { ...landing, via };
+  };
   let p = air;
   for (let guard = 0; guard < 8 && overSpan(p); guard++) {
     const below = boxes
       .filter((b) => b.l < p.x + o.x1 + 1 - EPS && b.r > p.x + o.x0 + EPS && b.t >= feet(p) - EPS && b.t < ch)
       .sort((a, b) => a.t - b.t)[0];
+    const ledge = shelfUnder(p);
+    if (ledge !== null && ledge >= feet(p) - EPS && (!below || ledge <= below.t + EPS)) return fallTo("shelf", p);
     if (!below) break;
     const y = Math.floor(below.t - o.y1 - 1 + EPS);
     const left = Math.floor(below.l - o.x1 - 1 + EPS);
@@ -232,10 +263,8 @@ export function landingFor(
     via.push(p);
   }
   if (!overSpan(p)) return { ...nearest(["left", "right"], p), via };
-  const hang = on("bottom", p).landing;
-  // Straight down to the bottom's level, then along under the card if its end held it back: never across the card.
-  if (Math.abs(hang.at.x - p.x) > EPS) via.push({ x: p.x, y: hang.at.y });
-  return { ...hang, via };
+  // Under the card, along it if the bottom's end held it back: never across the card.
+  return fallTo("bottom", p);
 }
 
 /** How far (CSS px) the sitting pose's legs hang below the edge: from the anchor row to the lowest opaque row. */
