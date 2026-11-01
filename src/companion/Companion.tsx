@@ -61,6 +61,7 @@ export function Companion({
   dpr = window.devicePixelRatio || 1,
   interactive = false,
   room,
+  avoid = [],
   className,
 }: {
   skin: Skin;
@@ -82,10 +83,12 @@ export function Companion({
   /** It takes the pointer (C4a): a click makes it react; a drag picks it up, and letting go drops it. */
   interactive?: boolean;
   /**
-   * Where it may be carried, same px; never over the card. Default: a sprite's box around the card (the window's
-   * margin, C3b), or above the top edge when there's no outline.
+   * Where it may be carried, same px. Default: the card and a sprite's box around it (the window's margin, C3b), or
+   * above the top edge when there's no outline.
    */
   room?: Outline;
+  /** Boxes, same px, it never covers while carried or falling: the artwork (CLAUDE.md). */
+  avoid?: readonly Outline[];
   className?: string;
 }) {
   const px = artPixelPx(dpr);
@@ -162,7 +165,8 @@ export function Companion({
   const snap = (v: number) => Math.round(v * dpr) / dpr;
 
   // The pointer (C4a). A press is a click until it moves PICK_UP_PX; then the creature is in the pointer's hand,
-  // keeping the spot it was grabbed by, until the press ends and it's dropped.
+  // keeping the spot it was grabbed by, until the press ends and it's dropped. It may be carried over the card, but
+  // never over what it must avoid (the artwork), and its fall slides off it.
   const press = useRef<{ id: number; x: number; y: number; grab: { x: number; y: number }; held: boolean } | null>(null);
   const box = spriteBoxPx(skin.grid, px);
   const carryRoom =
@@ -188,7 +192,7 @@ export function Companion({
     const p = local(e);
     if (!g.held && Math.hypot(p.x - g.x, p.y - g.y) < PICK_UP_PX) return;
     const b = brain.current!;
-    const at = carryPoint(skin, { left: p.x - g.grab.x, top: p.y - g.grab.y }, b.facing < 0, px, card, carryRoom);
+    const at = carryPoint(skin, { left: p.x - g.grab.x, top: p.y - g.grab.y }, b.facing < 0, px, card, carryRoom, avoid);
     if (g.held) {
       brain.current = carry(b, at);
       show();
@@ -204,7 +208,7 @@ export function Companion({
     const b = brain.current!;
     if (g.held && b.air) {
       // Under reduced motion it lives on the top only (C3a), so that's where it lands.
-      const to = landingFor(skin, b.air, b.facing, px, edge, outline && !reducedMotion ? card : null);
+      const to = landingFor(skin, b.air, b.facing, px, edge, outline && !reducedMotion ? card : null, avoid);
       update(drop(b, skin, worldRef.current, now(), to));
     } else if (click && !g.held) update(poke(b, skin, worldRef.current, now()));
   };

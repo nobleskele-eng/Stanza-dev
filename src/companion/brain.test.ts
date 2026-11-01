@@ -301,8 +301,8 @@ describe("companion brain around the card (C3a)", () => {
 
 describe("companion brain in the pointer's hand (C4a)", () => {
   const around: World = { ...playing, edge: { length: 124, noSit: [] }, around: { side: 44, bottom: 124 } };
-  /** Landed on the top at 30, its sprite box 15 art px above the top's line (where place.ts would put it). */
-  const onTop: Landing = { surface: "top", x: 30, facing: 1, at: { x: 20, y: -15 } };
+  /** Falls straight onto the top at 30, its sprite box 15 art px above the top's line (where place.ts would put it). */
+  const onTop: Landing = { surface: "top", x: 30, facing: 1, at: { x: 20, y: -15 }, via: [] };
   /** Awake on the top, idling. */
   const idling = (skin: Skin, world: World) => {
     const b = createBrain(skin, world, 0, 6);
@@ -391,6 +391,42 @@ describe("companion brain in the pointer's hand (C4a)", () => {
         expect(rest.pose.animation, skin.id).toBe(world.playing ? "idle" : "sleep");
       }
     }
+  });
+
+  it("dropped over the card it falls down its face, through each turn, and catches the bottom", () => {
+    for (const skin of skins) {
+      const held = pickUp(idling(skin, around), skin, around, 100, { x: 20, y: -5 });
+      // Down onto the artwork, along it to its edge, then down to the bottom (the turns place.ts would plan).
+      const turns = [
+        { x: 20, y: 10 },
+        { x: 42, y: 10 },
+      ];
+      const to: Landing = { surface: "bottom", x: 50, facing: 1, at: { x: 42, y: 44 }, via: turns };
+      const { changes } = run(skin, around, drop(held, skin, around, 200, to), 200, 200 + MINUTE);
+      const fall = changes.filter((c) => c.pose.animation === "fall").map((c) => c.pose.air!);
+      // Each turn is shown exactly, and every step between is along a straight leg.
+      const at = turns.map((t) => fall.findIndex((p) => p.x === t.x && p.y === t.y));
+      expect(at[0], `${skin.id}: reaches the first turn`).toBeGreaterThan(0);
+      expect(at[1], `${skin.id}: then the second`).toBeGreaterThan(at[0]);
+      for (const p of fall.slice(0, at[0])) expect(p.x, "the first leg is straight down").toBe(20);
+      for (const p of fall.slice(at[0], at[1])) expect(p.y, "the second goes along").toBe(10);
+      for (const p of fall.slice(at[1])) expect(p.x, "the last is straight down").toBe(42);
+      // After a turn it starts slowly again.
+      expect(fall[at[0] + 1].x - fall[at[0]].x, `${skin.id}: slow after the turn`).toBe(2);
+      const landed = changes.find((c) => c.pose.animation !== "fall")!;
+      expect(landed.pose, skin.id).toMatchObject({ animation: "hang", surface: "bottom", x: 50, air: null });
+    }
+  });
+
+  it("slid off the card's side by a turn, it grabs that side from the last turn", () => {
+    const skin = SKINS.pilcrow;
+    const held = pickUp(idling(skin, around), skin, around, 100, { x: 5, y: -5 });
+    const to: Landing = { surface: "left", x: 12, facing: -1, at: { x: -15, y: 10 }, via: [{ x: 5, y: 10 }, { x: -12, y: 10 }] };
+    const { changes } = run(skin, around, drop(held, skin, around, 200, to), 200, 200 + MINUTE);
+    const fall = changes.filter((c) => c.pose.animation === "fall").map((c) => c.pose.air!);
+    expect(fall).toContainEqual({ x: 5, y: 10 });
+    expect(fall.every((p) => p.x >= -12), "never past the last turn").toBe(true);
+    expect(changes.find((c) => c.pose.animation !== "fall")!.pose).toMatchObject({ animation: "climb", surface: "left", x: 12, air: null });
   });
 
   it("dropped beside a side or under the bottom it grabs on at once, and carries on from there", () => {

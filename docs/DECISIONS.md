@@ -3253,4 +3253,65 @@ one of the skin layers (PLAN.md §4b), so nothing structural changes.
   - **Not run:** the real exe (nothing in production changed); `cargo test` (no Rust changed).
 - **Open, your calls:**
   - Carrying it over the card (except the artwork) for longer falls, instead of keeping it off the card.
+    **Answered the same day: allow it** (next entry).
   - C3c corner art.
+
+## 2026-11-01 — M2 C4a, your call: carried over the card, never the artwork, and real falls
+- **Your answer:** "Allow over the card" (the option I'd described as over the card except the artwork, for longer
+  falls). The artwork stays off-limits: CLAUDE.md says nothing interactive over it, and the pet is interactive.
+- **Carrying** (`carryPoint`): anywhere over the card and a sprite's box around it (the window's margin, C3b). Its held
+  and fall art never cover the boxes it's told to avoid (`avoid`: the artwork). Pointing there pushes it off the
+  nearest way. The lab passes its mock artwork; production will pass `.mp-artwork` (C4b).
+- **Letting go: gravity decides** (`landingFor`, by where its held and fall art are):
+  - **Above the top's line:** the nearest surface. The top it falls onto, as before.
+  - **Over the card:** feet within 3 art px below the top's line catch it, and it steps up. Lower, it **falls down the
+    card's face** and catches the bottom edge, hanging. That's about a second on the lab's card.
+    - The artwork in the way stops the fall. It slides off the nearer edge, starts slowly again, and falls on.
+    - Slid off the card's side, it grabs that side instead.
+    - Held back by an end of the bottom, it falls straight down first, then moves along under the card. A diagonal
+      could clip the artwork.
+  - **Beside the card or under it:** it grabs a side or the bottom at once, as before.
+- **The brain:** a `Landing` now says how it gets there. With `via` (the turns, maybe none) it falls; without, it
+  grabs at once. A fall's path is the turns, then the landing (on the top or the bottom). On a side it grabs on from
+  the last turn. Each turn is shown exactly and the speed starts over there.
+- **Bug found by the new property test, fixed:** "falls upwards". The pilcrow's and the cassette's held art ends a row
+  above their landing pose's anchor. So with their feet already on the top's line, the landing's box sat 1 art px
+  higher, and the "fall" drifted up to it. A top landing that would rise is now stepped onto at once.
+- **Surprise: a stale module made a mutation check pass.** Letting the fall ignore the artwork *passed* the e2e at first.
+  - A probe showed the test did drop each creature onto the artwork, and with the right code each slid off it.
+  - The cause was my reused dev server (the browser pane's). Two in-place edits of the same file in quick succession
+    on Windows, and it went on serving the earlier module.
+  - On a fresh server, which Playwright starts itself, the mutation failed as it should: "falling (40 ms): a pixel
+    over the artwork".
+  - So mutation checks against the e2e need a fresh dev server. The earlier C4a e2e mutations had one.
+- **Production still unchanged:** the C3b brain against today's, side by side, the same 80 scripted minutes as above.
+  All 150,458 steps matched.
+- **Tests:**
+  - `brain.test.ts` (+2): a fall through two turns per skin (straight legs, each turn shown, slow after a turn, then
+    the hang); a turn that ends on a side (grabs on from the last turn, never past it).
+  - `place.test.ts`: the property test now runs for three artwork layouts: the lab's square, flush with the card's
+    left side at full height, and across the card's top. That's for every skin at 2 and 2.4 px.
+    - Carried anywhere: held and fall art stay off the artwork and in the room, and over the card it can be.
+    - Every step of every fall: clear of the artwork, in the room, never upwards. Each ends where it was headed.
+    - It counts real falls, falls down the face, and (for the lab's square) slides.
+    - By hand: the catch within reach; a fall down the face; the L-shaped fall near the bottom's end; a slide off the
+      artwork; a slide off the card's side; the push-out from the artwork.
+  - `e2e/companion-pointer.spec.ts` (+2 per engine):
+    - A drop over the card falls down the face and hangs.
+    - A drop onto the artwork's top edge slides off it and falls past it.
+    - Every frame of every fall is checked against the artwork. "Carried" now checks that it can be over the card.
+  - **Mutation-checked:**
+    - Carrying that ignores the artwork fails the property test and the e2e.
+    - A fall that ignores the artwork fails the property test (8 runs) and the e2e (on a fresh server).
+- **Checks run (Windows):**
+  - `npx tsc --noEmit`: clean.
+  - `npx vitest run`: 22 files, 272 passed.
+  - `npm run build`: passed, check-fixtures-excluded OK.
+  - `npx playwright test`: 779 passed, 23 skipped (Chromium + WebKit).
+  - The lab in the app's browser pane (Chromium, 100%), real mouse drags on the real clock. The cassette, dropped onto
+    its artwork's top edge, slid off its right edge, fell down the card and hung from the bottom. The pilcrow, dropped
+    over its card's right part, fell down the face and hung below where it was let go (the first try missed it
+    mid-walk). No console errors. Visual: ready for review.
+  - **Not run:** the real exe (nothing in production changed); `cargo test` (no Rust changed).
+- **For C4b:** the production e2e's "over no part" check has to allow the air states (held and falling may now cross
+  parts other than the artwork). It keeps every resting pose to it.

@@ -117,13 +117,15 @@ pixel's bottom edge rests on it.
 **`held`, `fall` and `land`** (C4a, 2026-11-01). While it's carried or falling, the creature is on no surface: its
 sprite box is wherever the pointer put it, and its anchors don't apply.
 - `held` plays while it's carried, as the budget allows (it's a resting loop). Frame 0 should look right held still.
-- `fall` is shown for the whole fall, which moves on its own clock (a step every 40 ms, speeding up), so a fall's
-  frames change only as fast as its `durations` or `fps` say. Falls are short.
+- `fall` is shown for the whole fall, which moves on its own clock (a step every 40 ms, speeding up, and slowly again
+  after each turn), so a fall's frames change only as fast as its `durations` or `fps` say. A fall down a card's face
+  lasts about a second.
 - `land` stands on the top like `idle` (the skin anchor) and plays once.
-- Carried, the `held` and `fall` art (every frame, the way it faces) stays off the card, so neither may reach further
-  than a sprite's box from the grid's edges. The fall ends on the top's line, so **`fall`'s lowest opaque row must be
-  no lower than `land`'s anchor row**, or its last steps would dip onto the card. Not validated; `place.test.ts` checks
-  it for every bundled skin by dropping each one from every place it can be carried.
+- Carried or falling, the `held` and `fall` art (every frame, the way it faces) stays off the artwork, so neither may
+  reach further than a sprite's box from the grid's edges. A fall onto the top ends on its line, so **`fall`'s lowest
+  opaque row must be no lower than `land`'s anchor row**, or its last steps would dip onto the card, and onto artwork
+  that starts at the card's top. Not validated: `place.test.ts` checks it for every bundled skin, dropping each one from
+  every place it can be carried, with three artwork layouts.
 
 A skin that is missing one of these, or has any other error, is rejected as a whole. The companion must be able to
 show every state.
@@ -180,12 +182,16 @@ The budget is about two changes a second on average (C0 spike, docs/DECISIONS.md
   seeds. The production player does the same since C3b, in a window with the pet's box as a margin on every side.
 - **Pick it up** (C4a), on both kinds of live card:
   - **Click** a creature on the top for a reaction. Asleep, it stirs (`wake`) and dozes off again.
-  - **Press and move** at least 4 px to pick it up. It keeps the spot you grabbed and follows the pointer within a
-    sprite's box around the card (the production window's margin; above the top edge on the top-only cards). It never
-    goes over the card: pointing over the card pushes it out the nearest way.
-  - **Let go** and it settles on the nearest surface. From above the top it falls onto it, speeding up, and plays
-    `land`. Beside a side it clings there and climbs back up. Under the card it hangs from the bottom. It only falls
-    onto the top from above it, so a fall never crosses the card.
+  - **Press and move** at least 4 px to pick it up. It keeps the spot you grabbed and follows the pointer over the card
+    and within a sprite's box around it (the production window's margin; above the top edge on the top-only cards). It
+    never goes over the artwork (CLAUDE.md): pointing there pushes it off the nearest way.
+  - **Let go** and gravity decides:
+    - From above the top it falls onto it, speeding up, and plays `land`. Feet within 3 art px below the top's line
+      catch it, and it steps up onto it.
+    - From over the card it falls down the card's face and catches the bottom edge, hanging. The artwork in the way
+      stops it: it slides off the nearer edge and falls on. Slid off the card's side, it grabs that side instead.
+    - Beside a side it clings there at once and climbs back up; under the card it hangs from the bottom at once.
+  - Its fall never goes up and never crosses the artwork.
   - Under reduced motion it can still be carried, holding still, and a drop puts it straight on the top.
   - The production player isn't interactive yet: that's C4b, with the hit region and a real-exe drag check.
 - **Each skin in context** at the top, at real size around a plain mock card (no text), on a light and a dark backdrop:
@@ -224,9 +230,14 @@ changes:
 
 `e2e/companion-pointer.spec.ts` (C4a, Chromium and WebKit) drives the around cards with the mouse on the fake clock:
 - Each creature takes the pointer and carries `data-no-drag`.
-- Carried across the card's middle and corners, every drawn pixel stays off the card and in its room. Dropped above
-  the top, it falls, lands and stands on the top's line where it was let go.
+- Carried over the card (it is over it), the artwork's middle and corner, and past its room, every drawn pixel stays
+  off the artwork and in its room. Dropped above the top, it falls, lands and stands on the top's line where it was
+  let go.
+- Dropped over the card, it falls down the card's face (more than 3 steps, over the card) and hangs touching the
+  bottom, below where it was let go.
+- Dropped onto the artwork's top edge, it slides off and falls past it, every frame clear of it, and hangs.
 - Dropped beside the left side, it clings there touching the side; under the card, it hangs touching the bottom.
+- Every step of every fall is checked against the artwork and the room.
 - A click makes it react; asleep, a click wakes it, and it's asleep again 2 s later.
 
 `src/companion/brain.test.ts` simulates whole hours per skin with a seeded generator.

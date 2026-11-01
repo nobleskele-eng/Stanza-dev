@@ -1,4 +1,6 @@
-// Where the companion goes on the card's outline (PLAN.md §4b, M2 C2, C3). Pure: CSS px and art px in, CSS px out.
+// Where the companion goes on the card's outline (PLAN.md §4b, M2 C2, C3), and where it goes in the pointer's hand and
+// when it's let go (C4a). Pure: CSS px and art px in, CSS px or art px out.
+import type { Landing, Point } from "./brain";
 import { anchorOf, type AnimationName, type Skin } from "./skin";
 
 /** An edge in its container's CSS px: the line the creature stands on, from `left` for `width` px. */
@@ -100,71 +102,140 @@ function opaqueBounds(skin: Skin, animations: readonly AnimationName[], mirrored
   return { x0, y0, x1, y1 };
 }
 
+/** A box (CSS px) in art px from the card's top-left: [l, r) × [t, b). */
+const artBox = (b: Outline, card: Outline, px: number) => ({
+  l: (b.left - card.left) / px,
+  t: (b.top - card.top) / px,
+  r: (b.left + b.width - card.left) / px,
+  b: (b.top + b.height - card.top) / px,
+});
+type ArtBox = ReturnType<typeof artBox>;
+type Bounds = ReturnType<typeof opaqueBounds>;
+const EPS = 1e-9;
+/** Whether opaque bounds `o` with the sprite box at `p` cover any of `boxes`. */
+const covers = (o: Bounds, p: Point, boxes: readonly ArtBox[]) =>
+  boxes.some((b) => p.x + o.x0 < b.r - EPS && p.x + o.x1 + 1 > b.l + EPS && p.y + o.y0 < b.b - EPS && p.y + o.y1 + 1 > b.t + EPS);
+
 /**
  * Where a carried creature's sprite box goes (C4a), in art px from the card's top-left (the brain's `Point`), for a
- * wanted top-left `want` (CSS px, the container's). Its held and fall art stay inside `room` and off the card, so it's
- * never over a part, even in the pointer's hand: pushed out of the card the shortest way that stays in the room.
- * Whole art px from the card's top-left, so its pixels line up with the ones it stands on.
+ * wanted top-left `want` (CSS px, the container's). Its held and fall art stay inside `room` and off every box in
+ * `avoid` (the artwork: CLAUDE.md, nothing interactive over it), pushed out the shortest way that stays in the room.
+ * It may go over the rest of the card (your call, 2026-11-01). Whole art px from the card's top-left, so its pixels
+ * line up with the ones it stands on.
  */
-export function carryPoint(skin: Skin, want: { left: number; top: number }, mirrored: boolean, px: number, card: Outline, room: Outline) {
+export function carryPoint(
+  skin: Skin,
+  want: { left: number; top: number },
+  mirrored: boolean,
+  px: number,
+  card: Outline,
+  room: Outline,
+  avoid: readonly Outline[] = [],
+): Point {
   const o = opaqueBounds(skin, ["held", "fall"], mirrored);
   // The opaque box's top-left may go anywhere in [lo, hi], art px from the card's top-left.
-  const lo = { x: Math.ceil((room.left - card.left) / px - 1e-9) - o.x0, y: Math.ceil((room.top - card.top) / px - 1e-9) - o.y0 };
+  const lo = { x: Math.ceil((room.left - card.left) / px - EPS) - o.x0, y: Math.ceil((room.top - card.top) / px - EPS) - o.y0 };
   const hi = {
-    x: Math.floor((room.left + room.width - card.left) / px + 1e-9) - o.x1 - 1,
-    y: Math.floor((room.top + room.height - card.top) / px + 1e-9) - o.y1 - 1,
+    x: Math.floor((room.left + room.width - card.left) / px + EPS) - o.x1 - 1,
+    y: Math.floor((room.top + room.height - card.top) / px + EPS) - o.y1 - 1,
   };
   const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
   const x = clamp(Math.round((want.left - card.left) / px), lo.x, hi.x);
   const y = clamp(Math.round((want.top - card.top) / px), lo.y, hi.y);
-  // The card in the same units: the opaque box is off it when it ends at or before one side or starts at or after
-  // the other.
-  const cw = Math.ceil(card.width / px - 1e-9);
-  const ch = Math.ceil(card.height / px - 1e-9);
-  const over = x + o.x1 >= 0 && x + o.x0 < cw && y + o.y1 >= 0 && y + o.y0 < ch;
-  if (!over) return { x, y };
-  const ways = [
-    { x: -o.x1 - 1, y },
-    { x: cw - o.x0, y },
-    { x, y: -o.y1 - 1 },
-    { x, y: ch - o.y0 },
-  ].filter((w) => w.x >= lo.x && w.x <= hi.x && w.y >= lo.y && w.y <= hi.y);
-  const cost = (w: { x: number; y: number }) => Math.abs(w.x - x) + Math.abs(w.y - y);
-  // The room always reaches past the card on some side (the window's margin, C3b); if it didn't, above the card.
+  const boxes = avoid.map((b) => artBox(b, card, px));
+  if (!covers(o, { x, y }, boxes)) return { x, y };
+  const ways = boxes
+    .flatMap((b) => [
+      { x: Math.floor(b.l - o.x1 - 1 + EPS), y },
+      { x: Math.ceil(b.r - o.x0 - EPS), y },
+      { x, y: Math.floor(b.t - o.y1 - 1 + EPS) },
+      { x, y: Math.ceil(b.b - o.y0 - EPS) },
+    ])
+    .filter((w) => w.x >= lo.x && w.x <= hi.x && w.y >= lo.y && w.y <= hi.y && !covers(o, w, boxes));
+  const cost = (w: Point) => Math.abs(w.x - x) + Math.abs(w.y - y);
+  // Something always fits (the room reaches past the card, C3b); if it didn't, above the card, clear of its insides.
   return ways.reduce((best, w) => (cost(w) < cost(best) ? w : best), ways[0] ?? { x, y: -o.y1 - 1 });
 }
 
+/** Feet this close below the top's line (art px) still catch it: the creature steps up onto it. */
+const REACH = 3;
+
 /**
- * Where a creature let go at `air` (art px from the card's top-left) ends up (C4a): the surface nearest its sprite
- * box, and its position there. On the top or the bottom it keeps facing the way it was; on a side it climbs back up.
- * It falls onto the top only from above it (its held and fall art clear of the top's line), so a fall never crosses
- * the card; from beside or below, it grabs a side or the bottom. Without the outline (`card` null: the top only, or
- * reduced motion) it's always the top.
+ * Where a creature let go at `air` (art px from the card's top-left) ends up (C4a), and how it gets there. On the top
+ * or the bottom it keeps facing the way it was; on a side it climbs back up. Gravity decides, by where its held and
+ * fall art are:
+ * - **Above the top's line:** the nearest surface (in the corners beside the top, maybe a side). The top it falls onto.
+ * - **Over the card:** its feet within REACH of the top catch it. Lower, it falls down the card's face and catches the
+ *   bottom edge, hanging. Something in `avoid` in the way (the artwork) stops the fall: it slides off the nearer side
+ *   and falls on. Slid off the card's side, it grabs that side instead.
+ * - **Beside the card or under it:** it grabs the nearest side, or the bottom, at once: nothing to fall onto.
+ *
+ * A landing it falls to has `via`: the turns on the way (none for a straight fall). Without `via` it's grabbed at once.
+ * Without the outline (`card` null: the top only, or reduced motion) it's always the top.
  */
-export function landingFor(skin: Skin, air: { x: number; y: number }, facing: 1 | -1, px: number, top: EdgeBox, card: Outline | null) {
+export function landingFor(
+  skin: Skin,
+  air: Point,
+  facing: 1 | -1,
+  px: number,
+  top: EdgeBox,
+  card: Outline | null,
+  avoid: readonly Outline[] = [],
+): Landing {
   const box = card ?? { left: top.left, top: top.top, width: top.width, height: 0 };
-  const above = air.y + opaqueBounds(skin, ["held", "fall"], facing < 0).y1 + 1 <= 1e-9;
-  const along = (animation: AnimationName, surface: Surface) => {
+  const o = opaqueBounds(skin, ["held", "fall"], facing < 0);
+  const cw = box.width / px;
+  const ch = box.height / px;
+  const overSpan = (p: Point) => p.x + o.x1 + 1 > EPS && p.x + o.x0 < cw - EPS;
+  const feet = (p: Point) => p.y + o.y1 + 1;
+  /** The landing on `surface` level with `from`, and how far its sprite box is from there. */
+  const on = (surface: Surface, from: Point): { landing: Landing; far: number } => {
+    const animation: AnimationName = surface === "top" ? "land" : surface === "bottom" ? "hang" : "climb";
     const a = anchorOf(skin, animation);
     const ax = facing > 0 ? a.x : skin.grid - 1 - a.x;
     const length = edgeLength(surface === "top" ? top.width : surface === "bottom" ? box.width : box.height, px);
-    const at = surface === "top" || surface === "bottom" ? air.x + ax : air.y + a.y;
-    return Math.max(0, Math.min(length - 1, Math.round(at)));
-  };
-  const options: [Surface, AnimationName][] = !card || above ? [["top", "land"]] : [];
-  if (card) options.push(["left", "climb"], ["right", "climb"], ["bottom", "hang"]);
-  let best: { surface: Surface; x: number; facing: 1 | -1; at: { x: number; y: number } } | null = null;
-  let bestFar = Infinity;
-  for (const [surface, animation] of options) {
-    const x = along(animation, surface);
+    const along = surface === "top" || surface === "bottom" ? from.x + ax : from.y + a.y;
+    const x = Math.max(0, Math.min(length - 1, Math.round(along)));
     const f: 1 | -1 = surface === "left" || surface === "right" ? -1 : facing;
     const p = placeAround(skin, animation, surface, x, f, px, top, box);
     const at = { x: (p.left - box.left) / px, y: (p.top - box.top) / px };
-    const far = Math.hypot(at.x - air.x, at.y - air.y);
-    // Ties go to the earlier surface: the top first.
-    if (far < bestFar - 1e-9) [best, bestFar] = [{ surface, x, facing: f, at }, far];
+    return { landing: { surface, x, facing: f, at }, far: Math.hypot(at.x - from.x, at.y - from.y) };
+  };
+  /** The nearest of `surfaces`; ties go to the earlier one. */
+  const nearest = (surfaces: Surface[], from: Point) =>
+    surfaces.map((s) => on(s, from)).reduce((best, c) => (c.far < best.far - EPS ? c : best)).landing;
+
+  if (!card) return { ...on("top", air).landing, via: [] };
+  if (feet(air) <= EPS) {
+    const landing = nearest(["top", "left", "right", "bottom"], air);
+    // Feet already on the line, but the landing pose's anchor is lower in its grid: stepped onto, never fallen up to.
+    return landing.surface === "top" && landing.at.y >= air.y - EPS ? { ...landing, via: [] } : landing;
   }
-  return best!;
+  if (overSpan(air) && feet(air) <= REACH + EPS) return on("top", air).landing;
+  if (!overSpan(air) || air.y + o.y0 >= ch - EPS) return nearest(["left", "right", "bottom"], air);
+
+  // Down the card's face, sliding off anything to avoid.
+  const boxes = avoid.map((b) => artBox(b, box, px));
+  const via: Point[] = [];
+  let p = air;
+  for (let guard = 0; guard < 8 && overSpan(p); guard++) {
+    const below = boxes
+      .filter((b) => b.l < p.x + o.x1 + 1 - EPS && b.r > p.x + o.x0 + EPS && b.t >= feet(p) - EPS && b.t < ch)
+      .sort((a, b) => a.t - b.t)[0];
+    if (!below) break;
+    const y = Math.floor(below.t - o.y1 - 1 + EPS);
+    const left = Math.floor(below.l - o.x1 - 1 + EPS);
+    const right = Math.ceil(below.r - o.x0 - EPS);
+    const x = p.x - left <= right - p.x ? left : right;
+    if (y !== p.y) via.push({ x: p.x, y });
+    p = { x, y };
+    via.push(p);
+  }
+  if (!overSpan(p)) return { ...nearest(["left", "right"], p), via };
+  const hang = on("bottom", p).landing;
+  // Straight down to the bottom's level, then along under the card if its end held it back: never across the card.
+  if (Math.abs(hang.at.x - p.x) > EPS) via.push({ x: p.x, y: hang.at.y });
+  return { ...hang, via };
 }
 
 /** How far (CSS px) the sitting pose's legs hang below the edge: from the anchor row to the lowest opaque row. */

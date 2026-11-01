@@ -37,6 +37,10 @@ const CARD = {
 const TOP_EDGE = { left: SCENE.card.x, top: SCENE.card.y, width: SCENE.card.w };
 /** The card's whole box: the scene leaves 56 px around it, more than any sprite's box. */
 const OUTLINE = { left: SCENE.card.x, top: SCENE.card.y, width: SCENE.card.w, height: SCENE.card.h };
+/** The mock artwork square, in the card's padding box (inside its 1 px border). */
+const ART = { x: 12, y: 12, size: 64 } as const;
+/** The artwork in the scene's px: what a carried or falling creature never covers (C4a). */
+const ART_BOX = { left: SCENE.card.x + 1 + ART.x, top: SCENE.card.y + 1 + ART.y, width: ART.size, height: ART.size };
 
 /** A plain mock card on a backdrop, the scene's size; no text (CLAUDE.md: no generated copy). */
 function MockCard({ backdrop, children, ...data }: { backdrop: keyof typeof BACKDROPS; children: ReactNode } & Record<`data-${string}`, string>) {
@@ -45,7 +49,7 @@ function MockCard({ backdrop, children, ...data }: { backdrop: keyof typeof BACK
   return (
     <div {...data} style={{ position: "relative", width: SCENE.w, height: SCENE.h, background: BACKDROPS[backdrop], overflow: "hidden" }}>
       <div style={{ position: "absolute", left: card.x, top: card.y, width: card.w, height: card.h, boxSizing: "border-box", background: c.face, border: `1px solid ${c.edge}`, borderRadius: 12 }}>
-        <div style={{ position: "absolute", left: 12, top: 12, width: 64, height: 64, borderRadius: 4, background: c.art }} />
+        <div data-lab-art="" style={{ position: "absolute", left: ART.x, top: ART.y, width: ART.size, height: ART.size, borderRadius: 4, background: c.art }} />
         {[
           [20, 120],
           [36, 84],
@@ -96,8 +100,9 @@ type Playback = "playing" | "paused" | "idle";
 /**
  * Each creature living on a mock card, run by its brain (M2 C2): on the top edge, or `around` the whole card (C3a:
  * corners, climbing the sides, hanging under the bottom). The controls stand in for the music. Each creature takes the
- * pointer (C4a): click it, or pick it up and drop it, within a sprite's box around the card (the production window's
- * margin) or, on the top-edge cards, above the edge. Lab-only labels; the production player's text comes from COPY.md.
+ * pointer (C4a): click it, or pick it up and drop it, over the card and a sprite's box around it (the production
+ * window's margin) but never over the artwork, or, on the top-edge cards, above the edge. Lab-only labels; the
+ * production player's text comes from COPY.md.
  */
 function Live({ around = false }: { around?: boolean }) {
   const section = around ? "data-lab-around" : "data-lab-live";
@@ -131,6 +136,7 @@ function Live({ around = false }: { around?: boolean }) {
               // Their own seeds, so the two sections don't start as twins.
               seed={hashString(around ? `${skin.id}/around` : skin.id)}
               interactive
+              avoid={[ART_BOX]}
             />
           </MockCard>
         ))}

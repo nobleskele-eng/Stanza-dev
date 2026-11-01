@@ -32,6 +32,11 @@ export interface Landing {
   facing: 1 | -1;
   /** The landing pose's sprite box, like `Brain.air`. */
   at: Point;
+  /**
+   * Present: it falls there, through these turns first (none: a straight fall). On the top or the bottom the fall
+   * ends at `at`; on a side it grabs on from the last turn. Absent: it's grabbed at once, with no fall.
+   */
+  via?: readonly Point[];
 }
 
 export interface Edge {
@@ -73,8 +78,11 @@ export interface Brain {
   loops: number;
   /** Held or falling (C4a): where its sprite box is; null on a surface. */
   air: Point | null;
-  /** Falling: where it lands, and how far its next step goes (art px; it speeds up as it falls). */
-  fall: { to: Landing; step: number } | null;
+  /**
+   * Falling: where it lands, the points it still falls through (the last is where it lands or grabs on), and how far
+   * its next step goes (art px; it speeds up as it falls, and starts slowly again after each turn).
+   */
+  fall: { to: Landing; path: readonly Point[]; step: number } | null;
   /** Frames are held: nothing changes until the music or the edge does. */
   still: boolean;
   /** When the music stopped (it falls asleep DROWSY_MS later); null while playing. */
@@ -319,22 +327,31 @@ class Draft {
     this.b.until = now + this.between(HOLD_MS);
     this.show(now, { surface: side, x: lengthOf(this.world, side) - 1, facing: -1, mode: "climb", frame: 0 });
   }
-  /** One step of a fall: it speeds up as it goes, and lands when the next step would reach its landing. */
+  /**
+   * One step of a fall: it speeds up as it goes. Reaching a turn (it hit the artwork, or it's under the card), it
+   * stops there and starts slowly again; when the next step would reach the end, it lands or grabs on.
+   */
   fallStep(now: number) {
     const { air, fall } = this.b;
     if (!air || !fall) return this.rest(now); // never happens; it must not get stuck in the air if it does
-    const dx = fall.to.at.x - air.x;
-    const dy = fall.to.at.y - air.y;
+    const [next, ...rest] = fall.path;
+    if (!next) return this.settle(now, fall.to);
+    const dx = next.x - air.x;
+    const dy = next.y - air.y;
     const far = Math.hypot(dx, dy);
-    if (far <= fall.step) return this.settle(now, fall.to);
+    if (far <= fall.step && !rest.length) return this.settle(now, fall.to);
     const anim = this.skin.animations.fall;
     let frame = this.b.frame;
     if (now >= this.b.until) {
       frame = (frame + 1) % anim.frames.length;
       this.b.until = now + frameMs(anim, frame);
     }
+    if (far <= fall.step) {
+      this.b.fall = { to: fall.to, path: rest, step: FALL_FIRST };
+      return this.show(now, { frame, air: next });
+    }
     const k = fall.step / far;
-    this.b.fall = { to: fall.to, step: Math.min(MAX_STEP, fall.step + 1) };
+    this.b.fall = { to: fall.to, path: fall.path, step: Math.min(MAX_STEP, fall.step + 1) };
     this.show(now, { frame, air: { x: air.x + dx * k, y: air.y + dy * k } });
   }
   /**
@@ -580,17 +597,20 @@ export function carry(b: Brain, at: Point): Brain {
 }
 
 /**
- * Let go (C4a). Over the top it falls onto it and lands. Beside a side or under the bottom it grabs on at once:
- * there's nothing there to fall onto. Under reduced motion it rests on the top with no fall.
+ * Let go (C4a). A landing with `via` it falls to (place.ts `landingFor` decides: onto the top from above it, or down
+ * the card's face to the bottom); one without it grabs at once. Under reduced motion it rests on the top, no fall.
  */
 export function drop(b: Brain, skin: Skin, world: World, now: number, to: Landing): Brain {
   if (b.mode !== "held" || !b.air) return b;
   const d = new Draft(b, skin, world);
-  if (world.reducedMotion || to.surface !== "top" || Math.hypot(to.at.x - b.air.x, to.at.y - b.air.y) <= FALL_FIRST) {
+  // On a side it grabs on from the last turn: the fall's last leg is only to the top or the bottom.
+  const path = to.via ? [...to.via, ...(to.surface === "top" || to.surface === "bottom" ? [to.at] : [])] : [];
+  const short = path.length === 1 && Math.hypot(path[0].x - b.air.x, path[0].y - b.air.y) <= FALL_FIRST;
+  if (world.reducedMotion || !path.length || short) {
     d.settle(now, to);
     return d.b;
   }
-  d.b.fall = { to, step: FALL_FIRST };
+  d.b.fall = { to, path, step: FALL_FIRST };
   d.b.until = now + frameMs(skin.animations.fall, 0);
   d.show(now, { mode: "fall", frame: 0 });
   return d.b;

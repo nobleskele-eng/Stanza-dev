@@ -93,10 +93,17 @@ describe("companion placement around the card (C3a)", () => {
 });
 
 describe("companion placement in the pointer's hand (C4a)", () => {
+  const card = { left: 56, top: 56, width: 248, height: 88 };
+  const top = { left: card.left, top: card.top, width: card.width };
+  /** Artwork layouts: the lab's square; flush with the card's left side, its full height; across the card's top. */
+  const LAYOUTS = {
+    lab: { left: 69, top: 69, width: 64, height: 64 },
+    "left side": { left: card.left, top: card.top, width: 88, height: card.height },
+    "across the top": { left: card.left, top: card.top, width: card.width, height: 60 },
+  };
+
   // The lab's mock card at 100%, and at 125% (3 CSS px per 2.4: art px that don't divide the card's size).
   for (const px of [2, 2.4]) {
-    const card = { left: 56, top: 56, width: 248, height: 88 };
-    const top = { left: card.left, top: card.top, width: card.width };
     const world: World = {
       playing: true,
       reducedMotion: false,
@@ -119,73 +126,122 @@ describe("companion placement in the pointer's hand (C4a)", () => {
       return boxes;
     };
     const EPS = 1e-6;
-    const offCard = (b: { left: number; top: number; right: number; bottom: number }) =>
-      b.right <= card.left + EPS || b.left >= card.left + card.width - EPS || b.bottom <= card.top + EPS || b.top >= card.top + card.height - EPS;
-    const inside = (b: { left: number; top: number; right: number; bottom: number }, room: typeof card) =>
+    type Box = { left: number; top: number; right: number; bottom: number };
+    const over = (b: Box, a: typeof card) =>
+      b.left < a.left + a.width - EPS && b.right > a.left + EPS && b.top < a.top + a.height - EPS && b.bottom > a.top + EPS;
+    const inside = (b: Box, room: typeof card) =>
       b.left >= room.left - EPS && b.right <= room.left + room.width + EPS && b.top >= room.top - EPS && b.bottom <= room.top + room.height + EPS;
 
-    for (const skin of Object.values(SKINS)) {
-      const box = spriteBoxPx(skin.grid, px);
-      // The component's default: a sprite's box around the card (the window's margin, C3b).
-      const room = { left: card.left - box, top: card.top - box, width: card.width + 2 * box, height: card.height + 2 * box };
+    for (const [layout, art] of Object.entries(LAYOUTS))
+      for (const skin of Object.values(SKINS)) {
+        const box = spriteBoxPx(skin.grid, px);
+        // The component's default: the card and a sprite's box around it (the window's margin, C3b).
+        const room = { left: card.left - box, top: card.top - box, width: card.width + 2 * box, height: card.height + 2 * box };
 
-      it(`${skin.id} at ${px} px: carried anywhere, it stays in its room and off the card, and every fall stays off it too`, () => {
-        const surfaces = new Set<string>();
-        const wrong: string[] = []; // collected, then checked once: a few thousand expect() calls are slow
-        let falls = 0;
-        for (const facing of [1, -1] as const)
-          for (let wy = room.top - 40; wy <= room.top + room.height + 40; wy += 5)
-            for (let wx = room.left - 40; wx <= room.left + room.width + 40; wx += 9) {
-              const where = `facing ${facing}, wanted (${wx}, ${wy})`;
-              const at = carryPoint(skin, { left: wx, top: wy }, facing < 0, px, card, room);
-              if (!Number.isInteger(at.x) || !Number.isInteger(at.y)) wrong.push(`${where}: not whole art px`);
-              for (const name of ["held", "fall"] as const)
-                for (const b of drawn(skin, name, at, facing < 0)) {
-                  if (!inside(b, room)) wrong.push(`${where}: ${name} leaves the room`);
-                  if (!offCard(b)) wrong.push(`${where}: ${name} over the card`);
+        it(`${skin.id} at ${px} px, artwork ${layout}: carried anywhere, never over the artwork; let go, it falls only down and lands`, () => {
+          const surfaces = new Set<string>();
+          const wrong: string[] = []; // collected, then checked once: tens of thousands of expect() calls are slow
+          const count = { falls: 0, faceFalls: 0, turns: 0, overCard: 0 };
+          for (const facing of [1, -1] as const)
+            for (let wy = room.top - 40; wy <= room.top + room.height + 40; wy += 5)
+              for (let wx = room.left - 40; wx <= room.left + room.width + 40; wx += 9) {
+                const where = `facing ${facing}, wanted (${wx}, ${wy})`;
+                const at = carryPoint(skin, { left: wx, top: wy }, facing < 0, px, card, room, [art]);
+                if (!Number.isInteger(at.x) || !Number.isInteger(at.y)) wrong.push(`${where}: not whole art px`);
+                for (const name of ["held", "fall"] as const)
+                  for (const b of drawn(skin, name, at, facing < 0)) {
+                    if (!inside(b, room)) wrong.push(`${where}: ${name} leaves the room`);
+                    if (over(b, art)) wrong.push(`${where}: ${name} over the artwork`);
+                  }
+                if (drawn(skin, "held", at, facing < 0).some((b) => over(b, card))) count.overCard++;
+                // Let go there: the brain's whole fall, every step clear of the artwork and never upwards.
+                const to = landingFor(skin, at, facing, px, top, card, [art]);
+                surfaces.add(to.surface);
+                if (to.surface === "bottom" && to.via) count.faceFalls++;
+                if ((to.via?.length ?? 0) >= 2) count.turns++;
+                let b = drop(pickUp({ ...createBrain(skin, world, 0, 1), facing }, skin, world, 0, at), skin, world, 0, to);
+                if (pose(b).animation === "fall") count.falls++;
+                for (let guard = 0; pose(b).air && guard < 200; guard++) {
+                  const air = pose(b).air!;
+                  for (const p of drawn(skin, "fall", air, facing < 0)) {
+                    if (over(p, art)) wrong.push(`${where}: falls over the artwork`);
+                    if (!inside(p, room)) wrong.push(`${where}: falls out of the room`);
+                  }
+                  b = advance(b, skin, world, nextChangeAt(b, skin, world)!);
+                  const next = pose(b).air;
+                  if (next && next.y < air.y - EPS) wrong.push(`${where}: falls upwards`);
                 }
-              // Let go there: the brain's whole fall, every step off the card, then on a surface.
-              const to = landingFor(skin, at, facing, px, top, card);
-              surfaces.add(to.surface);
-              let b = drop(pickUp({ ...createBrain(skin, world, 0, 1), facing }, skin, world, 0, at), skin, world, 0, to);
-              if (pose(b).animation === "fall") falls++;
-              for (let guard = 0; pose(b).air && guard < 100; guard++) {
-                if (drawn(skin, "fall", pose(b).air!, facing < 0).some((p) => !offCard(p))) wrong.push(`${where}: falls over the card`);
-                b = advance(b, skin, world, nextChangeAt(b, skin, world)!);
+                const p = pose(b);
+                if (p.air || p.surface !== to.surface || p.x !== to.x) wrong.push(`${where}: didn't land where it was headed`);
+                const placed = placeAround(skin, p.animation, to.surface, to.x, to.facing, px, top, card);
+                if (Math.abs(placed.left - (card.left + to.at.x * px)) > EPS || Math.abs(placed.top - (card.top + to.at.y * px)) > EPS)
+                  wrong.push(`${where}: the landing's box isn't the landed pose's`);
               }
-              const p = pose(b);
-              if (p.air || p.surface !== to.surface || p.x !== to.x) wrong.push(`${where}: didn't land where it was headed`);
-              const placed = placeAround(skin, p.animation, to.surface, to.x, to.facing, px, top, card);
-              if (Math.abs(placed.left - (card.left + to.at.x * px)) > EPS || Math.abs(placed.top - (card.top + to.at.y * px)) > EPS)
-                wrong.push(`${where}: the landing's box isn't the landed pose's`);
-            }
-        expect(wrong.slice(0, 10)).toEqual([]);
-        expect([...surfaces].sort(), "every surface is somewhere to land").toEqual(["bottom", "left", "right", "top"]);
-        expect(falls, "some drops are real falls").toBeGreaterThan(20);
-      }, 30_000);
-    }
+          expect(wrong.slice(0, 10)).toEqual([]);
+          expect([...surfaces].sort(), "every surface is somewhere to land").toEqual(["bottom", "left", "right", "top"]);
+          expect(count.overCard, "it can be carried over the card").toBeGreaterThan(100);
+          expect(count.falls, "some drops are real falls").toBeGreaterThan(20);
+          expect(count.faceFalls, "some fall down the card's face").toBeGreaterThan(20);
+          // Only the lab's artwork leaves room above it on the card; the others start at the card's top.
+          if (layout === "lab") expect(count.turns, "some slide off the artwork").toBeGreaterThan(0);
+        }, 30_000);
+      }
   }
 
-  const skin = SKINS.pilcrow;
+  const skin = SKINS.pilcrow; // held and fall art: columns 2–14, rows 2–13; anchor column 10; hang's top row 0
   const px = 2;
-  const card = { left: 56, top: 56, width: 248, height: 88 };
-  const top = { left: card.left, top: card.top, width: card.width };
+  const lab = [LAYOUTS.lab]; // art px from the card: 6.5 to 38.5 both ways
 
-  it("lands on the nearest surface: the top from above, a side from beside it, the bottom from below", () => {
-    // Above the middle: on the top, its anchor column where it was (pilcrow's anchor column is 10).
-    expect(landingFor(skin, { x: 40, y: -20 }, 1, px, top, card)).toMatchObject({ surface: "top", x: 50, facing: 1 });
-    expect(landingFor(skin, { x: 40, y: -20 }, -1, px, top, card)).toMatchObject({ surface: "top", x: 45, facing: -1 });
-    // Beside the left side, halfway down: it climbs back up from there.
-    expect(landingFor(skin, { x: -15, y: 20 }, 1, px, top, card)).toMatchObject({ surface: "left", facing: -1 });
-    expect(landingFor(skin, { x: 124, y: 20 }, 1, px, top, card)).toMatchObject({ surface: "right", facing: -1 });
-    expect(landingFor(skin, { x: 40, y: 45 }, 1, px, top, card)).toMatchObject({ surface: "bottom", x: 50, facing: 1 });
+  it("from above the top: the nearest surface, falling onto the top; beside or under the card: grabbed at once", () => {
+    expect(landingFor(skin, { x: 40, y: -20 }, 1, px, top, card)).toMatchObject({ surface: "top", x: 50, facing: 1, via: [] });
+    expect(landingFor(skin, { x: 40, y: -20 }, -1, px, top, card)).toMatchObject({ surface: "top", x: 45, facing: -1, via: [] });
+    const grabbed = [
+      landingFor(skin, { x: -15, y: 20 }, 1, px, top, card),
+      landingFor(skin, { x: 124, y: 20 }, 1, px, top, card),
+      landingFor(skin, { x: 40, y: 45 }, 1, px, top, card),
+    ];
+    expect(grabbed.map((l) => [l.surface, l.facing, l.via])).toEqual([
+      ["left", -1, undefined],
+      ["right", -1, undefined],
+      ["bottom", 1, undefined],
+    ]);
+    // Beside the card a little lower than its top: the top's end is about as near as the side, but out of reach.
+    expect(landingFor(skin, { x: -15, y: -10 }, 1, px, top, card).surface).toBe("left");
+    // Clear above the line in the same corner: the top's end (its anchor column, 10 art px in, is past the card's left).
+    expect(landingFor(skin, { x: -12, y: -16 }, 1, px, top, card)).toMatchObject({ surface: "top", x: 0 });
   });
 
-  it("beside the card but lower than its top, it doesn't fall onto the top (the fall would cross the card's corner)", () => {
-    // Just left of the card, a little below its top: the top's end is about as near as the side, but out of reach.
-    expect(landingFor(skin, { x: -15, y: -10 }, 1, px, top, card).surface).toBe("left");
-    // Clear above the line, in the same corner: the top's end (its anchor column, 10 art px in, is past the card's left).
-    expect(landingFor(skin, { x: -12, y: -16 }, 1, px, top, card)).toMatchObject({ surface: "top", x: 0 });
+  it("over the card: feet near the top catch it; lower, it falls down the face and catches the bottom", () => {
+    const caught = landingFor(skin, { x: 40, y: -12 }, 1, px, top, card); // feet 2 art px below the line
+    expect(caught).toMatchObject({ surface: "top", x: 50 });
+    expect(caught.via, "stepped up onto, not fallen to").toBeUndefined();
+    expect(landingFor(skin, { x: 60, y: 10 }, 1, px, top, card)).toEqual({ surface: "bottom", x: 70, facing: 1, at: { x: 60, y: 44 }, via: [] });
+    // Near the right end, the bottom's end holds it back: straight down, then along under the card.
+    expect(landingFor(skin, { x: 118, y: 10 }, 1, px, top, card)).toMatchObject({ surface: "bottom", x: 123, at: { x: 113, y: 44 }, via: [{ x: 118, y: 44 }] });
+  });
+
+  it("the artwork in the way stops the fall: it slides off the nearer side and falls on, or grabs the card's side", () => {
+    // Over the artwork's left part: down onto it, off its left edge, then down to the bottom.
+    expect(landingFor(skin, { x: 10, y: -10 }, 1, px, top, card, lab)).toEqual({
+      surface: "bottom",
+      x: 1,
+      facing: 1,
+      at: { x: -9, y: 44 },
+      via: [
+        { x: 10, y: -8 },
+        { x: -9, y: -8 },
+      ],
+    });
+    // Artwork flush with the card's left side: sliding off its left edge leaves the card, so it grabs that side.
+    const flush = [{ left: card.left, top: 70, width: 60, height: 60 }]; // art px 0–30 across, from 7 down
+    expect(landingFor(skin, { x: 5, y: -8 }, 1, px, top, card, flush)).toMatchObject({
+      surface: "left",
+      facing: -1,
+      via: [
+        { x: 5, y: -7 },
+        { x: -15, y: -7 },
+      ],
+    });
   });
 
   it("without an outline (the top only, or reduced motion) it always lands on the top, at the nearest end", () => {
@@ -193,17 +249,13 @@ describe("companion placement in the pointer's hand (C4a)", () => {
     expect(landingFor(skin, { x: 200, y: 50 }, 1, px, top, null)).toMatchObject({ surface: "top", x: 123 });
   });
 
-  it("over the card, it's pushed out the nearest way that stays in the room", () => {
+  it("carried over the card it goes where it's wanted; over the artwork, it's pushed out the nearest way", () => {
     const box = spriteBoxPx(skin.grid, px);
     const room = { left: card.left - box, top: card.top - box, width: card.width + 2 * box, height: card.height + 2 * box };
-    // Near the card's top-left corner, inside it: out over the top (the shortest way).
-    const near = carryPoint(skin, { left: card.left + 60, top: card.top + 2 }, false, px, card, room);
-    expect(near.x).toBe(30);
-    expect(near.y + 13 + 1, "pilcrow's lowest held/fall row (13) ends at the top's line").toBe(0);
-    // Near the bottom: out under it.
-    const low = carryPoint(skin, { left: card.left + 60, top: card.top + 80 }, false, px, card, room);
-    expect(low.y + 2).toBe(44); // its top row (2) starts at the card's bottom (88 / 2 = 44)
-    // Already off the card and in the room: where it was wanted, in whole art px.
-    expect(carryPoint(skin, { left: card.left + 61, top: card.top - 32 }, false, px, card, room)).toEqual({ x: 31, y: -16 });
+    expect(carryPoint(skin, { left: card.left + 200, top: card.top + 40 }, false, px, card, room, lab)).toEqual({ x: 100, y: 20 });
+    // Over the artwork's right part: out past its right edge (7 art px), not over its top (9).
+    expect(carryPoint(skin, { left: card.left + 60, top: card.top + 2 }, false, px, card, room, lab)).toEqual({ x: 37, y: 1 });
+    // Above the card, in the room: where it was wanted, in whole art px.
+    expect(carryPoint(skin, { left: card.left + 61, top: card.top - 32 }, false, px, card, room, lab)).toEqual({ x: 31, y: -16 });
   });
 });
