@@ -20,6 +20,7 @@ const skinJson = (id: string) =>
   JSON.parse(readFileSync(new URL(`../companions/${id}/companion.json`, import.meta.url), "utf8")) as {
     grid: number;
     anchor: { y: number };
+    palettes: Record<string, string[]>;
     animations: Record<string, { anchor?: { y: number } }>;
   };
 const skinGrid = (id: string) => skinJson(id).grid;
@@ -130,18 +131,42 @@ const saveAppearance = (page: Page, theme: string, companion: object) =>
     [APPEARANCE_STORAGE_KEY, theme, themeJson(theme).layout, CONTRACT_VERSION, companion] as const,
   );
 
-type MenuItemArg = { text?: string; checked?: boolean; icon?: number; handler?: string; item?: string };
-/** Right-click the card, then fire the companion's on/off item (the menu's last) and close the menu. */
-async function toggleFromMenu(page: Page) {
+type MenuItemArg = { text?: string; checked?: boolean; icon?: number; handler?: string; item?: string; items?: MenuItemArg[] };
+/** Right-clicks the card and returns the menu's items as the app sent them; the menu stays open. */
+async function openMenu(page: Page) {
   const before = (await ipcCalls(page, "plugin:menu|popup")).length;
   const box = (await page.locator(".mp-window").boundingBox())!;
   await page.mouse.click(box.x + 20, box.y + 20, { button: "right" });
   await expect.poll(async () => (await ipcCalls(page, "plugin:menu|popup")).length).toBe(before + 1);
-  const items = ((await ipcCalls(page, "plugin:menu|new")).at(-1)!.args.options as { items: MenuItemArg[] }).items;
-  const toggle = items.at(-1)!;
-  expect(items.at(-2)).toEqual({ item: "Separator" });
-  await page.evaluate((h) => (window as unknown as { __fireChannel: (c: string, m: unknown) => void }).__fireChannel(h, "item"), toggle.handler!);
+  return ((await ipcCalls(page, "plugin:menu|new")).at(-1)!.args.options as { items: MenuItemArg[] }).items;
+}
+/** Picks a menu item (its channel fires, as the native menu's click would), then closes the menu. */
+async function fireAndClose(page: Page, item: MenuItemArg) {
+  await page.evaluate((h) => (window as unknown as { __fireChannel: (c: string, m: unknown) => void }).__fireChannel(h, "item"), item.handler!);
   await page.evaluate(() => (window as unknown as { __closeMenu: () => void }).__closeMenu());
+}
+/**
+ * The companion's items, after the themes: a separator, the on/off cassette, then the picker (C6a). The picker is a
+ * submenu made first as its own resource, its picture set on it with `set_icon` (an inline submenu with an icon is
+ * read as a plain icon item by Tauri: DECISIONS.md C6a); here it's put back together as one item.
+ */
+async function companionItems(page: Page, items: MenuItemArg[]) {
+  const [separator, toggle, ref] = items.slice(THEME_IDS.length) as [MenuItemArg, MenuItemArg, unknown];
+  expect(separator).toEqual({ item: "Separator" });
+  expect(items).toHaveLength(THEME_IDS.length + 3);
+  expect(ref, "the picker, an existing submenu").toEqual([expect.any(Number), "Submenu"]);
+  const rid = (ref as [number, string])[0];
+  const made = (await ipcCalls(page, "plugin:menu|new")).filter((c) => c.args.kind === "Submenu").at(-1)!;
+  const icon = (await ipcCalls(page, "plugin:menu|set_icon")).filter((c) => c.args.rid === rid).at(-1)?.args.icon as number | undefined;
+  return { toggle, picker: { ...(made.args.options as MenuItemArg), icon } };
+}
+/** The picture behind an image resource id: the fake hands them out in order from 500. */
+const imageOf = async (page: Page, rid: number) =>
+  (await ipcCalls(page, "plugin:image|new"))[rid - 500].args as { rgba: number[]; width: number; height: number };
+/** Right-click the card, then fire the companion's on/off item and close the menu. */
+async function toggleFromMenu(page: Page) {
+  const { toggle } = await companionItems(page, await openMenu(page));
+  await fireAndClose(page, toggle);
   return toggle;
 }
 
@@ -199,9 +224,11 @@ test("the menu turns it on and off: the parts come and go, the window grows by t
   let stored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!), APPEARANCE_STORAGE_KEY);
   expect(stored.companion).toMatchObject({ on: true });
 
-  // Off again: the item shows the awake cassette now; everything goes back.
+  // Off again: the item shows the awake cassette now (another picture, made for this menu); everything goes back.
   const on = await toggleFromMenu(page);
-  expect(on).toMatchObject({ text: "", icon: 501 }); // now the awake cassette
+  expect(on).toMatchObject({ text: "", icon: expect.any(Number) });
+  expect(on.icon).not.toBe(off.icon);
+  expect((await imageOf(page, on.icon!)).rgba).not.toEqual((await imageOf(page, off.icon!)).rgba);
   expect(on).not.toHaveProperty("checked");
   await expect(page.locator(".mp-companion-layer, .mp-companion")).toHaveCount(0);
   await expect.poll(async () => last(await ipcCalls(page, "plugin:window|set_size")).args.value).toEqual({ Logical: { width, height } });
@@ -211,6 +238,72 @@ test("the menu turns it on and off: the parts come and go, the window grows by t
   expect((await card.boundingBox())!.y).toBeCloseTo(y0, 5);
   stored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!), APPEARANCE_STORAGE_KEY);
   expect(stored.companion).toMatchObject({ on: false });
+});
+
+test("the picker (C6a): pictures only, every species and the current one's palettes; a pick turns it on as that creature, saved, and the next menu shows it awake", async ({ page }) => {
+  await saveAppearance(page, "t1-default", { on: false, skin: "pilcrow", palette: "default" });
+  await fakeTauri(page, spotifyState(Date.now()));
+  await page.goto("/");
+  await expect(page.locator(".mp-root")).toHaveAttribute("data-status", "playing");
+  /** The picker's items as [the label picture, species ×3, palettes ×3], checking its shape: pictures, no text. */
+  const pickerOf = async () => {
+    const { picker } = await companionItems(page, await openMenu(page));
+    const items = picker.items!;
+    expect(picker.text, "the submenu has no text").toBe("");
+    expect(items.map((i) => i.item ?? "picture")).toEqual(["picture", "picture", "picture", "Separator", "picture", "picture", "picture"]);
+    for (const i of items.filter((i) => !i.item)) expect(i, "a picture, no text, no check").toEqual({ text: "", icon: expect.any(Number), handler: expect.any(String) });
+    return { label: picker.icon!, species: items.slice(0, 3), palettes: items.slice(4) };
+  };
+  /** The colours the pet is drawn in now. */
+  const colours = () => page.locator(".mp-companion svg").evaluate((el) => (el as SVGElement).style.getPropertyValue("--mp-pet-1").trim());
+
+  // Off, pilcrow in its default palette: the current species and palette are the label's own picture (awake); every
+  // other picture differs from it and from each other.
+  let p = await pickerOf();
+  expect(p.species[0].icon).toBe(p.label);
+  expect(p.palettes[0].icon).toBe(p.label);
+  const others = [p.species[1], p.species[2], p.palettes[1], p.palettes[2]].map((i) => i.icon);
+  expect(new Set([p.label, ...others]).size).toBe(5);
+  await expect(page.locator(".mp-companion")).toHaveCount(0);
+
+  // The bookworm: on, as a bookworm in its default palette, saved.
+  await fireAndClose(page, p.species[1]);
+  await expect(page.locator(".mp-companion")).toHaveCount(1);
+  await expect.poll(colours).toBe(skinJson("bookworm").palettes.default[0]);
+  let stored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!), APPEARANCE_STORAGE_KEY);
+  expect(stored.companion).toEqual({ on: true, skin: "bookworm", palette: "default" });
+
+  // The next menu: the bookworm awake, and its palettes now. Its third palette: recoloured, saved.
+  p = await pickerOf();
+  expect(p.species[1].icon).toBe(p.label);
+  expect(p.palettes[0].icon).toBe(p.label);
+  expect(p.species[0].icon, "pilcrow asleep now").not.toBe(p.label);
+  const third = Object.keys(skinJson("bookworm").palettes)[2];
+  await fireAndClose(page, p.palettes[2]);
+  await expect.poll(colours).toBe(skinJson("bookworm").palettes[third][0]);
+  stored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!), APPEARANCE_STORAGE_KEY);
+  expect(stored.companion).toEqual({ on: true, skin: "bookworm", palette: third });
+  p = await pickerOf();
+  expect(p.palettes[2].icon).toBe(p.label);
+  expect(p.species[1].icon, "the bookworm's own picture is in its new palette").toBe(p.label);
+  await page.evaluate(() => (window as unknown as { __closeMenu: () => void }).__closeMenu());
+
+  // No item the app sends inline has both an icon and nested items: Tauri reads that as a plain icon item and drops
+  // the items (found in the real exe, DECISIONS.md C6a), which this fake doesn't model.
+  const inline = (items: MenuItemArg[]): MenuItemArg[] => items.flatMap((i) => (Array.isArray(i) ? [] : [i, ...inline(i.items ?? [])]));
+  for (const call of await ipcCalls(page, "plugin:menu|new"))
+    for (const i of inline((call.args.options as { items?: MenuItemArg[] }).items ?? []))
+      expect(i.icon !== undefined && i.items !== undefined, "an inline submenu with an icon").toBe(false);
+
+  // Every picture, submenu and icon was made while no menu was open (Slice 4's deadlock rule): after a popup, the
+  // menu is closed before the next of them.
+  const calls = await page.evaluate(() => (window as unknown as { __ipcCalls: { cmd: string }[] }).__ipcCalls.map((c) => c.cmd));
+  let open = false;
+  for (const cmd of calls) {
+    if (cmd === "plugin:menu|popup") open = true;
+    if (cmd === "plugin:resources|close") open = false;
+    if (["plugin:image|new", "plugin:menu|new", "plugin:menu|set_icon"].includes(cmd)) expect(open, `${cmd} while a menu was open`).toBe(false);
+  }
 });
 
 test("saved on, a launch sizes the window with the margin but doesn't move it (the restored position already has the margin)", async ({ page }) => {

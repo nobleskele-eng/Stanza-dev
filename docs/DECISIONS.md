@@ -3578,3 +3578,64 @@ one of the skin layers (PLAN.md §4b), so nothing structural changes.
   - **Not run:** `cargo test` (no Rust changed).
 - **Ready for your review:** turn the companion on in any card theme and drop it above the bottom-left corner, or
   wait: it should be on the shelf about a quarter of the time while music plays.
+
+## 2026-11-01 — M2 C6a: the companion picker, pictures in the right-click menu
+
+- **Your calls (asked before building):**
+  - **Pictures, no text,** like the on/off cassette. COPY.md's species names, palette names and headings stay
+    `[NEEDS COPY]` and unread: the picker needs no copy.
+  - **The art polish pass is its own slice, C6b,** with you, in the lab.
+- **Already there, not rebuilt:** the app-wide saved setting `companion: { on, skin, palette }` (C2b), validated field
+  by field and kept across theme switches.
+- **What C6a adds:**
+  - After the on/off cassette, a submenu labelled with your creature's picture. In it: the three species (each in its
+    default palette, yours in your palette), a separator, then your species in each of its palettes. The chosen
+    species and palette are drawn awake, the rest asleep, the same language as the on/off item. A native picture
+    item can't carry a check mark.
+  - Picking turns the companion on as that creature: picking one means wanting to see it. A palette belongs to its
+    species, so a new species starts in its default palette (`pickCompanion`). Saved at once, like the toggle.
+  - The test dummy isn't offered (`SPECIES`); a stored one still loads, for the lab and the tests.
+  - Pictures are made once per skin, palette, pose and scale, and only inside the request chain after the previous
+    menu has closed (Slice 4's deadlock rule).
+- **Surprise: Tauri drops a submenu with an icon** when it's sent inline. The first real-exe run showed the picker as
+  a plain picture item with no submenu, and the e2e had passed.
+  - Diagnosed before changing anything, from tauri 2.11.5's source: `MenuItemPayloadKind` is an untagged enum that
+    tries `Icon` (text + icon) before `Submenu` (text + items, icon optional). So `{ text, icon, items }` is read as
+    an icon item, and `items` is silently ignored.
+  - Fix: the picker is made first with `Submenu.new` (no icon, so it's read as a submenu), given its picture with
+    `setIcon`, and put into the menu as an existing item. It's a second resource, closed with the menu on the next
+    request.
+  - The e2e fake didn't model Tauri's reading order, so the picker test now also fails on any inline item with both
+    an icon and nested items.
+- **Tests:**
+  - Unit:
+    - `companionPickerEntries`: the order, the awake ones, every species × palette, a stored dummy.
+    - `skinMenuIcon`: palettes, fallback, awake versus asleep.
+    - `pickCompanion`.
+  - `e2e/companion-player.spec.ts`, the picker:
+    - pictures only, in the right shape;
+    - the current choice shares the label's picture;
+    - picking the bookworm turns it on as a bookworm, in its colours, saved; then its third palette recolours it,
+      saved, and the next menu shows each choice awake;
+    - no picture, submenu or icon is made while a menu is open.
+  - `e2e/production.spec.ts`: each menu is now its submenu, its icon, the menu, then the popup. Both are closed before
+    the next menu, and at most those two are live.
+  - **Mutation-checked:** drawing the chosen species asleep and the others awake fails the picker e2e.
+- **Real exe (ran),** driven over CDP and Win32 messages to the menu's own windows, so your cursor never moved.
+  Stanza wasn't running; Spotify was open with nothing playing, and nothing touched it.
+  - A right-click near the artwork's top opened the native menu: the five themes, a separator, the on/off picture and
+    the picker, a real submenu with a picture. Its seven items: three pictures, a separator, three pictures, no text.
+  - Up, Right, Down, Enter picked the bookworm: the pet appeared in the bookworm's default colours, saved as
+    `{ on: true, skin: "bookworm", palette: "default" }`. Your appearance was then put back (companion off) and the
+    page reloaded. No console errors. Closed with `CloseMainWindow`; nothing left running.
+  - A screenshot of the open menus, everything around them blanked, is for your review (not in the repo: the player
+    behind them showed your track).
+- **Checks run (Windows):**
+  - `npx tsc --noEmit`: clean.
+  - `npx vitest run`: 22 files, 316 passed (new: the picker's entries, `skinMenuIcon`, `pickCompanion`).
+  - `npm run build` (in the release build): passed, check-fixtures-excluded OK.
+  - `npx playwright test`: first full run 812 passed, 2 failed: one production test still expected only the first
+    menu to be closed, in both engines. Updated to the menu and its submenu; then `e2e/production.spec.ts` 84/84 and
+    a second full run: 814 passed, 24 skipped (Chromium + WebKit).
+  - The release build and the real-exe drive above, twice: the first found the dropped submenu.
+  - **Not run:** `cargo test` (no Rust changed).

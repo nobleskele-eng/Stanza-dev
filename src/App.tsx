@@ -15,7 +15,7 @@ import { useDevicePixelRatio } from "./companion/useDevicePixelRatio";
 import { SpotifyAdapter } from "./adapters/spotifyAdapter";
 import { PlayerStore } from "./store/playerStore";
 import { useInterpolatedPosition, useStoreSnapshot } from "./store/usePlayback";
-import { loadAppearance, saveAppearance, selectTheme } from "./theme/appearance";
+import { loadAppearance, pickCompanion, saveAppearance, selectTheme, type CompanionSetting } from "./theme/appearance";
 import { MANIFESTS } from "./theme/registry";
 import { variantToDom } from "./theme/variant";
 import { DevHarness } from "./dev/DevHarness";
@@ -108,8 +108,8 @@ function ProductionApp() {
     },
     [sizeWindow],
   );
-  const toggleCompanion = useCallback(() => {
-    const next = { ...companion.current, on: !companion.current.on };
+  // The companion's own setting changes (on/off, or a species and palette from the picker, C6a), saved at once.
+  const setCompanion = useCallback((next: CompanionSetting) => {
     companion.current = next;
     setAppearance((a) => {
       const updated = { ...a, companion: next };
@@ -118,8 +118,14 @@ function ProductionApp() {
     });
   }, []);
   useEffect(
-    () => installThemeMenu(MANIFESTS, () => active.current, pickTheme, { isOn: () => companion.current.on, toggle: toggleCompanion }),
-    [pickTheme, toggleCompanion],
+    () =>
+      installThemeMenu(MANIFESTS, () => active.current, pickTheme, {
+        isOn: () => companion.current.on,
+        toggle: () => setCompanion({ ...companion.current, on: !companion.current.on }),
+        current: () => companion.current,
+        pick: ({ skin, palette }) => setCompanion(pickCompanion(companion.current, skin, palette)),
+      }),
+    [pickTheme, setCompanion],
   );
   const dom = variantToDom(appearance.variant);
   return (

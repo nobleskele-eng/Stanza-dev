@@ -64,6 +64,8 @@ no speech bubbles; its emotes are pixel icons, not text.
 - **Companion skin name — bookworm:** [NEEDS COPY]
 - **Companion skin name — cassette:** [NEEDS COPY]
 - **Companion menu — submenu label:** [NEEDS COPY]
+  — no text by your choice (2026-11-01, C6a): the picker submenu is your creature's picture, and every species and
+  palette in it is a picture too, the chosen one awake. Nothing reads this or the two headings below.
 - **Companion menu — show/hide item:** [NEEDS COPY]
   — no text by your choice (2026-10-22): the item is the cassette icon, awake = on, asleep = off. This label only shows if the icon fails to load.
 - **Companion menu — skins heading:** [NEEDS COPY]

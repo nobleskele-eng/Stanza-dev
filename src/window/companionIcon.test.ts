@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { SKINS } from "../companion/registry";
-import { companionMenuIcon, frameToRgba, menuIconScale } from "./companionIcon";
+import { companionMenuIcon, frameToRgba, menuIconScale, skinMenuIcon } from "./companionIcon";
 
 const px = (icon: { rgba: number[]; width: number }, x: number, y: number) => icon.rgba.slice((y * icon.width + x) * 4, (y * icon.width + x) * 4 + 4);
 
@@ -51,5 +51,25 @@ describe("companionMenuIcon", () => {
       expect(alphas).toContain(0);
       expect(alphas).toContain(255);
     }
+  });
+});
+
+describe("skinMenuIcon (C6a)", () => {
+  it("draws a species in the palette asked for, falling back to its default for one it doesn't have", () => {
+    for (const skin of ["pilcrow", "bookworm", "cassette"].map((id) => SKINS[id])) {
+      const [a, b] = Object.keys(skin.palettes).filter((p) => p !== "default");
+      const of = (palette: string) => JSON.stringify(skinMenuIcon(skin, palette, true, 1).rgba);
+      expect(of(a), `${skin.id}: ${a} differs from default`).not.toBe(of("default"));
+      expect(of(b), `${skin.id}: ${b} differs from ${a}`).not.toBe(of(a));
+      expect(of("no-such-palette"), `${skin.id}: unknown palette`).toBe(of("default"));
+    }
+  });
+
+  it("awake and asleep differ for every species, and the on/off icon is the cassette's", () => {
+    for (const id of ["pilcrow", "bookworm", "cassette"]) {
+      const skin = SKINS[id];
+      expect(JSON.stringify(skinMenuIcon(skin, "default", true, 1).rgba), id).not.toBe(JSON.stringify(skinMenuIcon(skin, "default", false, 1).rgba));
+    }
+    expect(companionMenuIcon(true, 1)).toEqual(skinMenuIcon(SKINS.cassette, "default", true, 1));
   });
 });

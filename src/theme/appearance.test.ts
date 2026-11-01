@@ -4,6 +4,7 @@ import {
   loadAppearance,
   defaultCompanion,
   parseAppearance,
+  pickCompanion,
   saveAppearance,
   selectTheme,
   type StorageLike,
@@ -105,5 +106,19 @@ describe("companion setting", () => {
     expect(parse({ on: true, skin: "__proto__" })).toEqual({ on: true, skin: DEFAULT_SKIN, palette: "default" });
     expect(parse("junk")).toEqual(defaultCompanion());
     expect(parse(null)).toEqual(defaultCompanion());
+  });
+});
+
+describe("pickCompanion (C6a)", () => {
+  const off = { on: false, skin: "pilcrow", palette: "ink" };
+  it("picks the species, turned on, keeping a palette it also has and otherwise its default", () => {
+    expect(pickCompanion(off, "pilcrow", "marker")).toEqual({ on: true, skin: "pilcrow", palette: "marker" });
+    expect(pickCompanion(off, "bookworm")).toEqual({ on: true, skin: "bookworm", palette: "default" }); // no "ink"
+    expect(pickCompanion({ ...off, palette: "default" }, "cassette")).toEqual({ on: true, skin: "cassette", palette: "default" });
+    expect(pickCompanion(off, "cassette", "chrome")).toEqual({ on: true, skin: "cassette", palette: "chrome" });
+    expect(pickCompanion(off, "cassette", "kraft")).toEqual({ on: true, skin: "cassette", palette: "default" });
+  });
+  it("an unknown species changes nothing", () => {
+    expect(pickCompanion(off, "dragon", "default")).toBe(off);
   });
 });

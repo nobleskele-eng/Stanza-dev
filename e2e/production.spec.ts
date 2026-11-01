@@ -280,18 +280,20 @@ test("in Tauri, nothing touches menu resources while a menu is open, and the old
   await page.mouse.click(box.x + 30, box.y + 30, { button: "right" });
   await page.keyboard.press("Shift+F10");
   await page.waitForTimeout(200);
-  expect(await cmds(), "extra requests while a menu is open are dropped").toEqual(["plugin:menu|new", "plugin:menu|popup"]);
+  // Each menu: its companion picker submenu first, given its picture (C6a), then the menu, then the popup.
+  const one = ["plugin:menu|new", "plugin:menu|set_icon", "plugin:menu|new", "plugin:menu|popup"];
+  expect(await cmds(), "extra requests while a menu is open are dropped").toEqual(one);
 
   await closeMenu(page);
   await openThemeMenu(page);
   expect(await cmds(), "close (awaited) -> new -> popup, never interleaved").toEqual([
-    "plugin:menu|new",
-    "plugin:menu|popup",
+    ...one,
     "plugin:resources|close",
-    "plugin:menu|new",
-    "plugin:menu|popup",
+    "plugin:resources|close",
+    ...one,
   ]);
-  expect((await ipcCalls(page, "plugin:resources|close"))[0].args.rid).toBe(100);
+  // The old menu (101) and its picker submenu (100) are both closed.
+  expect((await ipcCalls(page, "plugin:resources|close")).map((c) => c.args.rid)).toEqual([101, 100]);
 });
 
 test("in Tauri, right-click opens a native menu of every theme by name, the active one checked, at the click point", async ({ page }) => {
@@ -305,8 +307,13 @@ test("in Tauri, right-click opens a native menu of every theme by name, the acti
   expect(items.map((i) => i.text)).toEqual(THEME_IDS.map((id) => themeJson(id).name));
   expect(items.map((i) => i.checked)).toEqual([true, false, false, false, false]);
   expect(items.map((i) => i.text)).not.toContain("[NEEDS COPY]");
-  // Then the companion's on/off item (M2 C2b): the cassette asleep (it's off), an icon with no text and no check mark.
-  expect(all.slice(THEME_IDS.length)).toEqual([{ item: "Separator" }, { text: "", icon: 500, handler: expect.any(String) }]);
+  // Then the companion's on/off item (M2 C2b): the cassette asleep (it's off), an icon with no text and no check mark;
+  // then its picker (C6a), a submenu made as its own resource (companion-player.spec.ts checks it).
+  expect(all.slice(THEME_IDS.length)).toEqual([
+    { item: "Separator" },
+    { text: "", icon: 500, handler: expect.any(String) },
+    [expect.any(Number), "Submenu"],
+  ]);
   const [img] = await ipcCalls(page, "plugin:image|new");
   // The cassette's 16-px grid at 1 device px per art pixel below 200%, 2 from 200% (companionIcon.ts). The page's own
   // scaling sets it, not the fake's scale_factor: Desktop Safari runs at 2×.
@@ -349,7 +356,7 @@ test("in Tauri, picking a theme switches it, clears the old overrides, saves it 
   // The menu now checks the new theme, and the previous menu resource was released.
   const items = (await openThemeMenu(page))!;
   expect(items.filter((i) => i.checked).map((i) => i.text)).toEqual([themeJson("t3-pill").name]);
-  expect((await ipcCalls(page, "plugin:resources|close")).map((c) => c.args.rid)).toEqual([100]); // the fake's first rid
+  expect((await ipcCalls(page, "plugin:resources|close")).map((c) => c.args.rid)).toEqual([101, 100]); // the first menu and its picker submenu (C6a), made first
   await closeMenu(page); // dismissed without a pick
 
   // T5 (320x490) -> T4 (282x529): neither contains the other, so the window first grows to 320x529 while T5 is
@@ -371,8 +378,9 @@ test("in Tauri, 20 theme swaps through the menu: every swap lands, no errors, at
   await page.goto("/");
   await expect(page.locator(".mp-root")).toHaveAttribute("data-theme", "t1-default");
   for (let i = 1; i <= 20; i++) await pickTheme(page, THEME_IDS[i % THEME_IDS.length]);
+  // The last menu and its picker submenu (C6a), nothing older.
   const live = (await ipcCalls(page, "plugin:menu|new")).length - (await ipcCalls(page, "plugin:resources|close")).length;
-  expect(live).toBe(1);
+  expect(live).toBe(2);
   await expect(page.locator(".mp-root")).toHaveAttribute("data-theme", THEME_IDS[20 % THEME_IDS.length]);
   expect(errors).toEqual([]);
 });

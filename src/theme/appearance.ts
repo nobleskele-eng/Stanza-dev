@@ -20,6 +20,15 @@ export interface CompanionSetting {
 
 export const defaultCompanion = (): CompanionSetting => ({ on: false, skin: DEFAULT_SKIN, palette: "default" });
 
+/**
+ * Picked from the menu (C6a): that species, turned on, since picking it means wanting to see it. A palette it doesn't
+ * have (palettes belong to a species) falls back to its default; an unknown species changes nothing.
+ */
+export function pickCompanion(current: CompanionSetting, skin: string, palette = current.palette): CompanionSetting {
+  if (!has(SKINS, skin)) return current;
+  return { on: true, skin, palette: has(SKINS[skin].palettes, palette) ? palette : "default" };
+}
+
 export interface Appearance {
   theme: string;
   /** Always valid for `theme`; an empty variant means "the theme as shipped". */
