@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { CompanionLayer } from "../companion/CompanionLayer";
 import type { Skin } from "../companion/skin";
+import type { ShelfDeclaration } from "../theme/variant";
 import { copy } from "../copy";
 import { AnimatedText, FxFilters, type TextFx } from "../fx/AnimatedText";
 import { Debris } from "../fx/Debris";
@@ -52,8 +53,8 @@ interface PlayerProps {
   onVolume?: (level: number) => void;
   /** The lyrics button: bring the source's own app forward (S6). */
   onLyrics?: () => void;
-  /** The companion (contract v7). Absent = off: no part is rendered. */
-  companion?: { skin: Skin; palette: string };
+  /** The companion (contract v7). Absent = off: no part is rendered. `shelf`: the theme's, if any (contract v10). */
+  companion?: { skin: Skin; palette: string; shelf?: ShelfDeclaration };
 }
 
 /**
@@ -264,6 +265,7 @@ export function Player({
         <CompanionLayer
           skin={companion.skin}
           palette={companion.palette}
+          shelf={companion.shelf}
           playing={status === "playing"}
           trackKey={track ? `${track.title}::${track.artist}` : ""}
           windowRef={windowRef}

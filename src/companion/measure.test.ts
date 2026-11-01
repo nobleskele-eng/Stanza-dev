@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { measureOutline, measureShelf, type Box } from "./measure";
+import { measureOutline, measureShelf, shelfLine, type Box } from "./measure";
 import { FLOOR_ANIMATIONS, placeOnEdge, sitDepth } from "./place";
 import { SKINS } from "./registry";
 
@@ -84,5 +84,22 @@ describe.each(Object.entries(SKINS))("measureShelf · %s", (_id, skin) => {
     expect(measureShelf(skin, card, { left: 40, top: 300, width: 120 }, [box(40, 280, 70, 300)], px)).toBeNull();
     // A full-width shelf blocked at its left end keeps its right door.
     expect(measureShelf(skin, card, { left: 40, top: 300, width: 300 }, [box(40, 280, 70, 300)], px)?.doors).toEqual(["right"]);
+  });
+});
+
+describe("shelfLine (contract v10)", () => {
+  const card: Box = { left: 40, top: 100, right: 320, bottom: 648 };
+  const badge: Box = { left: 149, top: 590, right: 211, bottom: 622 };
+
+  it("runs level with the part's base, from the card's side to the part", () => {
+    expect(shelfLine("left", card, badge)).toEqual({ left: 40, top: 622, width: 109 });
+    expect(shelfLine("right", card, badge)).toEqual({ left: 211, top: 622, width: 109 });
+  });
+
+  it("is none without the part, with a part of no area, or with no room on that side", () => {
+    expect(shelfLine("left", card, null)).toBeNull();
+    expect(shelfLine("left", card, { ...badge, right: badge.left })).toBeNull();
+    expect(shelfLine("left", card, { ...badge, left: 40 })).toBeNull();
+    expect(shelfLine("right", card, { ...badge, right: 320 })).toBeNull();
   });
 });

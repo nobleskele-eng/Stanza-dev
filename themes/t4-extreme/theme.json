@@ -3,11 +3,12 @@
   "name": "Extreme",
   "author": "[NEEDS COPY]",
   "version": "1.0.0",
-  "contract": 9,
+  "contract": 10,
   "layout": "card",
   "window": { "width": 282, "height": 529 },
   "colorMode": "static",
   "nativeEffect": "none",
+  "companion": { "shelf": { "side": "left", "beside": ".mp-source-badge" } },
   "controls": {
     "--mp-bg": { "type": "color" },
     "--mp-fg": { "type": "color" },

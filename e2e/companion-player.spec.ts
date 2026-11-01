@@ -16,8 +16,18 @@ test.describe.configure({ mode: "parallel" });
 const APPEARANCE_STORAGE_KEY = "mp.appearance.v1";
 const THEME_IDS = ["t1-default", "t2-artwork", "t3-pill", "t4-extreme", "t5-kinetic"]; // registry order
 const SKIN_IDS = readdirSync(new URL("../companions/", import.meta.url)).filter((id) => !id.startsWith("."));
-const skinGrid = (id: string) =>
-  (JSON.parse(readFileSync(new URL(`../companions/${id}/companion.json`, import.meta.url), "utf8")) as { grid: number }).grid;
+const skinJson = (id: string) =>
+  JSON.parse(readFileSync(new URL(`../companions/${id}/companion.json`, import.meta.url), "utf8")) as {
+    grid: number;
+    anchor: { y: number };
+    animations: Record<string, { anchor?: { y: number } }>;
+  };
+const skinGrid = (id: string) => skinJson(id).grid;
+/** The art row a pose rests on its surface by (the animation's anchor, else the skin's). */
+const anchorRow = (id: string, state: string) => {
+  const skin = skinJson(id);
+  return (skin.animations[state]?.anchor ?? skin.anchor).y;
+};
 const themeJson = (id: string) =>
   JSON.parse(readFileSync(new URL(`../themes/${id}/theme.json`, import.meta.url), "utf8")) as {
     window: { width: number; height: number };
@@ -29,7 +39,7 @@ const PART_SELECTOR = [
   ".mp-volume-wrap", ".mp-link-out", ".mp-source-badge", ".mp-empty", ".mp-error",
 ].join(", ");
 const PET_STATES = ["idle", "walk", "sit", "sleep", "wake", "react", "climb", "hang", "held", "fall", "land"]; // contract v9, C4b
-const PET_SURFACES = ["top", "right", "bottom", "left", "air"];
+const PET_SURFACES = ["top", "right", "bottom", "left", "shelf", "air"]; // contract v10, C5b
 // Where the fake says the window is (physical px, scale 1), so a move reads as a plain offset from it.
 const AT = { x: 100, y: 300 };
 
@@ -365,7 +375,8 @@ async function timeLapse(page: Page, theme: string, skin: string) {
     for (const p of s.pixels) {
       if (p.left < -EPS || p.top < -EPS || p.right > view.width + EPS || p.bottom > view.height + EPS) wrong.add("a pixel outside the window");
       for (const part of s.parts) if ((!air || /\bmp-artwork\b/.test(part.part)) && overlaps(p, part)) wrong.add(`a pixel over ${part.part}`);
-      if (s.surface !== "top" && !air && overlaps(p, s.card)) wrong.add("a pixel on the card while off its top");
+      // On the shelf (contract v10) it's on the card by design, and still over no part.
+      if (s.surface !== "top" && s.surface !== "shelf" && !air && overlaps(p, s.card)) wrong.add("a pixel on the card while off its top");
     }
     expect([...wrong], `${theme} × ${skin}: ${s.state} on ${s.surface}, t=${t} ms`).toEqual([]);
     return s;
@@ -491,11 +502,54 @@ for (const [i, theme] of THEME_IDS.entries())
     await page.mouse.up();
     const states: string[] = [];
     for (let n = 0; n < 100 && (s = await run.step(40)).surface === "air"; n++) states.push(s.state);
-    expect(["top", "right", "bottom", "left"], `came to rest: ${s.state} on ${s.surface}`).toContain(s.surface);
+    expect(["top", "right", "bottom", "left", "shelf"], `came to rest: ${s.state} on ${s.surface}`).toContain(s.surface);
     if (spot) {
       expect(states, "it fell").toContain("fall");
-      expect([`bottom/hang`, `left/climb`, `right/climb`], "it caught an edge of the card").toContain(`${s.surface}/${s.state}`);
+      // Or the shelf (C5b), if the spot was over it.
+      expect([`bottom/hang`, `left/climb`, `right/climb`, `shelf/land`], "it caught an edge of the card").toContain(`${s.surface}/${s.state}`);
     }
+    expect(await ipcCalls(page, "plugin:window|start_dragging"), "pressing the pet never drags the window").toEqual([]);
+  });
+
+for (const [i, theme] of THEME_IDS.entries())
+  test(`shelf, ${theme}: dropped above the bottom-left corner it lands on the theme's shelf, level with the badge's base, and lives there over no part`, async ({ page, browserName }) => {
+    test.setTimeout(150_000);
+    const skin = SKIN_IDS[(i + 1) % SKIN_IDS.length]; // not the pointer test's species for this theme
+    const shelf = (themeJson(theme) as { companion?: { shelf?: unknown } }).companion?.shelf;
+    const run = await timeLapse(page, theme, skin);
+    let s = await run.step();
+    await noViewTransition(page);
+    const badge = s.parts.find((p) => /\bmp-source-badge\b/.test(p.part))!;
+    expect(badge, "the badge is always there").toBeDefined();
+
+    // Picked up, carried above the bottom-left corner beside the badge, and let go: every step of the fall checked.
+    const { mid } = await petBox(page);
+    await page.mouse.move(mid.x, mid.y);
+    await page.mouse.down();
+    await page.mouse.move(mid.x + 6, mid.y - 4, { steps: 3 });
+    s = await run.step(40);
+    expect(s.surface, "picked up").toBe("air");
+    await page.mouse.move(s.card.left + 30, badge.bottom - 70, { steps: 6 });
+    await run.step(40);
+    await page.mouse.up();
+    for (let n = 0; n < 100 && (s = await run.step(40)).surface === "air"; n++);
+    if (!shelf) {
+      expect(s.surface, `${theme} has no shelf`).not.toBe("shelf");
+      return;
+    }
+    expect(`${s.surface}/${s.state}`, "it landed on the shelf").toBe("shelf/land");
+    const box = await petBox(page);
+    expect(box.y + (anchorRow(skin, s.state) + 1) * (box.size / skinGrid(skin)), "standing level with the badge's base").toBeCloseTo(badge.bottom, 0);
+
+    // Living there, every step checked (on the shelf: over no part); on and off it only by the left side.
+    const moves = new Set<string>();
+    let prev = s.surface;
+    for (let n = 0; n < (browserName === "webkit" ? 60 : 600); n++) {
+      s = await run.step();
+      if (s.surface !== prev && (prev === "shelf" || s.surface === "shelf")) moves.add(`${prev}>${s.surface}`);
+      prev = s.surface;
+    }
+    for (const m of moves) expect(["shelf>left", "left>shelf"], "on and off by the left side").toContain(m);
     expect(await ipcCalls(page, "plugin:window|start_dragging"), "pressing the pet never drags the window").toEqual([]);
   });
 

@@ -3502,3 +3502,79 @@ one of the skin layers (PLAN.md §4b), so nothing structural changes.
   - **Not run:** `cargo test` and the real exe: no Rust changed and nothing in production changed.
 - **Ready for your review in the lab:** `?lab=companion&shelf`. Your calls for C5b: which themes get a shelf and
   where, whether a theme draws it, and how often it should find it.
+
+## 2026-11-01 — M2 C5b: shelves in the four card themes; contract v10
+
+- **Your calls (asked before building):**
+  - **Where:** the bottom-left corner of the four card themes (Default, Glow Card, Extreme, Kinetic), from the card's
+    left side to beside the source badge, level with the badge's base. The Micro Pill gets none.
+  - **Drawn:** no. It stands on an invisible floor, level with the badge's base.
+  - **How often:** a regular spot.
+- **Room, measured first** (the dev harness, every fixture, at 100%):
+  - Each card theme's badge sits at the same place in every state: T1 109 px in with its base 26 px above the card's
+    bottom, T2 112 and 18, T4 107 and 23, T5 130 and 20.
+  - Above the shelf's line, beside the badge, at least 42 px are clear in every state: more than the sprite's box
+    (32 px at 100%, 38 at 125%).
+- **How a theme declares it (contract v10).** `theme.json` gains `companion.shelf: { side, beside }`: a line level with
+  the base of the `beside` part, from the card's `side` to that part.
+  - Why beside a part, not px: it follows the badge wherever a theme or a state puts it, and it says what you chose
+    ("level with the badge's base").
+  - `beside` must be one of the card's parts; `validateCompanion` drops anything else and reports it. An absent part
+    means no shelf in that state.
+  - `data-pet-surface` gains `shelf`. Nothing renamed or removed; all five themes at `contract: 10`. As at every bump,
+    saved appearances made at v9 lose their variant (the theme stays) on the first v10 launch. Yours is the Default
+    with no overrides, so nothing visible changes.
+- **The player:** App passes the active theme's declaration to the layer. The layer measures the `beside` part (on whole
+  device px, like the card) for `shelfLine`, then `measureShelf` trims it as in C5a.
+- **"A regular spot", tuned by simulation** (T1's card, 4 skins × 8 seeds × 3 hours of music; the simulation was
+  temporary):
+  - C5a's even odds: its first visit took a median 30–45 minutes (measured on the lab's card, C5a).
+  - **First try, too much:** walking toward the door's side 65% of the time, turning that corner 90%, always stepping
+    in, stepping out 25%. It spent 63–69% of the time on the shelf. Stepping out 50%, then 75%: still 37–54%. Always
+    stepping in trapped it in a loop: out the door, down to the bottom, back up the same side, in again.
+  - **Second try, lopsided:** stepping in 70% and out 60% brought the shelf to 39–45%, but the walk bias kept it on the
+    left half. The right side and the bottom got 1–2% of the time each, and the right side 2–12 visits in 24 hours.
+  - **Kept:** no walk bias; turning the corner on the door's side 90% (50% elsewhere); stepping in 70%; stepping out
+    60%. That's 20–30% of the time on the shelf, about half on the top, 6–11% on the right side, and a first visit
+    usually within half an hour (median about 19 minutes; one seed took 127).
+  - These odds only apply where there's a shelf door, so the Micro Pill is unchanged.
+- **Production without a shelf unchanged, checked.** The C5a brain (from git) and the new one, side by side on worlds
+  with no shelf: 4 skins × the top-only and around worlds × 5 seeds × 80 minutes with music, track, click, drop and
+  reduced-motion events, 91,191 states identical. The comparison was temporary.
+- **Tests:**
+  - `e2e/companion-player.spec.ts`, every theme × a species:
+    - In a card theme, dropped above the bottom-left corner, the pet lands on the shelf with its anchor level with the
+      badge's base. Then 10 minutes (Chromium; 1 in WebKit), every step checked: inside the window and over no part,
+      on and off only by the left side. In the Micro Pill it never lands on a shelf.
+    - The per-step check lets the pet be on the card while it's on the shelf (still over no part). The pointer test's
+      drop may now land on the shelf.
+    - `shelf` is in the contract's surface list.
+  - `e2e/companion-shelf.spec.ts` (new, both engines), every card theme × every fixture:
+    - The layer's own `shelfLine` and `measureShelf` run on the laid-out boxes, for every species at 100% and 125%.
+    - A shelf with its left door is left every time, at least 16 art px long. The shortest: T4's at 125%, 36 art px;
+      T5's are 46–57.
+  - Unit tests:
+    - `validateCompanion` on every shipped theme.json (the four card themes beside the badge, T3 none) and on
+      malformed fields.
+    - `shelfLine`, and the brain's door odds through the C5a tests.
+  - **Mutation-checked:** a line at the badge's top instead of its base (every pose would overlap the badge, so the
+    shelf trims away) fails the T1 shelf test: the pet fell to the bottom.
+- **Real exe (ran):** `npm run tauri build -- --no-bundle` OK; driven over CDP with synthetic input, so your cursor
+  never moved. Stanza wasn't running; Spotify was open with nothing playing, and nothing touched it.
+  - Your saved appearance was already at contract 10 when the probe read it: the exe's own launch had made the
+    one-time reset (the Default, no overrides, so nothing visible changed). It was put back as it was found.
+  - Picked up under emulated reduced motion (so it held still), motion back on while it was held, carried above the
+    bottom-left corner and let go: `fall`, then `land` on the `shelf`, its anchor at 540 px, exactly the badge's base.
+  - 20 s on the shelf (real time, 80 samples, `land` then `sleep` with the music off): no pixel over a part.
+  - No `start_dragging`; 21 `set_hit_region` sends, the last with the pet's box. No console errors. Closed with
+    `CloseMainWindow`; nothing left running.
+- **Checks run (Windows):**
+  - `npx tsc --noEmit`: clean.
+  - `npx vitest run`: 22 files, 309 passed (new: `validateCompanion`, `shelfLine`).
+  - `npm run build` (in the release build): passed, check-fixtures-excluded OK.
+  - `npx playwright test`: 812 passed, 24 skipped (Chromium + WebKit; the 20 new are the shelf drop per theme and the
+    room check per card theme, in both engines).
+  - The release build and the CDP drive above.
+  - **Not run:** `cargo test` (no Rust changed).
+- **Ready for your review:** turn the companion on in any card theme and drop it above the bottom-left corner, or
+  wait: it should be on the shelf about a quarter of the time while music plays.

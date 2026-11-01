@@ -79,3 +79,14 @@ export function measureShelf(skin: Skin, card: Box, line: EdgeBox, parts: readon
   if (touches.right && end === n - 1) doors.push("right");
   return { edge: { left: line.left + start * px, top: line.top, width: (end - start + 1) * px }, doors };
 }
+
+/**
+ * A theme's shelf line (contract v10): level with the base of the part it's declared beside, from the card's `side`
+ * to that part's near edge. Null when the part isn't rendered (or has no area), or leaves no room on that side.
+ */
+export function shelfLine(side: Door, card: Box, beside: Box | null): EdgeBox | null {
+  if (!beside || beside.right <= beside.left || beside.bottom <= beside.top) return null;
+  const from = side === "left" ? card.left : beside.right;
+  const to = side === "left" ? beside.left : card.right;
+  return to > from ? { left: from, top: beside.bottom, width: to - from } : null;
+}

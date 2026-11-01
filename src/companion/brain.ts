@@ -141,6 +141,15 @@ const HOLD_MS: Range = [2000, 8000];
 const HANG_MS: Range = [8000, 25_000];
 /** Arriving at an end of the top, the chance it turns the corner and climbs down (when there's an outline). */
 export const CORNER_CHANCE = 0.5;
+/**
+ * A shelf is a regular spot (your call, C5b): it turns the top's corner on a door's side more often, mostly steps in
+ * climbing past the door, and steps out at the door end a little more often than not. Simulated on T1's card, that's
+ * about a quarter of the time on the shelf and the rest of the outline still travelled (DECISIONS.md, C5b). Without a
+ * shelf none of these apply.
+ */
+export const DOOR_CORNER_CHANCE = 0.9;
+export const STEP_IN_CHANCE = 0.7;
+export const STEP_OUT_CHANCE = 0.6;
 /** A climb leg the budget can't cover yet is tried again this much later. */
 const RETRY_MS = 2000;
 /** A floor's modes (the top's, or a shelf's): what it does there, and what the music can change (sleep, wake, a reaction). */
@@ -354,7 +363,7 @@ class Draft {
       this.b.until = now + this.between(IDLE_MS);
       const topEnd = lengthOf(this.world, "top") - 1;
       this.show(now, { surface: "top", x: left ? 0 : topEnd, facing: left ? 1 : -1, mode: "idle", frame: 0 });
-    } else if (x === this.doorOn(surface) && this.rand() < CORNER_CHANCE) {
+    } else if (x === this.doorOn(surface) && this.rand() < STEP_IN_CHANCE) {
       this.stepIn(now);
     } else {
       this.b.holding = true;
@@ -561,8 +570,9 @@ function step(b: Brain, skin: Skin, world: World, t: number, kind: DueKind): Bra
     if (b.mode === "climb") d.climbArrived(t);
     // At a shelf's door it may step out onto the side (C5a); at the top's end, on an outline, it may turn the corner
     // (the walk planner let it run out there).
-    else if (b.surface === "shelf" && end && d.doorAhead(b.facing) && d.rand() < CORNER_CHANCE) d.stepOut(t);
-    else if (b.surface === "top" && world.around && end && d.rand() < CORNER_CHANCE) d.turnDown(t);
+    else if (b.surface === "shelf" && end && d.doorAhead(b.facing) && d.rand() < STEP_OUT_CHANCE) d.stepOut(t);
+    else if (b.surface === "top" && world.around && end && d.rand() < (d.doorOn(b.facing < 0 ? "left" : "right") !== null ? DOOR_CORNER_CHANCE : CORNER_CHANCE))
+      d.turnDown(t);
     else {
       d.b.loops = 0;
       d.b.until = t + d.between(IDLE_MS);

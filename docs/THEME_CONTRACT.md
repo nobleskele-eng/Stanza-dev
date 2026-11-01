@@ -1,9 +1,9 @@
 # Stanza — Theme Contract
 
-**Contract version: 9**
-**Status:** live at v9. v1 froze 2026-09-22 (every item in "Remaining before this
+**Contract version: 10**
+**Status:** live at v10. v1 froze 2026-09-22 (every item in "Remaining before this
 contract can be frozen" below was checked off); v2 and v3 followed the same day, v4 and v5 the day after,
-v6 on 2026-10-17, v7 on 2026-10-18, v8 on 2026-10-29 and v9 on 2026-11-01, each in the same change as the code that needed it. Any further change to a part,
+v6 on 2026-10-17, v7 on 2026-10-18, v8 on 2026-10-29, and v9 and v10 on 2026-11-01, each in the same change as the code that needed it. Any further change to a part,
 attribute or variable name is a version bump made in the same change as the code that
 needs it.
 
@@ -57,6 +57,11 @@ needs it.
   react; a drag picks it up. `data-pet-state` gains `held` (carried), `fall` and `land`; `data-pet-surface` gains
   `air` (carried or falling, on no surface). Carried or falling it may be over the card, but **never over
   `.mp-artwork`**. Nothing renamed or removed: a v8 theme keeps working apart from its `contract` number.
+- **v10 (2026-11-01):** a shelf for the companion inside the card (M2 C5b). The `theme.json` field `companion` is read
+  for the first time, with one key, `shelf: { side, beside }`: a line level with the base of the part named by
+  `beside`, from the card's `side` to that part. `data-pet-surface` gains `shelf`. On the shelf it covers no part
+  (the app trims the shelf to where it fits). T1, T2, T4 and T5 declare one beside `.mp-source-badge`; T3 has none.
+  Nothing renamed or removed: a v9 theme keeps working apart from its `contract` number, without a shelf.
 
 This file is the source of truth for the class names, data attributes and CSS custom
 properties a Stanza theme may rely on. Most of it is checked by tests, not by hand:
@@ -196,9 +201,9 @@ customization layer.
 
 ---
 
-## Companion (v7–v9, opt-in, app-provided)
+## Companion (v7–v10, opt-in, app-provided)
 A small pixel-art creature (PLAN.md §4b, `docs/COMPANION.md`) that lives on the card's outline: it walks and sits on
-the top edge, climbs the sides and hangs under the bottom. It is **not theme art**:
+the top edge, climbs the sides and hangs under the bottom. A theme can give it a shelf inside the card (v10). It is **not theme art**:
 the app draws it, a theme only has to leave it room. It is **off until the owner turns it on** (right-click menu), and
 while it is off none of these parts exist.
 
@@ -207,8 +212,8 @@ while it is off none of these parts exist.
   (`z-index: 1`). It measures `.mp-window`'s box and the parts near its top, and follows them when they move.
 - **`.mp-companion`** — inside the layer: the creature. `aria-hidden`, `pointer-events: auto` and `data-no-drag` (v9: it
   takes the pointer, and pressing it never drags the window). Carries `data-pet-state` (`idle | walk | sit | sleep | wake |
-  react | land` on the top, `climb` on a side, `hang` under the bottom, `held | fall` in the air) and `data-pet-surface`
-  (`top | right | bottom | left | air`). Its position is an inline `transform` set by the app.
+  react | land` on the top or the shelf, `climb` on a side, `hang` under the bottom, `held | fall` in the air) and
+  `data-pet-surface` (`top | right | bottom | left | shelf | air`). Its position is an inline `transform` set by the app.
 - **`.mp-pet-c1`…`.mp-pet-c8`** — the sprite's colour slots: one SVG `<path>` per colour, filled from `--mp-pet-N`.
 - **`--mp-pet-1`…`--mp-pet-8`** — app-provided, set inline on the sprite, from the chosen skin's palette. Not theme-authored
   and not editable: a palette is part of a skin, not of a theme.
@@ -227,10 +232,16 @@ What a theme can rely on:
   while the music is off. Under `prefers-reduced-motion` it holds still poses on the top.
 - **It takes the pointer (v9).** A click on it makes it react. A drag picks it up; the owner can carry it over the card
   and the margin around it, never over `.mp-artwork` (pushed off the nearest way). Let go, it falls onto the top from
-  above, down the card's face to catch the bottom edge (sliding off the artwork if it's in the way), or grabs a side or
+  above, down the card's face to catch a shelf (v10) or the bottom edge (sliding off the artwork if it's in the way), or grabs a side or
   the bottom at once. **While carried or falling (`data-pet-surface="air"`) it may pass over any part except the
   artwork**; at rest it keeps every rule above. Its box is part of the window's hit region, so it takes clicks in the
   margin, where the window otherwise lets them through.
+- **A shelf (v10).** A theme that declares `companion.shelf` in `theme.json` gives it a floor inside the card: a line
+  level with the base of the `beside` part, from the card's `side` to that part. It isn't drawn: the creature stands
+  on it as it does on the top, and it steps on and off at the card's side (`data-pet-surface="shelf"`). The app trims
+  the shelf to where none of its floor poses covers a part (artwork, text, controls, the badge), measured from the
+  real boxes in every state; where nothing is left, or the `beside` part isn't rendered, there's no shelf. So a theme
+  only has to leave room: about a sprite's height (32 px at 100%, 38 px at 125%) clear above the line, beside the part.
 - Themes **must not** style, hide or reposition any of these parts. `.mp-companion-layer` and `.mp-companion` are not in the
   **Parts** list because they are absent whenever the companion is off; `e2e/companion-player.spec.ts` checks this section
   against the DOM instead.
@@ -265,6 +276,7 @@ What a theme can rely on:
 | `window` | `{width, height}` px | The native window size for this theme. Must be **at least the largest the player renders in any state**, and not needlessly larger: the largest state should fill it (±1 px) — **except a theme with content that deliberately bleeds past `.mp-window`'s own edges** (`t1-default`'s "Collage" layer), which may declare real reserved margin instead | `e2e/contract.spec.ts` against every fixture (ceiling check always; "fills it" check skipped for named exceptions) |
 | `colorMode` | `static \| artwork` | `artwork` = the theme uses `--mp-art-*` (needs the palette extraction) | *planned* |
 | `nativeEffect` | `none \| mica \| vibrancy` | Optional native backdrop; off by default, Windows 11 only (D11/C9) | *planned* |
+| `companion` | object, optional (v10) | Where the companion may stand inside the card: one key, `shelf: { "side": "left" | "right", "beside": "<part>" }`, a line level with the base of `beside` (one of `.mp-artwork`, `.mp-meta`, `.mp-progress`, `.mp-time-current`, `.mp-time-total`, `.mp-controls`, `.mp-volume-wrap`, `.mp-link-out`, `.mp-source-badge`) from the card's `side` to that part. See **Companion**. Absent: no shelf | `src/theme/variant.test.ts` (every shipped `theme.json`); `e2e/companion-shelf.spec.ts` (room in every fixture) |
 | `fx` | effects object, optional | Effects this theme ships switched **on**, using the same keys and values as a variant's `effects` (`shapes`, `waveform`, `flow`, `morph`, `debris`: `true`; `title`, `artist`: `typewriter \| ripple \| liquid \| splitflap`). A variant still overrides it, and switching theme resets to the new theme's own. Validated with the variant effect rules; nothing but the dev harness applies it yet (no theme loader exists) | `src/theme/variant.test.ts` (every shipped `theme.json`) |
 | `controls` | map, optional | `{ "<token>": { "type": "color \| length \| number \| font", "min"?, "max"? } }`. Only these tokens are customizer-editable. App-provided variables are never editable even if listed | variant validator |
 

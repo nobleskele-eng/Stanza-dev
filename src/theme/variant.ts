@@ -21,8 +21,8 @@ import { WCAG_AA_NORMAL, contrastRatio, parseColor } from "./contrast";
 // parts, the simulated `--mp-beat` variable, and `effects` in variants. Purely additive.
 // v5 (2026-09-23): design round 2 (T5) — `data-fx-flow|morph|debris`, the `splitflap` text effect, `.mp-flow` /
 // `.mp-debris` parts, app-provided artwork filter ids, `--mp-flap-*` tokens, theme.json `fx`. Purely additive.
-// v6–v9: the lyrics button and the companion; their notes are in docs/THEME_CONTRACT.md's change list.
-export const CONTRACT_VERSION = 9;
+// v6–v10: the lyrics button and the companion; their notes are in docs/THEME_CONTRACT.md's change list.
+export const CONTRACT_VERSION = 10;
 
 export type ControlType = "color" | "length" | "number" | "font";
 
@@ -46,7 +46,34 @@ export interface ThemeManifest {
   controls?: Record<string, ControlSpec>;
   /** Effects the theme ships switched on (a variant still overrides). Same rules as `Variant.effects`. */
   fx?: Effects;
+  /** Where the companion may stand inside the card (contract v10): `validateCompanion`'s rules. */
+  companion?: ThemeCompanion;
 }
+
+/**
+ * A shelf inside the card for the companion (contract v10, M2 C5b): a line level with the base of the part named by
+ * `beside`, from the card's `side` to that part. The app trims it to where the creature fits (measure.ts).
+ */
+export interface ShelfDeclaration {
+  side: "left" | "right";
+  beside: ShelfPart;
+}
+export interface ThemeCompanion {
+  shelf?: ShelfDeclaration;
+}
+/** Parts a shelf may stand beside: the card's own parts (THEME_CONTRACT.md "Parts"). */
+export const SHELF_PARTS = [
+  ".mp-artwork",
+  ".mp-meta",
+  ".mp-progress",
+  ".mp-time-current",
+  ".mp-time-total",
+  ".mp-controls",
+  ".mp-volume-wrap",
+  ".mp-link-out",
+  ".mp-source-badge",
+] as const;
+export type ShelfPart = (typeof SHELF_PARTS)[number];
 
 /**
  * Parts a variant may hide. `.mp-source-badge` and artwork are deliberately absent
@@ -98,6 +125,7 @@ export type IssueCode =
   | "value-out-of-range"
   | "part-not-hideable"
   | "effect-invalid"
+  | "shelf-invalid"
   | "unknown-key";
 
 export interface Issue {
@@ -209,6 +237,35 @@ export function validateEffects(input: unknown, path = "effects"): { effects: Ef
     issues.push({ code: "not-an-object", path });
   }
   return { effects, issues };
+}
+
+/**
+ * Validates an untrusted theme.json `companion` field (contract v10). A shelf needs both a `side` (`left` or
+ * `right`) and a `beside` from SHELF_PARTS; anything else drops the shelf and is reported.
+ */
+export function validateCompanion(input: unknown, path = "companion"): { companion: ThemeCompanion; issues: Issue[] } {
+  const issues: Issue[] = [];
+  const companion: ThemeCompanion = {};
+  if (isRecord(input)) {
+    for (const [key, raw] of Object.entries(input)) {
+      const at = `${path}.${key}`;
+      if (key !== "shelf") {
+        issues.push({ code: "unknown-key", path: at });
+        continue;
+      }
+      const ok =
+        isRecord(raw) &&
+        Object.keys(raw).every((k) => k === "side" || k === "beside") &&
+        (raw.side === "left" || raw.side === "right") &&
+        typeof raw.beside === "string" &&
+        (SHELF_PARTS as readonly string[]).includes(raw.beside);
+      if (ok) companion.shelf = { side: raw.side as "left" | "right", beside: raw.beside as ShelfPart };
+      else issues.push({ code: "shelf-invalid", path: at });
+    }
+  } else if (input !== undefined) {
+    issues.push({ code: "not-an-object", path });
+  }
+  return { companion, issues };
 }
 
 /** Layouts a theme offers: its own plus any listed in `layouts`. */

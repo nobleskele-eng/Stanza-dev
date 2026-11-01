@@ -138,7 +138,7 @@ function ProductionApp() {
         onPrevious={() => store?.previous()}
         onVolume={(level) => store?.setVolume(level)}
         onLyrics={() => store?.showLyrics()}
-        companion={appearance.companion.on ? { skin, palette: appearance.companion.palette } : undefined}
+        companion={appearance.companion.on ? { skin, palette: appearance.companion.palette, shelf: MANIFESTS[appearance.theme].companion?.shelf } : undefined}
       />
     </div>
   );

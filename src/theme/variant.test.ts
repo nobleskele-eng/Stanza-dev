@@ -7,6 +7,7 @@ import {
   TEXT_FX,
   checkVariantContrast,
   emptyVariant,
+  validateCompanion,
   validateEffects,
   validateValue,
   validateVariant,
@@ -402,5 +403,36 @@ describe("theme.json `fx` defaults", () => {
     expect(validateEffects("x", "fx").issues).toEqual([{ code: "not-an-object", path: "fx" }]);
     expect(validateEffects({ title: "nope" }, "fx").issues).toEqual([{ code: "effect-invalid", path: "fx.title" }]);
     expect(validateEffects(undefined)).toEqual({ effects: {}, issues: [] });
+  });
+});
+
+describe("theme.json `companion` (contract v10)", () => {
+  const themes = import.meta.glob("../../themes/*/theme.json", { eager: true, import: "default" }) as Record<string, ThemeManifest>;
+
+  it("every shipped theme's companion field (if any) validates cleanly; the card themes have a shelf beside the badge, the pill none", () => {
+    const shelves: Record<string, unknown> = {};
+    for (const [file, m] of Object.entries(themes)) {
+      const r = validateCompanion(m.companion);
+      expect(r.issues, file).toEqual([]);
+      if (m.companion) expect(r.companion, file).toEqual(m.companion);
+      shelves[m.id] = m.companion?.shelf ?? null;
+    }
+    const badge = { side: "left", beside: ".mp-source-badge" };
+    expect(shelves).toEqual({ "t1-default": badge, "t2-artwork": badge, "t3-pill": null, "t4-extreme": badge, "t5-kinetic": badge });
+  });
+
+  it("drops a malformed shelf and reports where", () => {
+    expect(validateCompanion(undefined)).toEqual({ companion: {}, issues: [] });
+    expect(validateCompanion("x").issues).toEqual([{ code: "not-an-object", path: "companion" }]);
+    const bad = [
+      { side: "top", beside: ".mp-source-badge" },
+      { side: "left", beside: ".mp-window" },
+      { side: "left" },
+      { side: "left", beside: ".mp-source-badge", y: 3 },
+      "left",
+    ];
+    for (const shelf of bad) expect(validateCompanion({ shelf }), JSON.stringify(shelf)).toEqual({ companion: {}, issues: [{ code: "shelf-invalid", path: "companion.shelf" }] });
+    expect(validateCompanion({ edges: ["top"] }).issues).toEqual([{ code: "unknown-key", path: "companion.edges" }]);
+    expect(validateCompanion({ shelf: { side: "right", beside: ".mp-controls" } })).toEqual({ companion: { shelf: { side: "right", beside: ".mp-controls" } }, issues: [] });
   });
 });
