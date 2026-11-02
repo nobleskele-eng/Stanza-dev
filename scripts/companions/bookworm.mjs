@@ -127,6 +127,9 @@ export const bookworm = {
     default: ["#4a5a86", "#fbf6e8", "#93b8ec", "#1d1b2e", "#f2b134", "#a7a294"],
     kraft: ["#6b4a2e", "#e2c08d", "#c1955a", "#2a1b10", "#f25f5c", "#a7a294"],
     graph: ["#2f6b55", "#f2f8f1", "#9bd3b5", "#14261d", "#f2b134", "#a7a294"],
+    // D2a (your picks): a yellow legal pad (its red margin line as the rules), and blueprint paper.
+    legal: ["#7a6420", "#fbe78f", "#e8a0a0", "#2a2210", "#e5484d", "#a7a294"],
+    blueprint: ["#16305f", "#3b6fc4", "#a9c8f2", "#0d1a33", "#f2b134", "#a7a294"],
   },
   animations: {
     idle: { fps: 1, loop: true, frames: [ground(R(), 4), ground(R_BLINK, 4)], durations: [2800, 160] },

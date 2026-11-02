@@ -245,12 +245,13 @@ test("the picker (C6a): pictures only, every species and the current one's palet
   await fakeTauri(page, spotifyState(Date.now()));
   await page.goto("/");
   await expect(page.locator(".mp-root")).toHaveAttribute("data-status", "playing");
-  /** The picker's items as [the label picture, species ×3, palettes ×3], checking its shape: pictures, no text. */
-  const pickerOf = async () => {
+  /** The picker's items as [the label picture, species ×3, `skin`'s palettes], checking its shape: pictures, no text. */
+  const pickerOf = async (skin: string) => {
     const { picker } = await companionItems(page, await openMenu(page));
     const items = picker.items!;
     expect(picker.text, "the submenu has no text").toBe("");
-    expect(items.map((i) => i.item ?? "picture")).toEqual(["picture", "picture", "picture", "Separator", "picture", "picture", "picture"]);
+    const palettes = Object.keys(skinJson(skin).palettes).length;
+    expect(items.map((i) => i.item ?? "picture")).toEqual([...Array(3).fill("picture"), "Separator", ...Array(palettes).fill("picture")]);
     for (const i of items.filter((i) => !i.item)) expect(i, "a picture, no text, no check").toEqual({ text: "", icon: expect.any(Number), handler: expect.any(String) });
     return { label: picker.icon!, species: items.slice(0, 3), palettes: items.slice(4) };
   };
@@ -259,11 +260,11 @@ test("the picker (C6a): pictures only, every species and the current one's palet
 
   // Off, pilcrow in its default palette: the current species and palette are the label's own picture (awake); every
   // other picture differs from it and from each other.
-  let p = await pickerOf();
+  let p = await pickerOf("pilcrow");
   expect(p.species[0].icon).toBe(p.label);
   expect(p.palettes[0].icon).toBe(p.label);
-  const others = [p.species[1], p.species[2], p.palettes[1], p.palettes[2]].map((i) => i.icon);
-  expect(new Set([p.label, ...others]).size).toBe(5);
+  const others = [...p.species.slice(1), ...p.palettes.slice(1)].map((i) => i.icon);
+  expect(new Set([p.label, ...others]).size).toBe(1 + others.length);
   await expect(page.locator(".mp-companion")).toHaveCount(0);
 
   // The bookworm: on, as a bookworm in its default palette, saved.
@@ -274,7 +275,7 @@ test("the picker (C6a): pictures only, every species and the current one's palet
   expect(stored.companion).toEqual({ on: true, skin: "bookworm", palette: "default" });
 
   // The next menu: the bookworm awake, and its palettes now. Its third palette: recoloured, saved.
-  p = await pickerOf();
+  p = await pickerOf("bookworm");
   expect(p.species[1].icon).toBe(p.label);
   expect(p.palettes[0].icon).toBe(p.label);
   expect(p.species[0].icon, "pilcrow asleep now").not.toBe(p.label);
@@ -283,7 +284,7 @@ test("the picker (C6a): pictures only, every species and the current one's palet
   await expect.poll(colours).toBe(skinJson("bookworm").palettes[third][0]);
   stored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!), APPEARANCE_STORAGE_KEY);
   expect(stored.companion).toEqual({ on: true, skin: "bookworm", palette: third });
-  p = await pickerOf();
+  p = await pickerOf("bookworm");
   expect(p.palettes[2].icon).toBe(p.label);
   expect(p.species[1].icon, "the bookworm's own picture is in its new palette").toBe(p.label);
   await page.evaluate(() => (window as unknown as { __closeMenu: () => void }).__closeMenu());

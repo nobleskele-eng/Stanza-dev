@@ -28,6 +28,20 @@
       "#fff8ec",
       "#10261b",
       "#ff8fab"
+    ],
+    "violet": [
+      "#8a5cf0",
+      "#5b37b3",
+      "#fff8ec",
+      "#1c1430",
+      "#f2b134"
+    ],
+    "highlighter": [
+      "#ff8a1f",
+      "#c45f05",
+      "#fff8ec",
+      "#2a1608",
+      "#ff5d8f"
     ]
   },
   "animations": {

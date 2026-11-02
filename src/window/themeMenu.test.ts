@@ -49,6 +49,8 @@ describe("companionPickerEntries (C6a)", () => {
       { skin: "bookworm", palette: "default", awake: false },
       { skin: "bookworm", palette: "kraft", awake: true },
       { skin: "bookworm", palette: "graph", awake: false },
+      { skin: "bookworm", palette: "legal", awake: false },
+      { skin: "bookworm", palette: "blueprint", awake: false },
     ]);
   });
 

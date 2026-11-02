@@ -3741,3 +3741,28 @@ one of the skin layers (PLAN.md §4b), so nothing structural changes.
     `cargo test` (no Rust changed).
 - **Ready for your review:** `?lab=companion` (the corner poses at the right-hand corners of each scene, and live on
   the around and shelf cards), and the review sheet I sent.
+
+## 2026-11-01 — M2 D2a: two more palettes per species
+
+- **D2's scope, your calls:**
+  - **Accessories:** headphones, a knitted beanie, a scarf and a little bow, drafted for all three species.
+  - **Palettes:** two more per species.
+  - **Order:** palettes first (D2a, this short slice); then the accessory rig and art (D2b), a skin-format change.
+- **The drafts** follow each species' idea:
+  - pilcrow (pens): `violet` ink with a gold accent, and an orange `highlighter` with a pink accent, so the z and the
+    heart stand out from it;
+  - bookworm (papers): a yellow `legal` pad (its red margin line as the rules) and `blueprint`;
+  - cassette (tape shells): a 90s translucent `pink` and `mint`.
+  - Each was checked on the lab's light and dark backdrops (the D1 rule: every part reads on both). The review sheets
+    were sent to you.
+- **Your picks:** all six kept, so five palettes per species.
+  - The picker shows them as pictures like the others (the current species in each). Nothing else changes.
+  - Palette names are ids only: the picker has no text.
+- **Tests:**
+  - The picker's unit test lists the bookworm's five palettes.
+  - The picker e2e counts the current species' palettes instead of assuming three, and checks every picture is
+    distinct.
+  - Every new palette is covered by the lab's "every skin × palette × animation renders" check.
+- **Checks run (Windows):** `npx tsc --noEmit` clean; `npx vitest run` 331 passed; `npm run build` passed,
+  check-fixtures-excluded OK; `npx playwright test` 814 passed, 24 skipped (Chromium + WebKit). Not run: the real exe
+  (only skin colours changed); `cargo test` (no Rust changed).

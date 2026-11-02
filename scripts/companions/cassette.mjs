@@ -79,6 +79,9 @@ export const cassette = {
     default: ["#30343f", "#9aa3b2", "#f6e9cc", "#ffffff", "#262a35", "#ff7a3d", "#7a4a2c", "#ff5d8f"],
     clear: ["#2c3f57", "#8fc3e8", "#ffffff", "#ffffff", "#1c2a3a", "#ffd166", "#7a4a2c", "#ff5d8f"],
     chrome: ["#30343f", "#e3d9c6", "#2f2f35", "#ffffff", "#141418", "#e5484d", "#7a4a2c", "#ffd166"],
+    // D2a (your picks): a 90s translucent pink shell, and mint.
+    pink: ["#3a2433", "#ff8cc6", "#fff3f8", "#ffffff", "#2b1b26", "#7a5cff", "#7a4a2c", "#ffd166"],
+    mint: ["#22362f", "#8fdcbc", "#f4fbf7", "#ffffff", "#1a2a24", "#ff7a3d", "#7a4a2c", "#ff5d8f"],
   },
   animations: {
     idle: { fps: 1, loop: true, frames: [stand(), stand("closed")], durations: [2800, 160] },

@@ -37,6 +37,26 @@
       "#e5484d",
       "#7a4a2c",
       "#ffd166"
+    ],
+    "pink": [
+      "#3a2433",
+      "#ff8cc6",
+      "#fff3f8",
+      "#ffffff",
+      "#2b1b26",
+      "#7a5cff",
+      "#7a4a2c",
+      "#ffd166"
+    ],
+    "mint": [
+      "#22362f",
+      "#8fdcbc",
+      "#f4fbf7",
+      "#ffffff",
+      "#1a2a24",
+      "#ff7a3d",
+      "#7a4a2c",
+      "#ff5d8f"
     ]
   },
   "animations": {

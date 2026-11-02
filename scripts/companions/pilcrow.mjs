@@ -99,6 +99,9 @@ export const pilcrow = {
     default: ["#e0412f", "#a8261c", "#fff8ec", "#24141a", "#f2b134"],
     ink: ["#3d63dd", "#2a3f99", "#fff8ec", "#141a33", "#f2b134"],
     marker: ["#2bb673", "#17824e", "#fff8ec", "#10261b", "#ff8fab"],
+    // D2a (your picks): violet ink, and an orange highlighter (pink accent, so the z and heart stand out from it).
+    violet: ["#8a5cf0", "#5b37b3", "#fff8ec", "#1c1430", "#f2b134"],
+    highlighter: ["#ff8a1f", "#c45f05", "#fff8ec", "#2a1608", "#ff5d8f"],
   },
   animations: {
     idle: { fps: 1, loop: true, frames: [standing, blink], durations: [2800, 160] },
