@@ -48,7 +48,9 @@ function stand(eyes = "open", legs = "stand", lift = 0) {
   return frame([body(eyes), X, top], [l, X + 1, top + 10]);
 }
 
-const Z = [art(["888", "..8", ".8.", "888"]), art(["88", ".8", "88"])];
+// The sleep z: one legible glyph in both frames (C6b: a 2-wide second z read as a "c"). The shell fills the grid
+// below row 4, so it sways sideways rather than drifting up.
+const Z = art(["888", "..8", ".8.", "888"]);
 
 // Sit: the shell's bottom edge (row 11) rests on the card's edge; the legs hang over it.
 const sit = (eyes, legs) => frame([body(eyes), X, 2], [LEGS[legs], X + 1, 12]);
@@ -77,7 +79,7 @@ export const cassette = {
     sit: { fps: 1, loop: true, frames: [sit("open", "sitA"), sit("open", "sitB")], durations: [2400, 2400], anchor: { x: 8, y: 11 } },
     climb: { fps: 3, loop: true, frames: [rotCCW(stand("open", "stepA")), rotCCW(stand("turn", "stepB"))], steps: [2, 2] }, // the walk turned: same stride
     hang: { fps: 1, loop: true, frames: [hang(0), hang(1)], durations: [1400, 1400] },
-    sleep: { fps: 1, loop: true, frames: [frame([stand("closed", "tuck"), 0, 0], [Z[0], 12, 0]), frame([stand("closed", "tuck"), 0, 0], [Z[1], 13, 1])], durations: [4000, 4000] },
+    sleep: { fps: 1, loop: true, frames: [frame([stand("closed", "tuck"), 0, 0], [Z, 12, 0]), frame([stand("closed", "tuck"), 0, 0], [Z, 13, 0])], durations: [4000, 4000] },
     wake: { fps: 4, loop: false, frames: [stand("closed", "tuck"), stand("turn"), stand()] },
     react: { fps: 2, loop: false, frames: [frame([stand("hearts", "stand", 1), 0, 0]), stand()], durations: [900, 300] },
     held: { fps: 2, loop: true, frames: [stand("wide", "dangle", 1), stand("wide", "dangle", 1).map((r, y) => (y > 11 ? r.slice(1) + "." : r))] },

@@ -64,8 +64,10 @@ const SIT = (eye) =>
 const I = paper([".##.", "####", "#e##", "####", "####", "####", "####", "####", "####", ".##."]);
 const L = paper([".##.", "####", "#e##", "####", "####", "####", "####", "####", "####", "####", "####", ".##."]);
 
-const HEART = art(["5.5", "555", ".5."]);
-const Z = [art(["555", "..5", ".5.", "555"]), art(["55", ".5", "55"])];
+// 5×4 (C6b: the 3×3 one read as a "Y").
+const HEART = art([".5.5.", "55555", ".555.", "..5.."]);
+// The sleep z: one legible glyph in both frames, drifting up between them (C6b: a 2-wide second z read as a "c").
+const Z = art(["555", "..5", ".5.", "555"]);
 
 /** Feet on row 14 (the anchor row), left edge at x. */
 const ground = (s, x) => frame([s, x, 15 - s.length]);
@@ -95,9 +97,9 @@ export const bookworm = {
     sit: { fps: 1, loop: true, frames: [frame([SIT("e"), 2, 7]), frame([SIT("k"), 2, 7])], durations: [3200, 160], anchor: { x: 8, y: 10 } },
     climb: { fps: 3, loop: true, frames: [rotCCW(ground(DASH, 1)), rotCCW(ground(N, 5))], steps: [4, 0] }, // the walk turned: same stride
     hang: { fps: 1, loop: true, frames: [hang(0), hang(1)], durations: [1400, 1400] },
-    sleep: { fps: 1, loop: true, frames: [frame([O, 3, 7], [Z[0], 12, 1]), frame([O, 3, 7], [Z[1], 12, 3])], durations: [4000, 4000] },
+    sleep: { fps: 1, loop: true, frames: [frame([O, 3, 7], [Z, 12, 2]), frame([O, 3, 7], [Z, 13, 0])], durations: [4000, 4000] },
     wake: { fps: 4, loop: false, frames: [ground(O, 3), ground(C, 3), ground(R(), 4)] },
-    react: { fps: 2, loop: false, frames: [frame([I, 6, 5], [HEART, 6, 1]), ground(R(), 4)], durations: [700, 300] },
+    react: { fps: 2, loop: false, frames: [frame([I, 6, 5], [HEART, 5, 0]), ground(R(), 4)], durations: [700, 300] },
     held: { fps: 2, loop: true, frames: [held(-1), held(1)] },
     fall: { fps: 1, loop: true, frames: [ground(U, 3)] },
     land: { fps: 6, loop: false, frames: [ground(DASH, 1), ground(R(), 4)] },

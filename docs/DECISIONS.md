@@ -3639,3 +3639,37 @@ one of the skin layers (PLAN.md §4b), so nothing structural changes.
     a second full run: 814 passed, 24 skipped (Chromium + WebKit).
   - The release build and the real-exe drive above, twice: the first found the dropped submenu.
   - **Not run:** `cargo test` (no Rust changed).
+
+## 2026-11-01 — M2 C6b: the art polish pass (the emotes)
+
+- **The review:** each creature's frames at 10× with a pixel grid, every animation, plus the palettes on light and
+  dark (`scripts/companion-sheet.mjs`). I sent you the zoomed sheets and listed what I found.
+  - The bodies, poses and palettes read well at real size and on both backdrops. On dark cards the dark outlines
+    fade, but each creature's fill carries its shape (the D1 rule).
+  - **Two emotes didn't read,** both shared across species:
+    - the sleep z's second frame was 2 pixels wide, too narrow for a diagonal, and read as a backwards "c";
+    - the 3×3 reaction heart (the pilcrow's, and the bookworm's "i" dot) read as a "Y".
+- **Your picks:** both fixes, nothing else.
+- **What changed** (`scripts/companions/*.mjs`, regenerated with `node scripts/gen-companions.mjs`):
+  - **Sleep z, all three:** one 3×4 Z in both frames.
+    - The pilcrow's drifts up two rows between frames, and the bookworm's up two and right one.
+    - The cassette's shell fills the grid below row 4, leaving exactly the Z's four rows, so it sways a pixel right
+      instead of rising.
+  - **Heart, 5×4** (`.5.5. / 55555 / .555. / ..5..`):
+    - On the bookworm it's still the dot of its "i", with a pixel's gap.
+    - The pilcrow standing leaves only three rows above itself, and hopping fewer. So its reaction is now three
+      frames: the hop (250 ms), a landing crouch under the heart (700 ms, the crouch from `wake`), then standing
+      (250 ms). Before it was the hop with the small heart (700 ms), then standing (300 ms). One more visible change
+      per reaction: reactions always happen (music or pointer), and the budget tests still pass.
+  - The cassette's heart eyes are unchanged.
+- **Docs:** COMPANION.md gains an "Emotes" section with these rules.
+- **Checks run (Windows):**
+  - `npx tsc --noEmit`: clean.
+  - `npx vitest run`: 316 passed (every skin still validates; the registry, palettes and frames).
+  - `npm run build`: passed, check-fixtures-excluded OK.
+  - `npx playwright test`: 814 passed, 24 skipped (Chromium + WebKit). That includes the lab's crispness check of
+    every frame at 100/125/150/200%, and the budget and outline time-lapses with the pilcrow's longer reaction.
+  - The new frames reviewed at 10× (sheets sent to you).
+  - **Not run:** the real exe (only skin data changed, and the production player draws it as before); `cargo test`.
+- **Ready for your review:** `?lab=companion`, or in the player: pause the music to see the z, click it for the
+  heart.

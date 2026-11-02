@@ -47,8 +47,10 @@ function stand(eyes = "open", legs = "stand", lift = 0) {
   return frame([body(eyes), X, top], [l, X, top + 7]);
 }
 
-const Z = [art(["555", "..5", ".5.", "555"]), art(["55", ".5", "55"])];
-const HEART = art(["5.5", "555", ".5."]);
+// The sleep z: one legible glyph in both frames, drifting up between them (C6b: a 2-wide second z read as a "c").
+const Z = art(["555", "..5", ".5.", "555"]);
+// 5×4 (C6b: the 3×3 one read as a "Y").
+const HEART = art([".5.5.", "55555", ".555.", "..5.."]);
 
 const standing = stand();
 const blink = stand("closed");
@@ -62,7 +64,7 @@ const hang = (dx) => flipY(frame([body("open"), X + dx, 4], [LEGS.dangle, X, 11]
 // Climb: the walk turned a quarter so the feet grip a wall on the right, heading up.
 const climb = (legs) => rotCCW(stand("open", legs));
 
-const sleeping = (z) => frame([body("closed"), X, 6], [LEGS.tuck, X, 13], [z, 12, 0]);
+const sleeping = (z, zx = 13, zy = 2) => frame([body("closed"), X, 6], [LEGS.tuck, X, 13], [z, zx, zy]);
 const held = stand("wide", "dangle", 1);
 
 export const pilcrow = {
@@ -82,9 +84,10 @@ export const pilcrow = {
     sit: { fps: 1, loop: true, frames: [sit("open"), sit("closed")], durations: [3200, 160], anchor: { x: 10, y: 10 } },
     climb: { fps: 3, loop: true, frames: [climb("stepA"), climb("stepB")], steps: [2, 2] }, // the walk turned: same stride
     hang: { fps: 1, loop: true, frames: [hang(0), hang(1)], durations: [1400, 1400] },
-    sleep: { fps: 1, loop: true, frames: [sleeping(Z[0]), sleeping(Z[1])], durations: [4000, 4000] },
+    sleep: { fps: 1, loop: true, frames: [sleeping(Z, 13, 2), sleeping(Z, 13, 0)], durations: [4000, 4000] },
     wake: { fps: 4, loop: false, frames: [sleeping(blank(1, 1)), stand("half", "squat"), standing] },
-    react: { fps: 2, loop: false, frames: [frame([stand("open", "stand", 2), 0, 0], [HEART, 13, 0]), standing], durations: [700, 300] },
+    // A hop, then a landing crouch under the heart, then up (C6b: standing or hopping, it leaves no room for a 5×4 heart).
+    react: { fps: 2, loop: false, frames: [stand("open", "stand", 2), frame([stand("open", "squat"), 0, 0], [HEART, 11, 1]), standing], durations: [250, 700, 250] },
     held: { fps: 2, loop: true, frames: [held, held.map((r, y) => (y > 10 ? r.slice(1) + "." : r))] },
     fall: { fps: 1, loop: true, frames: [stand("wide", "spread", 3)] },
     land: { fps: 6, loop: false, frames: [stand("closed", "squat"), standing] },
