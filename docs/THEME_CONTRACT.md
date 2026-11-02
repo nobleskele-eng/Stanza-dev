@@ -1,9 +1,9 @@
 # Stanza — Theme Contract
 
-**Contract version: 10**
-**Status:** live at v10. v1 froze 2026-09-22 (every item in "Remaining before this
+**Contract version: 11**
+**Status:** live at v11. v1 froze 2026-09-22 (every item in "Remaining before this
 contract can be frozen" below was checked off); v2 and v3 followed the same day, v4 and v5 the day after,
-v6 on 2026-10-17, v7 on 2026-10-18, v8 on 2026-10-29, and v9 and v10 on 2026-11-01, each in the same change as the code that needed it. Any further change to a part,
+v6 on 2026-10-17, v7 on 2026-10-18, v8 on 2026-10-29, and v9, v10 and v11 on 2026-11-01, each in the same change as the code that needed it. Any further change to a part,
 attribute or variable name is a version bump made in the same change as the code that
 needs it.
 
@@ -62,6 +62,11 @@ needs it.
   `beside`, from the card's `side` to that part. `data-pet-surface` gains `shelf`. On the shelf it covers no part
   (the app trims the shelf to where it fits). T1, T2, T4 and T5 declare one beside `.mp-source-badge`; T3 has none.
   Nothing renamed or removed: a v9 theme keeps working apart from its `contract` number, without a shelf.
+- **v11 (2026-11-01):** the companion rounds corners (M2 C3c). `data-pet-state` gains `over` (bent over a top corner
+  or a shelf's door) and `under` (bent under a bottom corner), each shown for a moment on the side it turns from or
+  onto (`data-pet-surface` `left | right`). At a top or bottom corner it's outside the card; at a shelf's door it
+  reaches over the card above the shelf, covering no part. Nothing renamed or removed: a v10 theme keeps working
+  apart from its `contract` number.
 
 This file is the source of truth for the class names, data attributes and CSS custom
 properties a Stanza theme may rely on. Most of it is checked by tests, not by hand:
@@ -201,7 +206,7 @@ customization layer.
 
 ---
 
-## Companion (v7–v10, opt-in, app-provided)
+## Companion (v7–v11, opt-in, app-provided)
 A small pixel-art creature (PLAN.md §4b, `docs/COMPANION.md`) that lives on the card's outline: it walks and sits on
 the top edge, climbs the sides and hangs under the bottom. A theme can give it a shelf inside the card (v10). It is **not theme art**:
 the app draws it, a theme only has to leave it room. It is **off until the owner turns it on** (right-click menu), and
@@ -212,8 +217,8 @@ while it is off none of these parts exist.
   (`z-index: 1`). It measures `.mp-window`'s box and the parts near its top, and follows them when they move.
 - **`.mp-companion`** — inside the layer: the creature. `aria-hidden`, `pointer-events: auto` and `data-no-drag` (v9: it
   takes the pointer, and pressing it never drags the window). Carries `data-pet-state` (`idle | walk | sit | sleep | wake |
-  react | land` on the top or the shelf, `climb` on a side, `hang` under the bottom, `held | fall` in the air) and
-  `data-pet-surface` (`top | right | bottom | left | shelf | air`). Its position is an inline `transform` set by the app.
+  react | land` on the top or the shelf, `climb` on a side, `hang` under the bottom, `over | under` rounding a corner
+  on a side (v11), `held | fall` in the air) and `data-pet-surface` (`top | right | bottom | left | shelf | air`). Its position is an inline `transform` set by the app.
 - **`.mp-pet-c1`…`.mp-pet-c8`** — the sprite's colour slots: one SVG `<path>` per colour, filled from `--mp-pet-N`.
 - **`--mp-pet-1`…`--mp-pet-8`** — app-provided, set inline on the sprite, from the chosen skin's palette. Not theme-authored
   and not editable: a palette is part of a skin, not of a theme.
@@ -226,7 +231,8 @@ What a theme can rely on:
   Its legs may hang over the card's top; it only sits where they cover none of the artwork, controls, text parts or source
   badge. Measured from the parts' real boxes, so a theme needs nothing declared to be safe.
 - On a side it is outside the card, touching it; under the bottom it hangs below the card, touching it. Off the top it
-  covers nothing of the card.
+  covers nothing of the card. Rounding a top or bottom corner (v11, `over` / `under`) it's bent round the corner from
+  outside, touching both edges; at a shelf's door, `over` reaches over the card above the shelf, covering no part.
 - It rides the outline: when the card's height or a part's box changes (state, T3's hover reveal) it re-measures.
 - It reacts only to playback state (playing, paused, a new track), never to the audio (D16). Off the top it holds still
   while the music is off. Under `prefers-reduced-motion` it holds still poses on the top.

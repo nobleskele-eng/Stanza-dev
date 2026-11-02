@@ -4,7 +4,7 @@ import { spriteBoxPx } from "./pixel";
 import { measureShelf } from "./measure";
 import { FLOOR_ANIMATIONS, carryPoint, edgeLength, landingFor, noSitRanges, placeAround, placeOnEdge, type Surface } from "./place";
 import { SKINS } from "./registry";
-import { anchorOf, type AnimationName, type Skin } from "./skin";
+import { anchorOf, animationOf, type AnimationName, type Skin } from "./skin";
 
 describe("companion placement", () => {
   it("fits whole anchor positions on an edge", () => {
@@ -48,7 +48,7 @@ describe("companion placement around the card (C3a)", () => {
   function pixels(skin: Skin, animation: AnimationName, surface: Surface, pos: number, facing: 1 | -1) {
     const at = placeAround(skin, animation, surface, pos, facing, px, top, card);
     const boxes: { left: number; top: number; right: number; bottom: number }[] = [];
-    for (const f of skin.animations[animation].frames)
+    for (const f of animationOf(skin, animation).frames)
       f.forEach((r, y) => {
         for (let x = 0; x < r.length; x++)
           if (r[x] !== ".") {
@@ -115,7 +115,7 @@ describe("companion placement in the pointer's hand (C4a)", () => {
     /** An animation's opaque pixels (every frame) as CSS-px boxes, for a sprite box at `at` (art px from the card). */
     const drawn = (skin: Skin, animation: AnimationName, at: { x: number; y: number }, mirrored: boolean) => {
       const boxes: { left: number; top: number; right: number; bottom: number }[] = [];
-      for (const f of skin.animations[animation].frames)
+      for (const f of animationOf(skin, animation).frames)
         f.forEach((r, y) => {
           for (let x = 0; x < r.length; x++)
             if (r[x] !== ".") {
@@ -364,4 +364,52 @@ describe("companion placement with a shelf (C5a)", () => {
       expect(landingFor(skin, air, 1, px, top, card, [art], null)).toEqual(landingFor(skin, air, 1, px, top, card, [art]));
     expect(landingFor(skin, { x: 10, y: 40 }, 1, px, top, null, [], shelf.edge).surface).toBe("top");
   });
+});
+
+describe("companion placement round a corner (C3c)", () => {
+  const card = { left: 56, top: 56, width: 248, height: 88 };
+  const top = { left: card.left, top: card.top, width: card.width };
+  const shelf = { left: card.left, top: card.top + 60, width: 80 };
+  /** The drawn pixels of a corner pose, CSS px boxes, as placed. */
+  const drawn = (skin: Skin, animation: "over" | "under", surface: Surface, pos: number, px: number, s = shelf) => {
+    const p = placeAround(skin, animation, surface, pos, 1, px, top, card, s);
+    return animationOf(skin, animation).frames.flatMap((f) =>
+      f.flatMap((r, y) =>
+        [...r].flatMap((c, x) => {
+          if (c === ".") return [];
+          const left = p.left + (p.mirrored ? skin.grid - 1 - x : x) * px;
+          return [{ left, top: p.top + y * px, right: left + px, bottom: p.top + (y + 1) * px }];
+        }),
+      ),
+    );
+  };
+  const E = 1e-6;
+  const inside = (b: { left: number; top: number; right: number; bottom: number }) =>
+    b.left < card.left + card.width - E && b.right > card.left + E && b.top < card.top + card.height - E && b.bottom > card.top + E;
+
+  for (const skin of Object.values(SKINS).filter((s) => s.animations.over && s.animations.under))
+    for (const px of [2, 2.4])
+      it(`${skin.id} at ${px} px: bent round each corner from outside, a foot on each edge`, () => {
+        const right = card.left + card.width;
+        const bottom = card.top + card.height;
+        for (const side of ["left", "right"] as const) {
+          const wall = side === "left" ? card.left : right;
+          const onWall = (b: { left: number; right: number }) => Math.abs((side === "left" ? b.right : b.left) - wall) < E;
+          const past = (b: { left: number; right: number }) => (side === "left" ? b.left >= card.left - E : b.right <= right + E);
+          // Over the top corner: nothing on the card; a pixel resting on the top beside the corner, one against the side.
+          const over = drawn(skin, "over", side, 0, px);
+          expect(over.filter(inside), `${side} over: on the card`).toEqual([]);
+          expect(over.some((b) => Math.abs(b.bottom - card.top) < E && past(b)), `${side} over: a foot on the top`).toBe(true);
+          expect(over.some((b) => onWall(b) && b.top >= card.top - E), `${side} over: a foot on the side`).toBe(true);
+          // Under the bottom corner: nothing on the card; a pixel under the bottom beside the corner, one against the side.
+          const under = drawn(skin, "under", side, 43, px);
+          expect(under.filter(inside), `${side} under: on the card`).toEqual([]);
+          expect(under.some((b) => Math.abs(b.top - bottom) < E && past(b)), `${side} under: a foot under the bottom`).toBe(true);
+          expect(under.some((b) => onWall(b) && b.bottom <= bottom + E), `${side} under: a foot on the side`).toBe(true);
+        }
+        // At a shelf's door: level with the shelf, a foot on its line inside the card and one against the side.
+        const door = drawn(skin, "over", "left", 20, px);
+        expect(door.some((b) => Math.abs(b.bottom - shelf.top) < E && b.left >= card.left - E), "door: a foot on the shelf").toBe(true);
+        expect(door.some((b) => Math.abs(b.right - card.left) < E && b.top >= shelf.top - E), "door: a foot on the side").toBe(true);
+      });
 });

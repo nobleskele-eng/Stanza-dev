@@ -254,6 +254,9 @@ async function expectAround(page: Page, section = "around") {
     if (p.surface === "bottom") {
       check(p.state === "hang", "not hanging");
       check(near(min((b) => b.top), p.card.bottom), "not touching the bottom from below");
+    } else if (p.state === "over" || p.state === "under") {
+      // Rounding a corner (C3c): the skin validator keeps the pose off the card's side of the corner.
+      continue;
     } else {
       check(p.state === "climb", "not climbing");
       check(p.surface === "left" ? near(max((b) => b.right), p.card.left) : near(min((b) => b.left), p.card.right), "not touching the side");

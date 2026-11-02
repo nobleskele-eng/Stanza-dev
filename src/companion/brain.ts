@@ -15,7 +15,7 @@
 // Being carried moves it with the pointer, which isn't one of its own changes: the budget doesn't count those.
 import type { Door } from "./measure";
 import type { Surface } from "./place";
-import { MAX_STEP, REQUIRED_ANIMATIONS, frameMs, stepPx, type AnimationName, type Skin } from "./skin";
+import { MAX_STEP, REQUIRED_ANIMATIONS, animationOf, frameMs, stepPx, type AnimationName, type Skin } from "./skin";
 
 /** Every animation is a state of the brain (C4a added the last three: held, fall, land). */
 export type Mode = AnimationName;
@@ -74,6 +74,14 @@ export interface World {
   };
 }
 
+/** Where a corner leads (C3c): the pose it takes once the corner pose has played. */
+export interface Turn {
+  surface: Surface;
+  x: number;
+  facing: 1 | -1;
+  mode: "climb" | "hang" | "idle";
+}
+
 export interface Brain {
   mode: Mode;
   frame: number;
@@ -99,6 +107,8 @@ export interface Brain {
    * its next step goes (art px; it speeds up as it falls, and starts slowly again after each turn).
    */
   fall: { to: Landing; path: readonly Point[]; step: number } | null;
+  /** Rounding a corner (C3c, `over` or `under`): where it goes once the corner pose has played. */
+  after: Turn | null;
   /** Frames are held: nothing changes until the music or the edge does. */
   still: boolean;
   /** When the music stopped (it falls asleep DROWSY_MS later); null while playing. */
@@ -255,6 +265,7 @@ class Draft {
    */
   rest(now: number) {
     const { playing, reducedMotion } = this.world;
+    this.b.after = null;
     if (!(this.b.surface === "shelf" && this.world.shelf && this.world.around && !reducedMotion)) this.toTop(now);
     this.b.loops = 0;
     this.b.still = reducedMotion;
@@ -322,11 +333,30 @@ class Draft {
     return { target: this.b.x + facing * Math.min(moved, distance), facing };
   }
   /** Down a side from the top's end it's facing (C3a): it clings at the side's top before its first leg. */
-  turnDown(now: number) {
+  /**
+   * Rounds a corner (C3c): the corner pose (`over` or `under`) on `side` at `x`, played once, then `to`. Without
+   * the pose, or with no room in the budget for it, straight to `to` in one change, as before.
+   */
+  turn(now: number, pose: "over" | "under", side: Surface, x: number, to: Turn) {
+    const anim = this.skin.animations[pose];
+    if (!anim || this.affordableAt(now, anim.frames.length) > now) return this.arrive(now, to);
+    this.b.after = to;
+    this.b.holding = false;
     this.b.loops = 0;
-    this.b.holding = true;
-    this.b.until = now + this.between(HOLD_MS);
-    this.show(now, { surface: this.b.facing < 0 ? "left" : "right", x: 0, facing: 1, mode: "climb", frame: 0 });
+    this.show(now, { surface: side, x, facing: to.facing, mode: pose, frame: 0 });
+  }
+  /** Round the corner: on where it was going, starting that mode afresh (a climb clings first). */
+  arrive(now: number, to: Turn) {
+    this.b.after = null;
+    if (to.surface === "shelf" && !this.world.shelf) return this.rest(now); // the shelf went away meanwhile
+    this.b.loops = 0;
+    this.b.holding = to.mode === "climb";
+    this.b.until = now + this.between(to.mode === "climb" ? HOLD_MS : to.mode === "hang" ? HANG_MS : IDLE_MS);
+    this.show(now, { surface: to.surface, x: to.x, facing: to.facing, mode: to.mode, frame: 0 });
+  }
+  turnDown(now: number) {
+    const side: Surface = this.b.facing < 0 ? "left" : "right";
+    this.turn(now, "over", side, 0, { surface: side, x: 0, facing: 1, mode: "climb" });
   }
   /** Clinging is over: climb the next leg if the budget covers it, else try again a little later. */
   climbLeg(now: number) {
@@ -354,15 +384,11 @@ class Draft {
     const left = surface === "left";
     this.b.loops = 0;
     if (facing > 0 && x === lengthOf(this.world, surface) - 1) {
-      this.b.holding = false;
-      this.b.until = now + this.between(HANG_MS);
       const bottomEnd = lengthOf(this.world, "bottom") - 1;
-      this.show(now, { surface: "bottom", x: left ? 0 : bottomEnd, facing: left ? 1 : -1, mode: "hang", frame: 0 });
+      this.turn(now, "under", surface, x, { surface: "bottom", x: left ? 0 : bottomEnd, facing: left ? 1 : -1, mode: "hang" });
     } else if (facing < 0 && x === 0) {
-      this.b.holding = false;
-      this.b.until = now + this.between(IDLE_MS);
       const topEnd = lengthOf(this.world, "top") - 1;
-      this.show(now, { surface: "top", x: left ? 0 : topEnd, facing: left ? 1 : -1, mode: "idle", frame: 0 });
+      this.turn(now, "over", surface, 0, { surface: "top", x: left ? 0 : topEnd, facing: left ? 1 : -1, mode: "idle" });
     } else if (x === this.doorOn(surface) && this.rand() < STEP_IN_CHANCE) {
       this.stepIn(now);
     } else {
@@ -374,10 +400,8 @@ class Draft {
   /** Level with a shelf's door on a climb (C5a): in onto the shelf's end there, facing along it. */
   stepIn(now: number) {
     const left = this.b.surface === "left";
-    this.b.holding = false;
-    this.b.loops = 0;
-    this.b.until = now + this.between(IDLE_MS);
-    this.show(now, { surface: "shelf", x: left ? 0 : lengthOf(this.world, "shelf") - 1, facing: left ? 1 : -1, mode: "idle", frame: 0 });
+    const to: Turn = { surface: "shelf", x: left ? 0 : lengthOf(this.world, "shelf") - 1, facing: left ? 1 : -1, mode: "idle" };
+    this.turn(now, "over", this.b.surface, this.b.x, to);
   }
   /** At a shelf's door (C5a): out onto that side, clinging there before it climbs on, up or down. */
   stepOut(now: number) {
@@ -385,18 +409,13 @@ class Draft {
     const last = lengthOf(this.world, side) - 1;
     const x = this.doorOn(side) ?? 0;
     const down = x === 0 ? true : x === last ? false : this.rand() < 0.5;
-    this.b.loops = 0;
-    this.b.holding = true;
-    this.b.until = now + this.between(HOLD_MS);
-    this.show(now, { surface: side, x, facing: down ? 1 : -1, mode: "climb", frame: 0 });
+    this.turn(now, "over", side, x, { surface: side, x, facing: down ? 1 : -1, mode: "climb" });
   }
   /** Done hanging: back up the side it came down. */
   leaveBottom(now: number) {
     const side: Surface = this.b.x < lengthOf(this.world, "bottom") / 2 ? "left" : "right";
-    this.b.loops = 0;
-    this.b.holding = true;
-    this.b.until = now + this.between(HOLD_MS);
-    this.show(now, { surface: side, x: lengthOf(this.world, side) - 1, facing: -1, mode: "climb", frame: 0 });
+    const last = lengthOf(this.world, side) - 1;
+    this.turn(now, "under", side, last, { surface: side, x: last, facing: -1, mode: "climb" });
   }
   /**
    * One step of a fall: it speeds up as it goes. Reaching a turn (it hit the artwork, or it's under the card), it
@@ -451,8 +470,10 @@ class Draft {
   /** Advances the current mode by one frame, or ends it. */
   nextFrame(now: number) {
     const { mode, frame } = this.b;
-    const anim = this.skin.animations[mode];
+    const anim = animationOf(this.skin, mode);
     const last = frame === anim.frames.length - 1;
+    // A corner pose plays once, then on to where it was going (C3c).
+    if (last && (mode === "over" || mode === "under")) return this.b.after ? this.arrive(now, this.b.after) : this.rest(now);
     // Wake, react and land play once. A climb always cycles: its frames are what move it.
     if (last && !anim.loop && mode !== "climb") return this.rest(now);
     const next = last ? 0 : frame + 1;
@@ -487,7 +508,7 @@ function nextDue(b: Brain, skin: Skin, world: World): { at: number; kind: DueKin
   const candidates: [number, DueKind][] = [];
   if (AWAKE.includes(b.mode) && !world.playing && b.quietSince !== null) candidates.push([b.quietSince + DROWSY_MS, "drowsy"]);
   if (!world.reducedMotion && !b.still) {
-    const anim = skin.animations[b.mode];
+    const anim = animationOf(skin, b.mode);
     const frameEnd = b.frameAt + frameMs(anim, b.frame);
     const moving = b.mode === "walk" || (b.mode === "climb" && !b.holding);
     if (moving && b.x === b.target) candidates.push([frameEnd, "arrive"]);
@@ -530,6 +551,7 @@ export function createBrain(skin: Skin, world: World, now: number, seed: number)
       loops: 0,
       air: null,
       fall: null,
+      after: null,
       still: false,
       quietSince: null,
       rng: seed >>> 0,
@@ -595,7 +617,8 @@ export function setWorld(b: Brain, skin: Skin, prev: World, world: World, now: n
   if (!b.air && d.clampX(b.x) !== b.x) d.show(now, { x: d.clampX(b.x) });
   // Reduced motion puts it back on the top in a still pose; so does losing the outline or the shelf it was on. Falling,
   // it lands now (settle() rests it on the top). Carried, it stays in the pointer's hand.
-  if (world.reducedMotion !== prev.reducedMotion || (b.surface !== "top" && !world.around) || (b.surface === "shelf" && !world.shelf)) {
+  const shelfGone = (b.surface === "shelf" || b.after?.surface === "shelf") && !world.shelf;
+  if (world.reducedMotion !== prev.reducedMotion || (b.surface !== "top" && !world.around) || shelfGone) {
     if (b.fall) {
       d.settle(now, b.fall.to);
       return d.b;
@@ -619,9 +642,11 @@ export function setWorld(b: Brain, skin: Skin, prev: World, world: World, now: n
     }
   } else if (!world.playing && prev.playing) {
     d.b.quietSince = now;
+    // Rounding a corner (C3c), it gets there first.
+    if (d.b.after) d.arrive(now, d.b.after);
     // Off a floor it holds still where it is: clinging in a climb's rest frame, or in the hang's (C3a).
-    if (!isFloor(b.surface) && !b.air) {
-      if (b.mode === "climb") d.b.holding = true;
+    if (!isFloor(d.b.surface) && !d.b.air) {
+      if (d.b.mode === "climb") d.b.holding = true;
       d.show(now, { frame: 0 });
     }
   }
@@ -663,6 +688,7 @@ export function pickUp(b: Brain, skin: Skin, world: World, now: number, at: Poin
   const d = new Draft(b, skin, world);
   d.b.holding = false;
   d.b.fall = null;
+  d.b.after = null;
   d.b.loops = 0;
   d.b.still = false;
   d.show(now, { mode: "held", frame: 0, air: at });

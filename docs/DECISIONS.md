@@ -3673,3 +3673,71 @@ one of the skin layers (PLAN.md §4b), so nothing structural changes.
   - **Not run:** the real exe (only skin data changed, and the production player draws it as before); `cargo test`.
 - **Ready for your review:** `?lab=companion`, or in the player: pause the music to see the z, click it for the
   heart.
+
+## 2026-11-01 — M2 C3c: corner art, each creature bent round the corner; contract v11
+
+- **Before:** at a corner the creature switched surfaces in one change. I showed you each species before and after
+  its top and bottom corners.
+- **Your calls (asked before building):**
+  - **Bent round it, new art,** rather than a hop over it in the existing fall pose.
+  - **Everywhere it turns:** the top corners, the bottom corners and the shelf doors.
+- **The skin format** gains two optional animations, still format 2 (a skin without them keeps the one-change switch,
+  as the test dummy does):
+  - `over`: bent over a corner it stands on (the top corners, and a shelf's door, the same kind of turn from a wall
+    to a floor).
+  - `under`: bent under a bottom corner.
+  - Each needs its own anchor, the art pixel just outside the corner diagonally. The validator rejects any opaque pixel
+    on the card's side of it (`corner-invalid`).
+- **The art** (`scripts/companions/*.mjs`, for your review):
+  - **pilcrow:** the standing ¶ turned 45° about its feet. I turned it with a small supersampling script, then checked
+    it by eye; the eye survived the turn. Its `under` is the same upside down, as its hang is.
+  - **bookworm:** an L wrapped round the corner, head first.
+  - **cassette:** a 45° turn of its 14×10 shell needs about 17 pixels, more than the 16-pixel grid. So it's the climb's
+    body with one leg hooked round the corner: over the top edge, or under the bottom edge.
+- **The brain:** every corner move goes through `turn()`:
+  - It shows the pose for its frame (300 ms), then `arrive()` starts where it was going: clinging, hanging or idle.
+  - Without the pose, or when the change budget has no room for it, it arrives at once.
+  - Music stopping mid-corner: it arrives first, then holds still as anywhere else.
+  - Reduced motion, losing the outline or the shelf, or being picked up mid-corner: back on the top, or in the hand.
+- **Placement:** `placeAround` puts the pose on the side, its anchor at the corner: the top corner at the side's top
+  end, the bottom corner at its bottom end, and a door level with the shelf. `measureShelf` closes a door where
+  `over` would cover a part.
+- **Contract v11:** `data-pet-state` gains `over` and `under`, shown on the side they turn from or onto. All five themes
+  are at `contract: 11`. Saved variants made at v10 reset once (the theme stays), as at every bump; yours was the
+  Default with no overrides.
+- **Surprise (my own art bug):** the pilcrow's feet first floated one pixel off both edges. I'd set the anchor one pixel
+  along the diagonal from where the turned feet ended. Found while writing the "a foot on each edge" check, before any
+  test existed for it. Fixed by moving the anchor to (10, 10), and its `under` anchor to (10, 5). The new
+  `place.test.ts` check fails with the old anchor.
+- **Unchanged without the poses, checked change for change.** The C6b brain (from git) and the new one, side by side:
+  - for the test dummy, and the three species with their corner poses removed;
+  - on the top-only, around and shelf worlds, 4 seeds × an hour each, with music, track, click, drop and
+    reduced-motion events;
+  - 83,429 states identical, apart from the new `after` field. The comparison was temporary.
+- **Tests:**
+  - Brain, per species over three seeds and an hour each:
+    - every corner pose is shown for its frame, then becomes where it was going;
+    - more than 9 in 10 changes of surface go through one, and the rest are budget skips;
+    - the budget holds.
+  - Brain, other cases:
+    - the dummy never shows one;
+    - music stopping or reduced motion mid-corner;
+    - a shelf's door is entered and left through `over` only;
+    - picked up mid-corner.
+  - Placement: every species at both scalings, on both sides and at a door, is bent round from outside with a foot on
+    each edge.
+  - `measureShelf` closes a door that only `over` would block.
+  - The lab spec checks every corner pose's crispness at 100–200%, and the scenes show them.
+  - The e2e checks allow `over` and `under` on a side.
+- **Checks run (Windows):**
+  - `npx tsc --noEmit`: clean.
+  - `npx vitest run`: 22 files, 331 passed (15 new: corners in the brain, placement and `measureShelf`).
+  - `npm run build`: passed, check-fixtures-excluded OK.
+  - `npx playwright test`: 814 passed, 24 skipped (Chromium + WebKit). That includes:
+    - the lab's crispness check of every corner pose;
+    - every theme's time-lapse, with corner poses in the per-step checks.
+  - The art reviewed at 8× and 10×, in context at both corners.
+  - **Not run:** the real exe (the player draws the new poses like any other; the production e2e covers every theme);
+    `cargo test` (no Rust changed).
+- **Ready for your review:** `?lab=companion` (the corner poses at the right-hand corners of each scene, and live on
+  the around and shelf cards), and the review sheet I sent.

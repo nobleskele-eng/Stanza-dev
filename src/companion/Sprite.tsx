@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { artPixelPx, spriteBoxPx } from "./pixel";
-import { frameMs, type Skin, type SkinAnimation } from "./skin";
+import { animationOf, frameMs, type Skin, type SkinAnimation } from "./skin";
 import { frameToPaths } from "./spritePaths";
 import "./companion.css";
 
@@ -61,7 +61,7 @@ export function Sprite({
   mirrored?: boolean;
   className?: string;
 }) {
-  const frames = skin.animations[animation].frames;
+  const frames = animationOf(skin, animation).frames;
   const paths = useMemo(() => frameToPaths(frames[frame % frames.length]), [frames, frame]);
   const px = pixel ?? artPixelPx(dpr);
   const box = spriteBoxPx(skin.grid, px);

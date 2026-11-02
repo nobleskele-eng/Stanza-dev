@@ -39,7 +39,7 @@ const PART_SELECTOR = [
   ".mp-artwork", ".mp-meta", ".mp-progress", ".mp-time-current", ".mp-time-total", ".mp-controls",
   ".mp-volume-wrap", ".mp-link-out", ".mp-source-badge", ".mp-empty", ".mp-error",
 ].join(", ");
-const PET_STATES = ["idle", "walk", "sit", "sleep", "wake", "react", "climb", "hang", "held", "fall", "land"]; // contract v9, C4b
+const PET_STATES = ["idle", "walk", "sit", "sleep", "wake", "react", "climb", "hang", "held", "fall", "land", "over", "under"]; // contract v11, C3c
 const PET_SURFACES = ["top", "right", "bottom", "left", "shelf", "air"]; // contract v10, C5b
 // Where the fake says the window is (physical px, scale 1), so a move reads as a plain offset from it.
 const AT = { x: 100, y: 300 };
@@ -468,8 +468,10 @@ async function timeLapse(page: Page, theme: string, skin: string) {
     for (const p of s.pixels) {
       if (p.left < -EPS || p.top < -EPS || p.right > view.width + EPS || p.bottom > view.height + EPS) wrong.add("a pixel outside the window");
       for (const part of s.parts) if ((!air || /\bmp-artwork\b/.test(part.part)) && overlaps(p, part)) wrong.add(`a pixel over ${part.part}`);
-      // On the shelf (contract v10) it's on the card by design, and still over no part.
-      if (s.surface !== "top" && s.surface !== "shelf" && !air && overlaps(p, s.card)) wrong.add("a pixel on the card while off its top");
+      // On the shelf (contract v10) it's on the card by design, and still over no part; so is `over` at a shelf's door
+      // (v11; at the top corners the skin validator keeps it off the card).
+      const onCardOk = s.surface === "top" || s.surface === "shelf" || s.state === "over";
+      if (!onCardOk && !air && overlaps(p, s.card)) wrong.add("a pixel on the card while off its top");
     }
     expect([...wrong], `${theme} × ${skin}: ${s.state} on ${s.surface}, t=${t} ms`).toEqual([]);
     return s;

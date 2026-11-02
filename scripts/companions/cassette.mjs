@@ -62,6 +62,13 @@ function hang(dx) {
   return f;
 }
 
+// Round a corner (C3c): its shell can't bend, so it's the climb's body with one leg hooked round the corner. Over the
+// top corner (the bottom-right of pixel (14, 6)) the upper leg reaches over onto the top edge while the lower one
+// grips the side; under the bottom corner (the top-right of pixel (14, 10)) the lower leg hooks under the card.
+const climbBody = rotCCW(stand()).map((r) => r.slice(0, 12) + "....");
+const OVER = frame([climbBody, 0, 0], [art(["2...", ".222", "...2"]), 12, 4], [art(["222", "..2"]), 12, 11]);
+const UNDER = frame([climbBody, 0, 0], [art(["2..", ".22", "..2"]), 12, 4], [art(["...2", "2222"]), 12, 10]);
+
 export const cassette = {
   id: "cassette",
   name: "[NEEDS COPY]",
@@ -85,5 +92,7 @@ export const cassette = {
     held: { fps: 2, loop: true, frames: [stand("wide", "dangle", 1), stand("wide", "dangle", 1).map((r, y) => (y > 11 ? r.slice(1) + "." : r))] },
     fall: { fps: 1, loop: true, frames: [stand("wide", "spread", 3)] },
     land: { fps: 6, loop: false, frames: [stand("closed", "tuck"), stand()] },
+    over: { fps: 3, loop: false, frames: [OVER], durations: [300], anchor: { x: 14, y: 6 } },
+    under: { fps: 3, loop: false, frames: [UNDER], durations: [300], anchor: { x: 14, y: 10 } },
   },
 };

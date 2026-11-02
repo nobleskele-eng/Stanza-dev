@@ -67,6 +67,28 @@ const climb = (legs) => rotCCW(stand("open", legs));
 const sleeping = (z, zx = 13, zy = 2) => frame([body("closed"), X, 6], [LEGS.tuck, X, 13], [z, zx, zy]);
 const held = stand("wide", "dangle", 1);
 
+// Over a corner (C3c): the standing ¶ turned 45° about its feet (supersampled, then checked by eye), one foot on the
+// top edge and one against the side. The corner is the bottom-right of pixel (10, 10). Under the bottom corner it's
+// the same, upside down, as its hang is (the corner then the top-right of pixel (10, 5)).
+const OVER = art([
+  "................",
+  "................",
+  ".....12.........",
+  "....1222........",
+  "...11.222.......",
+  "..111..222......",
+  ".11111..222.....",
+  "1134111..222....",
+  "11111111..222...",
+  "111111111..222..",
+  "111112..11..2...",
+  "22222....11.....",
+  "..........1.....",
+  "................",
+  "................",
+  "................",
+]);
+
 export const pilcrow = {
   id: "pilcrow",
   name: "[NEEDS COPY]",
@@ -91,5 +113,7 @@ export const pilcrow = {
     held: { fps: 2, loop: true, frames: [held, held.map((r, y) => (y > 10 ? r.slice(1) + "." : r))] },
     fall: { fps: 1, loop: true, frames: [stand("wide", "spread", 3)] },
     land: { fps: 6, loop: false, frames: [stand("closed", "squat"), standing] },
+    over: { fps: 3, loop: false, frames: [OVER], durations: [300], anchor: { x: 10, y: 10 } },
+    under: { fps: 3, loop: false, frames: [flipY(OVER)], durations: [300], anchor: { x: 10, y: 5 } },
   },
 };

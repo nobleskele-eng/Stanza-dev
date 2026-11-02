@@ -1,7 +1,7 @@
 // Where the companion goes on the card's outline (PLAN.md §4b, M2 C2, C3) and on a shelf inside it (C5a), and where it
 // goes in the pointer's hand and when it's let go (C4a). Pure: CSS px and art px in, CSS px or art px out.
 import type { Landing, Point } from "./brain";
-import { anchorOf, type AnimationName, type Skin } from "./skin";
+import { anchorOf, animationOf, type AnimationName, type Skin } from "./skin";
 
 /** An edge in its container's CSS px: the line the creature stands on, from `left` for `width` px. */
 export interface EdgeBox {
@@ -71,6 +71,10 @@ export const FLOOR_ANIMATIONS: readonly AnimationName[] = ["idle", "walk", "sit"
  * `placeOnEdge` on `top`, and the shelf (C5a) is `placeOnEdge` on `shelf`. The bottom runs from the card's left like
  * the top; the hang anchor's top edge touches it. The sides run from the card's top down; the climb anchor's right edge
  * touches the left side, and the art is mirrored on the right side, whichever way it climbs.
+ *
+ * A corner pose (C3c, `over` / `under`) is placed on the side it turns from or onto, its anchor pixel just outside
+ * the corner, diagonally: `over` at the side's top end is at the top corner, anywhere else at a shelf's door (level
+ * with the shelf); `under` is at the bottom corner. Drawn for the left side, mirrored on the right.
  */
 export function placeAround(
   skin: Skin,
@@ -84,6 +88,13 @@ export function placeAround(
   shelf?: EdgeBox,
 ): { left: number; top: number; mirrored: boolean } {
   const a = anchorOf(skin, animation);
+  if (animation === "over" || animation === "under") {
+    const right = surface === "right";
+    const left = right ? card.left + card.width - (skin.grid - 1 - a.x) * px : card.left - (a.x + 1) * px;
+    if (animation === "under") return { left, top: card.top + card.height - a.y * px, mirrored: right };
+    const line = pos === 0 || !shelf ? card.top : shelf.top;
+    return { left, top: line - (a.y + 1) * px, mirrored: right };
+  }
   if (surface === "top" || surface === "shelf")
     return { ...placeOnEdge(skin, animation, pos, facing, px, surface === "shelf" && shelf ? shelf : top), mirrored: facing < 0 };
   if (surface === "bottom") {
@@ -99,7 +110,7 @@ export function placeAround(
 export function opaqueBounds(skin: Skin, animations: readonly AnimationName[], mirrored: boolean) {
   let [x0, y0, x1, y1] = [Infinity, Infinity, -Infinity, -Infinity];
   for (const name of animations)
-    for (const f of skin.animations[name].frames)
+    for (const f of animationOf(skin, name).frames)
       f.forEach((r, y) => {
         for (let x = 0; x < r.length; x++)
           if (r[x] !== ".") {

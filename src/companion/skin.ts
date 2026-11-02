@@ -6,7 +6,17 @@ export const SKIN_FORMAT = 2;
 
 /** Every skin must have all of these (the C2 brain's states). */
 export const REQUIRED_ANIMATIONS = ["idle", "walk", "sit", "climb", "hang", "sleep", "wake", "react", "held", "fall", "land"] as const;
-export type AnimationName = (typeof REQUIRED_ANIMATIONS)[number];
+/**
+ * A skin may have these (C3c): the corner poses, played once at a corner between two surfaces. `over` is bent over a
+ * corner it stands on (a top corner, or a shelf's door); `under` is bent under a bottom corner. Drawn for the card's
+ * left side (mirrored on the right). Each needs its own anchor: the art pixel just outside the corner, diagonally
+ * (`over`: above-left of the card's corner pixel; `under`: below-left), and no opaque pixel may fall on the card's side
+ * of it. A skin without them switches surfaces at a corner in one change, as before.
+ */
+export const OPTIONAL_ANIMATIONS = ["over", "under"] as const;
+export type RequiredAnimation = (typeof REQUIRED_ANIMATIONS)[number];
+export type OptionalAnimation = (typeof OPTIONAL_ANIMATIONS)[number];
+export type AnimationName = RequiredAnimation | OptionalAnimation;
 
 /** Palette slots per skin ("1"–"8" in frames). */
 export const MAX_SLOTS = 8;
@@ -55,7 +65,14 @@ export interface Skin {
   anchor: Anchor;
   /** Named palettes; each is the colours of slots 1..n. Must include "default". */
   palettes: Record<string, string[]>;
-  animations: Record<AnimationName, SkinAnimation>;
+  animations: Record<RequiredAnimation, SkinAnimation> & Partial<Record<OptionalAnimation, SkinAnimation>>;
+}
+
+/** An animation the skin has; throws for an optional one it lacks (callers check `skin.animations[name]` first). */
+export function animationOf(skin: Skin, name: AnimationName): SkinAnimation {
+  const anim = skin.animations[name];
+  if (!anim) throw new Error(`skin ${skin.id} has no ${name}`);
+  return anim;
 }
 
 export type SkinIssueCode =
@@ -78,7 +95,8 @@ export type SkinIssueCode =
   | "rows-invalid"
   | "row-length"
   | "pixel-invalid"
-  | "slot-out-of-range";
+  | "slot-out-of-range"
+  | "corner-invalid";
 
 export interface SkinIssue {
   code: SkinIssueCode;
@@ -136,9 +154,10 @@ export function validateSkin(raw: unknown): { skin: Skin | null; issues: SkinIss
   if ("animations" in raw) {
     if (!isObject(raw.animations)) add("missing", "animations");
     else {
-      for (const name of Object.keys(raw.animations))
-        if (!(REQUIRED_ANIMATIONS as readonly string[]).includes(name)) add("unknown-key", `animations.${name}`);
-      for (const name of REQUIRED_ANIMATIONS) {
+      const known = [...REQUIRED_ANIMATIONS, ...OPTIONAL_ANIMATIONS] as readonly string[];
+      for (const name of Object.keys(raw.animations)) if (!known.includes(name)) add("unknown-key", `animations.${name}`);
+      const optional = OPTIONAL_ANIMATIONS.filter((name) => name in (raw.animations as object));
+      for (const name of [...REQUIRED_ANIMATIONS, ...optional]) {
         const path = `animations.${name}`;
         const anim = raw.animations[name];
         if (!isObject(anim)) {
@@ -165,11 +184,29 @@ export function validateSkin(raw: unknown): { skin: Skin | null; issues: SkinIss
           if (!ok) add("steps-invalid", `${path}.steps`);
         }
         if ("anchor" in anim && !isAnchor(anim.anchor, grid)) add("anchor-invalid", `${path}.anchor`);
+        // A corner pose places by its own anchor, and never on the card's side of it (C3c).
+        if (name === "over" || name === "under") {
+          if (!("anchor" in anim)) add("missing", `${path}.anchor`);
+          else if (isAnchor(anim.anchor, grid) && !cornerClear(frames, anim.anchor as Anchor, name)) add("corner-invalid", path);
+        }
       }
     }
   }
 
   return { skin: issues.length ? null : (raw as unknown as Skin), issues };
+}
+
+/** No opaque pixel of a corner pose on the card's side of its anchor: below-right (`over`) or above-right (`under`). */
+function cornerClear(frames: unknown[], a: Anchor, name: "over" | "under"): boolean {
+  return frames.every(
+    (frame) =>
+      !Array.isArray(frame) ||
+      frame.every(
+        (row, y) =>
+          typeof row !== "string" ||
+          [...row].every((c, x) => c === "." || x <= a.x || (name === "over" ? y <= a.y : y >= a.y)),
+      ),
+  );
 }
 
 function checkFrame(frame: unknown, grid: number | null, slots: number, path: string, add: (c: SkinIssueCode, p: string) => void) {
@@ -227,10 +264,10 @@ function opaqueBounds(frames: readonly (readonly string[])[]) {
  * default the skin anchor's column at the top-most opaque row (M2 C3a).
  */
 export function anchorOf(skin: Skin, name: AnimationName): Anchor {
-  const own = skin.animations[name].anchor;
+  const own = animationOf(skin, name).anchor;
   if (own) return own;
   if (name !== "climb" && name !== "hang") return skin.anchor;
-  const { top, right } = opaqueBounds(skin.animations[name].frames);
+  const { top, right } = opaqueBounds(animationOf(skin, name).frames);
   if (top === Infinity) return skin.anchor; // an empty animation: nothing touches anything
   return name === "climb" ? { x: right, y: top } : { x: skin.anchor.x, y: top };
 }

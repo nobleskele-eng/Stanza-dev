@@ -69,6 +69,46 @@ const HEART = art([".5.5.", "55555", ".555.", "..5.."]);
 // The sleep z: one legible glyph in both frames, drifting up between them (C6b: a 2-wide second z read as a "c").
 const Z = art(["555", "..5", ".5.", "555"]);
 
+// Round a corner (C3c): an L wrapped round it, head first. Over the top corner (the corner is the bottom-right of
+// pixel (11, 11)) its tail lies along the top and its head goes down the side; under the bottom corner (the top-right
+// of pixel (11, 4)) its tail is up the side and its head goes along under the card.
+const OVER = paper([
+  "................",
+  "................",
+  "................",
+  "................",
+  "................",
+  "................",
+  "................",
+  "................",
+  ".........######.",
+  "........########",
+  "........########",
+  "........#######.",
+  "........####....",
+  "........####....",
+  "........#e##....",
+  ".........##.....",
+]);
+const UNDER = paper([
+  ".........##.....",
+  "........####....",
+  "........####....",
+  "........####....",
+  "........#######.",
+  "........########",
+  "........#####e##",
+  ".........######.",
+  "................",
+  "................",
+  "................",
+  "................",
+  "................",
+  "................",
+  "................",
+  "................",
+]);
+
 /** Feet on row 14 (the anchor row), left edge at x. */
 const ground = (s, x) => frame([s, x, 15 - s.length]);
 const hang = (dx) => frame([J, 3 + dx, 2], [art(["6"]), 9, 0], [art(["6"]), 9 + dx, 1]);
@@ -103,5 +143,7 @@ export const bookworm = {
     held: { fps: 2, loop: true, frames: [held(-1), held(1)] },
     fall: { fps: 1, loop: true, frames: [ground(U, 3)] },
     land: { fps: 6, loop: false, frames: [ground(DASH, 1), ground(R(), 4)] },
+    over: { fps: 3, loop: false, frames: [OVER], durations: [300], anchor: { x: 11, y: 11 } },
+    under: { fps: 3, loop: false, frames: [UNDER], durations: [300], anchor: { x: 11, y: 4 } },
   },
 };

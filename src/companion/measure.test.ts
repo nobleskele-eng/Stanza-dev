@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { measureOutline, measureShelf, shelfLine, type Box } from "./measure";
 import { FLOOR_ANIMATIONS, placeOnEdge, sitDepth } from "./place";
 import { SKINS } from "./registry";
+import { animationOf } from "./skin";
 
 const card: Box = { left: 40, top: 100, right: 340, bottom: 500 };
 const box = (left: number, top: number, right: number, bottom: number): Box => ({ left, top, right, bottom });
@@ -49,7 +50,7 @@ describe.each(Object.entries(SKINS))("measureShelf · %s", (_id, skin) => {
       for (const animation of FLOOR_ANIMATIONS)
         for (const facing of [1, -1] as const) {
           const at = placeOnEdge(skin, animation, s, facing, px, shelf);
-          for (const f of skin.animations[animation].frames)
+          for (const f of animationOf(skin, animation).frames)
             f.forEach((r, y) => {
               for (let x = 0; x < r.length; x++)
                 if (r[x] !== ".") {
@@ -101,5 +102,44 @@ describe("shelfLine (contract v10)", () => {
     expect(shelfLine("left", card, { ...badge, right: badge.left })).toBeNull();
     expect(shelfLine("left", card, { ...badge, left: 40 })).toBeNull();
     expect(shelfLine("right", card, { ...badge, right: 320 })).toBeNull();
+  });
+});
+
+describe("measureShelf and the corner pose at a door (C3c)", () => {
+  const px = 2;
+  const card: Box = { left: 40, top: 100, right: 340, bottom: 400 };
+  const line = { left: 40, top: 300, width: 120 };
+  /** Every pixel (CSS px boxes) a set of poses puts down. */
+  const pixels = (skin: (typeof SKINS)[string], poses: { animation: "over" | (typeof FLOOR_ANIMATIONS)[number]; left: number; top: number; mirrored: boolean }[]) =>
+    poses.flatMap(({ animation, left, top, mirrored }) =>
+      animationOf(skin, animation).frames.flatMap((f) =>
+        f.flatMap((r, y) => [...r].flatMap((c, x) => (c === "." ? [] : [`${left + (mirrored ? skin.grid - 1 - x : x) * px},${top + y * px}`]))),
+      ),
+    );
+
+  it("closes the door where only the over pose would cover a part; a skin without one keeps it", () => {
+    let tried = 0;
+    for (const skin of Object.values(SKINS).filter((s) => s.animations.over)) {
+      const a = skin.animations.over!.anchor!;
+      const over = new Set(pixels(skin, [{ animation: "over", left: card.left - (a.x + 1) * px, top: line.top - (a.y + 1) * px, mirrored: false }]));
+      const floor = new Set(
+        pixels(
+          skin,
+          Array.from({ length: line.width / px }, (_, s) =>
+            FLOOR_ANIMATIONS.flatMap((animation) =>
+              ([1, -1] as const).map((facing) => ({ animation, ...placeOnEdge(skin, animation, s, facing, px, line), mirrored: facing < 0 })),
+            ),
+          ).flat(),
+        ),
+      );
+      const only = [...over].find((p) => !floor.has(p));
+      if (!only) continue;
+      tried++;
+      const [x, y] = only.split(",").map(Number);
+      const part = box(x, y, x + px, y + px);
+      expect(measureShelf(skin, card, line, [part], px), `${skin.id}: its only door is closed`).toBeNull();
+      expect(measureShelf(skin, card, line, [], px)?.doors, `${skin.id}: open without the part`).toEqual(["left"]);
+    }
+    expect(tried, "a species whose over pose reaches past its floor poses").toBeGreaterThan(0);
   });
 });

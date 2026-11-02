@@ -12,7 +12,10 @@ import { placeAround, type EdgeBox, type Surface } from "../companion/place";
 import { SKINS } from "../companion/registry";
 import { hashString } from "../fx/beat";
 import { LAYOUT_GRID, artPixelPx } from "../companion/pixel";
-import { REQUIRED_ANIMATIONS, type AnimationName, type Skin } from "../companion/skin";
+import { OPTIONAL_ANIMATIONS, REQUIRED_ANIMATIONS, animationOf, type AnimationName, type Skin } from "../companion/skin";
+
+/** Every animation a skin has: the required ones, then any corner poses (C3c). */
+const animationsOf = (skin: Skin): AnimationName[] => [...REQUIRED_ANIMATIONS, ...OPTIONAL_ANIMATIONS.filter((a) => skin.animations[a])];
 import { Sprite, useFrame } from "../companion/Sprite";
 
 const BACKDROPS = { light: "#f2f0ea", dark: "#16161a" } as const;
@@ -25,9 +28,23 @@ const BACKDROPS = { light: "#f2f0ea", dark: "#16161a" } as const;
 const ZOOM_PIXEL = 8;
 const LINE: CSSProperties = { lineHeight: `${LAYOUT_GRID * 4}px`, margin: 0 };
 
-function Playing({ skin, animation, palette, pixel, paused }: { skin: Skin; animation: AnimationName; palette: string; pixel?: number; paused: boolean }) {
-  const frame = useFrame(skin.animations[animation], !paused);
-  return <Sprite skin={skin} animation={animation} frame={frame} palette={palette} pixel={pixel} />;
+function Playing({
+  skin,
+  animation,
+  palette,
+  pixel,
+  paused,
+  mirrored = false,
+}: {
+  skin: Skin;
+  animation: AnimationName;
+  palette: string;
+  pixel?: number;
+  paused: boolean;
+  mirrored?: boolean;
+}) {
+  const frame = useFrame(animationOf(skin, animation), !paused);
+  return <Sprite skin={skin} animation={animation} frame={frame} palette={palette} pixel={pixel} mirrored={mirrored} />;
 }
 
 const SCENE = { w: 352, h: 200, card: { x: 56, y: 56, w: 248, h: 88 } } as const;
@@ -100,7 +117,7 @@ function MockCard({
 
 /**
  * The creature around the mock card at real size: walking, sitting and asleep on the top edge, hanging under the
- * bottom edge (the owner's sketch), climbing the left side. Sprites sit at the grid-aligned scene origin and move only
+ * bottom edge (the owner's sketch), climbing the left side, and rounding the right-hand corners (C3c). Sprites sit at the grid-aligned scene origin and move only
  * by `transform`, whole device px: the C2 placement rule. Every pose uses the brain's placement (place.ts), at a
  * position given in CSS px along its surface.
  */
@@ -109,21 +126,24 @@ function Scene({ skin, palette, backdrop, paused }: { skin: Skin; palette: strin
   const px = artPixelPx(dpr);
   const snap = (v: number) => Math.round(v * dpr) / dpr;
   const at = (animation: AnimationName, surface: Surface, along: number) => {
-    const { left, top } = placeAround(skin, animation, surface, Math.round(along / px), 1, px, TOP_EDGE, OUTLINE);
-    return { x: left, y: top };
+    const { left, top, mirrored } = placeAround(skin, animation, surface, Math.round(along / px), 1, px, TOP_EDGE, OUTLINE);
+    return { x: left, y: top, mirrored };
   };
-  const poses: { animation: AnimationName; at: { x: number; y: number } }[] = [
+  const poses: { animation: AnimationName; at: { x: number; y: number; mirrored: boolean } }[] = [
     { animation: "walk", at: at("walk", "top", 40) },
     { animation: "sleep", at: at("sleep", "top", 112) },
     { animation: "sit", at: at("sit", "top", 184) },
     { animation: "hang", at: at("hang", "bottom", 132) },
     { animation: "climb", at: at("climb", "left", 20) },
+    // Its corner poses (C3c), at the right-hand corners, where nothing else stands.
+    ...(skin.animations.over ? [{ animation: "over" as const, at: at("over", "right", 0) }] : []),
+    ...(skin.animations.under ? [{ animation: "under" as const, at: at("under", "right", OUTLINE.height) }] : []),
   ];
   return (
     <MockCard backdrop={backdrop} data-lab-scene={backdrop}>
       {poses.map(({ animation, at }) => (
         <div key={animation} data-lab-pose={animation} style={{ position: "absolute", left: 0, top: 0, transform: `translate(${snap(at.x)}px, ${snap(at.y)}px)` }}>
-          <Playing skin={skin} animation={animation} palette={palette} paused={paused} />
+          <Playing skin={skin} animation={animation} palette={palette} paused={paused} mirrored={at.mirrored} />
         </div>
       ))}
     </MockCard>
@@ -224,7 +244,7 @@ export function CompanionLab() {
               </h2>
               {(Object.keys(BACKDROPS) as (keyof typeof BACKDROPS)[]).map((backdrop) => (
                 <div key={backdrop} style={{ display: "flex", flexWrap: "wrap", gap: 12, padding: 12, background: BACKDROPS[backdrop], color: backdrop === "dark" ? "#ddd" : "#333" }}>
-                  {REQUIRED_ANIMATIONS.map((animation) => (
+                  {animationsOf(skin).map((animation) => (
                     <figure key={animation} data-lab-anim={animation} data-lab-backdrop={backdrop} style={{ margin: 0, width: skin.grid * ZOOM_PIXEL, display: "grid", gap: LAYOUT_GRID }}>
                       <div data-lab-sprite="">
                         <Playing skin={skin} animation={animation} palette={palette} paused={paused} />
@@ -236,9 +256,9 @@ export function CompanionLab() {
                 </div>
               ))}
               <div style={{ padding: 12, display: "flex", flexWrap: "wrap", gap: 16 }}>
-                {REQUIRED_ANIMATIONS.map((animation) => (
+                {animationsOf(skin).map((animation) => (
                   <div key={animation} data-lab-strip={animation} style={{ display: "flex", gap: 2, alignItems: "end" }}>
-                    {skin.animations[animation].frames.map((_, f) => (
+                    {animationOf(skin, animation).frames.map((_, f) => (
                       <Sprite key={f} skin={skin} animation={animation} frame={f} palette={palette} />
                     ))}
                     <span style={{ marginLeft: 4 }}>{animation}</span>

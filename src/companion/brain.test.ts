@@ -20,7 +20,7 @@ import {
   type World,
 } from "./brain";
 import { SKINS } from "./registry";
-import { MAX_STEP, stepPx, type Skin } from "./skin";
+import { MAX_STEP, frameMs, stepPx, type Skin } from "./skin";
 
 const MINUTE = 60_000;
 const playing: World = { playing: true, reducedMotion: false, edge: { length: 160, noSit: [] } };
@@ -234,8 +234,12 @@ describe("companion brain around the card (C3a)", () => {
           surfaces.add(p.surface);
           expect(p.x, `seed ${seed}: ${p.surface} position`).toBeGreaterThanOrEqual(0);
           expect(p.x, `seed ${seed}: ${p.surface} position`).toBeLessThan(lengths[p.surface]);
-          if (p.surface === "left" || p.surface === "right") expect(p.animation).toBe("climb");
-          else if (p.surface === "bottom") expect(p.animation).toBe("hang");
+          // On a side it climbs, or rounds a corner (C3c): over at the top end, under at the bottom end.
+          if (p.surface === "left" || p.surface === "right") {
+            expect(["climb", "over", "under"]).toContain(p.animation);
+            if (p.animation === "over") expect(p.x, "over at the side's top end").toBe(0);
+            if (p.animation === "under") expect(p.x, "under at the side's bottom end").toBe(lengths[p.surface] - 1);
+          } else if (p.surface === "bottom") expect(p.animation).toBe("hang");
           else expect(["idle", "walk", "sit", "wake", "react"]).toContain(p.animation);
           if (p.surface !== prev.surface) {
             const corner = CORNERS[`${prev.surface}>${p.surface}`];
@@ -613,5 +617,105 @@ describe("companion brain with a shelf (C5a)", () => {
       }
     }
     expect([...moves].sort()).toEqual(["right@67>shelf@43", "shelf@43>right@67"]);
+  });
+});
+
+describe("companion brain round the corners (C3c)", () => {
+  const around: World = { ...playing, edge: { length: 124, noSit: [] }, around: { side: 44, bottom: 124 } };
+  const species = skins.filter((s) => s.animations.over && s.animations.under);
+  const CORNER = ["over", "under"];
+
+  it("every species has both corner poses; the test dummy has none", () => {
+    expect(species.map((s) => s.id).sort()).toEqual(["bookworm", "cassette", "pilcrow"]);
+    expect(SKINS["test-dummy"].animations.over).toBeUndefined();
+  });
+
+  for (const skin of species) {
+    it(`${skin.id}: round every corner it goes through its corner pose, once, then on where it was going`, () => {
+      let turns = 0;
+      let switches = 0;
+      let instant = 0;
+      for (const seed of [1, 2, 3]) {
+        const { changes } = run(skin, around, createBrain(skin, around, 0, seed), 0, 60 * MINUTE);
+        expect(busiestMinute(changes.map((c) => c.t)), `seed ${seed}: busiest minute`).toBeLessThanOrEqual(BUDGET_PER_MINUTE);
+        for (let i = 1; i < changes.length; i++) {
+          const [prev, p] = [changes[i - 1].pose, changes[i].pose];
+          if (CORNER.includes(prev.animation)) {
+            turns++;
+            // Shown for its frame, then where it was going: a climb or idle beyond `over`, a hang or climb beyond `under`.
+            expect(changes[i].t - changes[i - 1].t, "the corner pose's frame").toBe(frameMs(skin.animations[prev.animation as "over"]!, 0));
+            const next = `${p.surface}/${p.animation}`;
+            if (prev.animation === "over") expect([`${prev.surface}/climb`, "top/idle"]).toContain(next);
+            else expect([`${prev.surface}/climb`, "bottom/hang"]).toContain(next);
+          }
+          if (p.surface !== prev.surface) {
+            switches++;
+            if (!CORNER.includes(p.animation) && !CORNER.includes(prev.animation)) instant++;
+          }
+        }
+      }
+      expect(turns, "it rounds corners").toBeGreaterThan(5);
+      // Only a full budget skips the pose: almost every change of surface goes through one.
+      expect(instant, `${instant} of ${switches} changes of surface without a corner pose`).toBeLessThanOrEqual(switches / 10);
+    });
+  }
+
+  it("the test dummy, without corner poses, switches surfaces at once as before", () => {
+    const skin = SKINS["test-dummy"];
+    const { changes } = run(skin, around, createBrain(skin, around, 0, 1), 0, 60 * MINUTE);
+    expect(changes.some((c) => CORNER.includes(c.pose.animation))).toBe(false);
+    expect(new Set(changes.map((c) => c.pose.surface)).size, "it still travels").toBeGreaterThan(1);
+  });
+
+  /** Runs until it shows `pose`; returns the brain and when. */
+  function untilPose(skin: Skin, world: World, seed: number, pose: string) {
+    let b = createBrain(skin, world, 0, seed);
+    for (;;) {
+      const at = nextChangeAt(b, skin, world);
+      if (at === null || at > 6 * 60 * MINUTE) return null;
+      b = advance(b, skin, world, at);
+      if (pose === pose_(b)) return { brain: b, t: at };
+    }
+  }
+  const pose_ = (b: Brain) => pose(b).animation;
+
+  it("music stopping mid-corner: it gets where it was going, then holds still; reduced motion puts it on the top", () => {
+    for (const skin of species)
+      for (const corner of ["over", "under"]) {
+        const reached = untilPose(skin, around, 1, corner)!;
+        expect(reached, `${skin.id} reaches ${corner}`).not.toBeNull();
+        const quiet: World = { ...around, playing: false };
+        const stopped = setWorld(reached.brain, skin, around, quiet, reached.t + 10);
+        expect(CORNER, `${skin.id}: not left mid-corner`).not.toContain(pose(stopped).animation);
+        expect(stopped.after).toBeNull();
+        if (pose(stopped).surface !== "top") expect(nextChangeAt(stopped, skin, quiet), `${skin.id} ${corner}: then still`).toBeNull();
+        const reduced = setWorld(reached.brain, skin, around, { ...around, reducedMotion: true }, reached.t + 10);
+        expect(pose(reduced).surface).toBe("top");
+        expect(reduced.after).toBeNull();
+      }
+  });
+
+  it("with a shelf, its door is a corner too: over at the door, in and out", () => {
+    const shelfWorld: World = { ...around, around: { side: 76, bottom: 124 }, shelf: { length: 44, left: 0, doors: ["left"], at: 67 } };
+    for (const skin of species) {
+      const seen = new Set<string>();
+      for (const seed of [1, 2, 3, 4]) {
+        const { changes } = run(skin, shelfWorld, createBrain(skin, shelfWorld, 0, seed), 0, 60 * MINUTE);
+        for (let i = 1; i < changes.length; i++) {
+          const [prev, p] = [changes[i - 1].pose, changes[i].pose];
+          if (p.surface === "shelf" && prev.surface !== "shelf") seen.add(`in via ${prev.animation}@${prev.x}`);
+          if (prev.surface === "shelf" && p.surface !== "shelf") seen.add(`out via ${p.animation}@${p.x}`);
+        }
+      }
+      expect([...seen].sort(), skin.id).toEqual(["in via over@67", "out via over@67"]);
+    }
+  });
+
+  it("picked up mid-corner it forgets the corner", () => {
+    const skin = SKINS.bookworm;
+    const reached = untilPose(skin, around, 2, "over")!;
+    const held = pickUp(reached.brain, skin, around, reached.t + 1, { x: 10, y: -20 });
+    expect(held.after).toBeNull();
+    expect(pose(held).animation).toBe("held");
   });
 });

@@ -1,12 +1,15 @@
 import { expect, test, type Page } from "@playwright/test";
 import { readdirSync, readFileSync } from "node:fs";
-import { REQUIRED_ANIMATIONS, type Skin } from "../src/companion/skin";
+import { OPTIONAL_ANIMATIONS, REQUIRED_ANIMATIONS, type AnimationName, type Skin } from "../src/companion/skin";
 
 // Every skin folder, read like the theme specs read theme.json (Playwright's loader won't import JSON without an
 // import attribute). companion.test.ts checks that the registry bundles exactly these.
 const SKINS: Record<string, Skin> = Object.fromEntries(
   readdirSync(new URL("../companions/", import.meta.url)).map((id) => [id, JSON.parse(readFileSync(new URL(`../companions/${id}/companion.json`, import.meta.url), "utf8"))]),
 );
+
+/** Every animation a skin has: the required ones, then any corner poses (C3c). */
+const animationsOf = (skin: Skin): AnimationName[] => [...REQUIRED_ANIMATIONS, ...OPTIONAL_ANIMATIONS.filter((a) => skin.animations[a])];
 
 // The dev-only Companion lab (PLAN.md §5 M2 C1). Frames must come from JS timers: in the real transparent
 // window any running CSS/WAAPI animation costs ~2% of a core (C0 spike, docs/DECISIONS.md 2026-10-17).
@@ -24,7 +27,7 @@ test("every skin × palette × animation renders, with no console errors", async
   await page.locator(sprite("idle")).waitFor();
   for (const skin of Object.values(SKINS))
     for (const palette of Object.keys(skin.palettes))
-      for (const anim of REQUIRED_ANIMATIONS)
+      for (const anim of animationsOf(skin))
         for (const backdrop of ["light", "dark"])
           expect(await page.locator(sprite(anim, backdrop, palette, skin.id)).locator("path").count(), `${skin.id}/${palette}/${anim}/${backdrop}`).toBeGreaterThan(0);
   expect(errors).toEqual([]);
@@ -96,7 +99,7 @@ for (const dpr of [1, 1.25, 1.5, 2]) {
       const k = Math.round(2 * dpr);
       for (const skin of Object.values(SKINS)) {
         const allowed = new Set([...skin.palettes.default.map(rgb), rgb("#f2f0ea")]);
-        for (const anim of REQUIRED_ANIMATIONS) {
+        for (const anim of animationsOf(skin)) {
           const what = `${skin.id}/${anim}`;
           const svg = page.locator(sprite(anim, "light", "default", skin.id));
           await svg.scrollIntoViewIfNeeded();
@@ -118,7 +121,8 @@ for (const dpr of [1, 1.25, 1.5, 2]) {
       await page.goto("/?lab=companion&pause");
       for (const id of Object.keys(SKINS)) {
         const poses = page.locator(`[data-lab-scenes] [data-lab-skin="${id}"] [data-lab-scene="light"] [data-lab-pose]`);
-        await expect(poses).toHaveCount(5);
+        // Five poses round the card, and each corner pose the skin has (C3c).
+        await expect(poses).toHaveCount(5 + OPTIONAL_ANIMATIONS.filter((a) => SKINS[id].animations[a]).length);
         const offsets = await poses.evaluateAll((els) =>
           els.map((el) => {
             const m = new DOMMatrix(getComputedStyle(el).transform);

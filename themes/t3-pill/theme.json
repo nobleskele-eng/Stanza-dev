@@ -3,7 +3,7 @@
   "name": "Micro Pill",
   "author": "[NEEDS COPY]",
   "version": "1.0.0",
-  "contract": 10,
+  "contract": 11,
   "layout": "pill",
   "window": { "width": 248, "height": 86 },
   "colorMode": "static",

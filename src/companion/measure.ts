@@ -1,7 +1,7 @@
 // Where the companion's surfaces are, measured from the player's real parts (PLAN.md §4b, M2 C2b, C3b, C5a). Pure:
 // boxes in, boxes out, all in one coordinate space (CSS px of the viewport, which the pet's fixed layer shares).
 import { FLOOR_ANIMATIONS, edgeLength, opaqueBounds, placeOnEdge, sitDepth, type EdgeBox, type Outline } from "./place";
-import type { Skin } from "./skin";
+import { anchorOf, type Skin } from "./skin";
 
 export interface Box {
   left: number;
@@ -47,8 +47,9 @@ export interface Shelf {
 /**
  * The part of a shelf (C5a: a line inside the card, `line`) the creature can stand on: the positions where none of its
  * floor poses, facing either way, would put an opaque pixel over a part. Of those, the stretch reaching a side of the
- * card (a door: within an art pixel of it), so it can always get on and off. Null when no stretch reaches a side: a
- * shelf it could only be dropped onto would keep it there.
+ * card (a door: within an art pixel of it), so it can always get on and off. A door is a corner too (C3c): where the
+ * skin has an `over` pose, it must fit there as well, or that door is closed. Null when no door is left: a shelf it
+ * could only be dropped onto would keep it there.
  */
 export function measureShelf(skin: Skin, card: Box, line: EdgeBox, parts: readonly Box[], px: number): Shelf | null {
   const n = edgeLength(line.width, px);
@@ -57,12 +58,23 @@ export function measureShelf(skin: Skin, card: Box, line: EdgeBox, parts: readon
   const bounds = FLOOR_ANIMATIONS.flatMap((animation) =>
     ([1, -1] as const).map((facing) => ({ animation, facing, o: opaqueBounds(skin, [animation], facing < 0) })),
   );
+  const clearOf = (left: number, top: number, o: { x0: number; y0: number; x1: number; y1: number }) => {
+    const art = { left: left + o.x0 * px, top: top + o.y0 * px, right: left + (o.x1 + 1) * px, bottom: top + (o.y1 + 1) * px };
+    return !solid.some((b) => art.left < b.right - E && art.right > b.left + E && art.top < b.bottom - E && art.bottom > b.top + E);
+  };
   const fits = (s: number) =>
     bounds.every(({ animation, facing, o }) => {
       const at = placeOnEdge(skin, animation, s, facing, px, line);
-      const art = { left: at.left + o.x0 * px, top: at.top + o.y0 * px, right: at.left + (o.x1 + 1) * px, bottom: at.top + (o.y1 + 1) * px };
-      return !solid.some((b) => art.left < b.right - E && art.right > b.left + E && art.top < b.bottom - E && art.bottom > b.top + E);
+      return clearOf(at.left, at.top, o);
     });
+  /** The `over` pose at a door, placed as `placeAround` does: its anchor pixel just outside the card's side, level. */
+  const overFits = (door: Door) => {
+    if (!skin.animations.over) return true;
+    const a = anchorOf(skin, "over");
+    const right = door === "right";
+    const left = right ? card.right - (skin.grid - 1 - a.x) * px : card.left - (a.x + 1) * px;
+    return clearOf(left, line.top - (a.y + 1) * px, opaqueBounds(skin, ["over"], right));
+  };
   const clear = Array.from({ length: n }, (_, s) => fits(s));
   const run = (from: number, step: 1 | -1) => {
     let s = from;
@@ -75,8 +87,9 @@ export function measureShelf(skin: Skin, card: Box, line: EdgeBox, parts: readon
   if (start === null) return null;
   const end = run(start, 1);
   const doors: Door[] = [];
-  if (touches.left && start === 0) doors.push("left");
-  if (touches.right && end === n - 1) doors.push("right");
+  if (touches.left && start === 0 && overFits("left")) doors.push("left");
+  if (touches.right && end === n - 1 && overFits("right")) doors.push("right");
+  if (!doors.length) return null;
   return { edge: { left: line.left + start * px, top: line.top, width: (end - start + 1) * px }, doors };
 }
 
