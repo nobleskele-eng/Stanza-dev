@@ -219,7 +219,8 @@ filled from `--mp-acc-1`…`3`.
   margin.
 - Every part reads on the lab's light and dark backdrops (the D1 rule).
 
-**Drawn (drafts, waiting for review):** headphones, a knitted beanie, a scarf and a little bow for all three species.
+**Drawn:** headphones, a knitted beanie, a scarf and a little bow for all three species, all kept (your review,
+2026-11-07).
 - **pilcrow:** the head mount is the bowl's top, the neck a band round the bowl's lower half where the stems leave it.
   To leave room for a hat, its corner pose moved 2 px on the grid (with its anchor, so it sits where it did) and its
   react hops one row instead of two.

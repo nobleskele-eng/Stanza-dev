@@ -3828,3 +3828,15 @@ one of the skin layers (PLAN.md §4b), so nothing structural changes.
     WebKit, which hit the 30 s test timeout taking 156 screenshots (it had already passed every pilcrow and bookworm
     outfit). With a 120 s timeout, `companion-lab.spec.ts` in WebKit: 17 passed. So 826 pass, 24 skipped.
   - Not run: the real exe (the player wears nothing yet); `cargo test` (no Rust changed).
+
+## 2026-11-07 — D2b outcome: all four accessories kept
+
+- **Your pick:** keep all four (headphones, the beanie, the scarf, the bow) for every species, as drafted. The review
+  sheets were the lab's wardrobe at 2×.
+- **Not answered, so kept as drafted** (no further art or rule change):
+  - the pilcrow's react hop stays one row (it was two before D2b);
+  - climbing, a hat may still stick up past the card's top, out in the margin.
+
+  Both are easy to revisit.
+- **Next:** D2c, wearing one in the player: a pick in the Companion submenu (pictures, no text, like the palettes),
+  saved app-wide with the species and palette, and the `mp-pet-a1`…`a3` parts in the contract (v12).
