@@ -1,5 +1,6 @@
 mod hit_region;
 mod spotify;
+mod themes;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -37,6 +38,7 @@ pub fn run() {
             spotify::spotify_volume,
             spotify::spotify_set_volume,
             spotify::spotify_show_window,
+            themes::user_themes,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

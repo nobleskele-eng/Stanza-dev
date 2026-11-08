@@ -4007,3 +4007,86 @@ one of the skin layers (PLAN.md §4b), so nothing structural changes.
     at 30 s on "waiting for element to be stable" (they pass alone in ~17 s each). Then a clean full run: **907
     passed, 65 skipped** (Chromium + WebKit; the 12 new tests included, the skips unchanged).
   - The style comparison and the real exe, as above. Not run: `cargo test` (no Rust changed).
+
+## 2026-11-08 — M3 L2: the runtime theme loader (user themes)
+
+- **What it does:** a theme folder put in `%APPDATA%\com.stanza.app\themes\<id>\` (`theme.json` + `theme.css`, plus
+  whatever its CSS points at with a relative `url()`) appears in the right-click menu after the five bundled themes,
+  by its `theme.json` `name`, at the next launch. Picking it loads its CSS into the `theme` layer, sizes the window
+  to its `window` and saves it. The five bundled themes stay bundled. No settings window yet (L4).
+- **Rust** (`src-tauri/src/themes.rs`, `user_themes`): reads the folder fresh on each call (async, off the main
+  thread), read-only. Checks the folder name and `id` (the same, lowercase words joined by hyphens, ≤ 40 chars),
+  `theme.json` (regular file ≤ 64 KB, JSON object, `name` 1–80 chars without control characters, `contract` 12,
+  `layout`/`layouts`, `window` 40–1600 per side) and `theme.css` (regular file ≤ 512 KB). Links are refused or
+  skipped: one could point out of the asset scope. Failures are machine codes, never prose.
+- **Frontend** (`src/theme/userThemes.ts`): checks what Rust sends again (stored data is untrusted), strict on
+  `fx`, `companion` and `controls` (a wrong one refuses the theme, so its author finds out), refuses a bundled id,
+  and logs the codes with `console.warn` until the settings window can show them with copy ("Theme failed to load"
+  is still `[NEEDS COPY]`).
+- **Loading:** one `<link>` to a `blob:` holding `@import url("<theme.css>") layer(theme);` (the S4 spike's method).
+  Not a constructed stylesheet with the text wrapped in `@layer theme { … }`: a stray `}` in the theme could close
+  the layer early. The bundled shell declared the layer order first (L1), so the sheet joins the existing `theme`
+  layer. Only the active user theme's sheet is in the page; switching away removes it after the new theme has
+  rendered.
+- **Before the first paint** (`App.tsx` `boot`): the app asks for the user themes, then, if the saved theme is one,
+  loads its CSS, and only then renders. Otherwise a saved user theme would look unknown and be reset to the default,
+  or paint unstyled. It paints nothing meanwhile (the window is transparent): one IPC call, plus one CSS load.
+- **Failures:** a theme whose CSS won't load (it was listed, then deleted) isn't applied when picked; if it was the
+  saved theme, the default opens instead (companion kept) and is saved. A saved user theme that's gone: the same.
+  A failed `@import` fails the `<link>`'s load in both engines, so this is detected, not painted unstyled.
+- **Config:** the `protocol-asset` feature on `tauri`; `app.security.assetProtocol` on, scope
+  `["$APPDATA/themes/**"]`; the CSP gains `blob:` in `style-src` and the asset origin (`http://asset.localhost`,
+  plus `asset:` for macOS, untested) in `style-src`, `img-src` and `font-src`. Nothing in `connect-src`.
+- **Surprise (asset URLs):** Tauri's `convertFileSrc` encodes the whole path as one URL segment, separators too
+  (`http://asset.localhost/C%3A%5CUsers%5C…%5Ctheme.css`). The CSS loads, but a relative `url(bg.svg)` inside it
+  resolves to `http://asset.localhost/bg.svg`, which the scope refuses (403). Seen in the real exe. The app builds the
+  URL itself, one encoded segment per folder (`http://asset.localhost/C%3A/Users/…/fixture-paper/theme.css`), which
+  the asset protocol serves and the scope accepts; the image then comes from the theme's folder (200). The responses
+  carry `Access-Control-Allow-Origin: http://tauri.localhost`, so a theme's fonts load too (no font file in the
+  fixture, so not exercised).
+- **Caught by the full suite (fixed):** the first full Playwright run had 58 failures, one cause. The loader asked
+  for the asset protocol's root (`convertFileSrc`) even when there were no user themes; the other specs' fake Tauri
+  has no `convertFileSrc`, so it logged "listing user themes failed", and those tests fail on any console error.
+  With no folders (the usual case) the loader now returns before touching the asset protocol. The real Tauri always
+  has it, so the exe never logged this, but the empty path should do nothing anyway.
+- **Contract:** no bump (still 12): a **User themes** section under `theme.json` (where, what's checked, the codes,
+  scope rules to `[data-theme="<id>"]`); `id` must equal its folder (was *planned*); unknown fields are ignored.
+  Changelog line added.
+- **Fixture:** `dev/fixtures/user-themes/fixture-paper/` (synthetic, its name carries the fixture marker): a paper
+  look, a relative `url(bg.svg)`, and a deliberately hostile `!important` on the artwork's opacity that the guard
+  must beat. Not imported by `src/`, so never in the bundle (check-fixtures-excluded OK).
+- **Tests:**
+  - `cargo test`: 8 new in `themes.rs` (every code, sorting, links and stray files, no `\\?\` prefix, the JSON
+    shape the frontend reads). 23 in all.
+  - Unit, `src/theme/userThemes.test.ts` (13): the URL shape and relative resolution, every manifest code, optional
+    fields kept, bundled ids refused, the shell sheet text, and Rust's contract version = the frontend's.
+  - e2e, `e2e/user-themes.spec.ts` (7 × 2 engines), the production bundle in a fake Tauri with the shipped CSP and a
+    fake asset protocol (403 outside the themes folder, 404 for a missing file, like the real one): offered by name
+    after the five; picked: CSS first, then applied, sized, saved, its `url()` served from its folder, still below the
+    user layer; a saved one paints first time with its CSS loaded; switching away removes the sheet and back loads
+    it again; broken, clashing and refused themes never offered, codes logged; a gone or unloadable saved theme falls
+    back. Mutation-checked: Tauri's URL shape fails the pick test; painting before the CSS loads fails the
+    first-paint test.
+- **Real exe (ran),** `npm run tauri build -- --no-bundle` OK (0 warnings, check-fixtures-excluded OK). The fixture
+  folder was copied into your app data for the run and removed after (the `themes` folder ended as it was). Spotify
+  was read-only; nothing was pressed; your cursor never moved.
+  - First, the URL-shape probe above, with the sheet tried by hand.
+  - Then the whole path: a synthetic right-click opened the native menu, read by one persistent helper: Default,
+    Glow Card, Micro Pill, Extreme, Kinetic, the fixture's name, a separator, the cassette, the picker. Down ×6
+    highlighted the fixture (read back), Enter picked it: its CSS applied, `bg.svg` 200 from its folder, the artwork's
+    opacity still 1 (guard), saved; the window went from 340×600 to 280×507 without moving. A reload painted the
+    fixture first time with its sheet loaded. No CSP violations, no console or page errors, every asset 200.
+  - Your settings put back: the saved appearance restored byte for byte and the page reloaded (T1, no user sheet);
+    the window back to 340×600 at (2492, 583), where it started. Closed with `CloseMainWindow`.
+- **Next:** L3, hot swap (a file watcher, so a theme you're editing updates live, and a swap with no unstyled frame).
+- **Checks run (Windows):**
+  - `npx tsc --noEmit` clean.
+  - `npx vitest run`: 603 passed (590 + 13).
+  - `cargo test`: 23 passed (15 + 8).
+  - `npm run tauri build -- --no-bundle` (includes `npm run build`) OK, 0 warnings, check-fixtures-excluded OK.
+  - `npx playwright test`: the first full run had 58 failures (the `convertFileSrc` cause above); after the fix, the
+    three affected specs 231 passed, 61 skipped, then a clean full run: **921 passed, 65 skipped** (Chromium +
+    WebKit; the 14 new tests included, the skips unchanged).
+  - The real exe, as above, then rebuilt after the fix and launched once with no user themes: `user_themes` empty,
+    no user sheet, the L1 guard and hide checks still pass, no CSP violations, no console errors (Spotify was
+    playing; read-only).

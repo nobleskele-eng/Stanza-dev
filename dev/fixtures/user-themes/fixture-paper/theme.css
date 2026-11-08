@@ -1,0 +1,23 @@
+/* FIXTURE-ONLY-DEV-BUILD: a synthetic user theme, the kind a person drops into <app data dir>/themes/<id>/ by hand
+   (M3 L2). Used by e2e/user-themes.spec.ts and the real-exe check; never shipped. */
+.mp-root[data-theme="fixture-paper"] {
+  --mp-bg: #f3efe6;
+  --mp-fg: #1d1b16;
+  --mp-muted: #5f5a50;
+  --mp-accent: #2f5d8a;
+  --fixture-paper-loaded: 1;
+}
+
+/* A relative url(): it must resolve inside this theme's own folder. */
+.mp-root[data-theme="fixture-paper"] .mp-window {
+  background: var(--mp-bg) url(bg.svg) repeat;
+  color: var(--mp-fg);
+  width: 232px;
+  padding: 22px 24px 18px;
+  border-radius: 6px;
+}
+
+/* Hostile on purpose: the guard layer must still win over a user theme's !important. */
+.mp-root[data-theme="fixture-paper"] .mp-artwork {
+  opacity: 0.3 !important;
+}

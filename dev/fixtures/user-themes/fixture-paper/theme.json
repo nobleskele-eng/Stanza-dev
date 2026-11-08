@@ -1,0 +1,11 @@
+{
+  "id": "fixture-paper",
+  "name": "Fixture paper (FIXTURE-ONLY-DEV-BUILD)",
+  "author": "FIXTURE-ONLY-DEV-BUILD",
+  "version": "0.0.1",
+  "contract": 12,
+  "layout": "card",
+  "window": { "width": 280, "height": 507 },
+  "colorMode": "static",
+  "nativeEffect": "none"
+}

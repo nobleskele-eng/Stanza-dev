@@ -72,6 +72,9 @@ needs it.
   app-provided `--mp-acc-1`…`--mp-acc-3`, present only while it wears something. Worn, it keeps every placement rule
   (a hat may stick up into the margin while it climbs). Nothing renamed or removed: a v11 theme keeps working apart
   from its `contract` number.
+- **No bump (2026-11-08, M3 L2):** **User themes** (under `theme.json`): theme folders in the app's data folder,
+  loaded at runtime into the `theme` layer. `id` must now equal the folder name (checked). No part, attribute or
+  variable renamed or added; the version stays 12.
 - **No bump (2026-11-08, M3 L1):** the **Layer order** below went live: every stylesheet loads into
   `guard, base, theme, user`, so the guard now beats `!important` too, and a theme rule beats the app's own CSS
   whatever its specificity. **Hidden parts** now win over any `display` a theme gives the part (it didn't for
@@ -290,7 +293,7 @@ What a theme can rely on:
 ```
 | Field | Type | Meaning | Checked |
 |---|---|---|---|
-| `id` | string | Unique id; equals the folder name under `themes/`. Variants bind to it | variant validator (theme match); folder-name match *planned* (Phase 4 loader) |
+| `id` | string | Unique id; equals the folder name under `themes/`. Lowercase letters and digits in words joined by single hyphens, at most 40 characters. A user theme can't take a bundled theme's id. Variants bind to it | variant validator (theme match); for user themes, the folder-name match and the id rules: `src-tauri/src/themes.rs` (`cargo test`) and `src/theme/userThemes.ts` |
 | `name`, `author` | string | Display strings. The theme picker (right-click menu) shows `name`, or `[NEEDS COPY]` if it is missing or blank, never the id. First-party names are placeholders tracked in docs/COPY.md "Theme names"; `author` is still `[NEEDS COPY]` and unused | `src/theme/registry.test.ts` (first-party `name` = COPY.md), `src/window/themeMenu.test.ts` |
 | `version` | semver string | The theme's own version | *planned* |
 | `contract` | integer | The contract version the theme was written against; must equal this file's version | variant validator |
@@ -316,7 +319,35 @@ with spare width gets equal margin on both sides. Keep `.mp-window`'s width the 
 a width change re-centres the card and moves its left edge; heights may vary freely, since the top edge never
 moves. See docs/DECISIONS.md, Slice 6.
 
-Unknown fields: *planned* to be ignored by the Phase 4 loader (nothing reads `theme.json` at runtime yet). Copy fields hold `[NEEDS COPY]` rather than invented text.
+Unknown fields are ignored, and so are `author`, `version`, `colorMode` and `nativeEffect` for now: the app doesn't
+read them yet. Copy fields hold `[NEEDS COPY]` rather than invented text.
+
+### User themes (M3 L2)
+A theme you write yourself is a folder in the app's data folder, `<app data dir>/themes/<id>/`
+(`%APPDATA%\com.stanza.app\themes\<id>\` on Windows), holding `theme.json` and `theme.css`, plus anything
+`theme.css` points at with a relative `url()` (fonts, images), which resolves inside the folder. The app reads the
+folder at launch: a theme that passes the checks below appears in the right-click menu after the five bundled ones,
+by its `name`. There is no settings window yet (M3 L4); a theme added while Stanza runs appears at the next launch.
+
+- **Loaded only while it's the active theme,** into the `theme` layer (see **Layer order**), so everything this
+  contract says about themes applies, the guard included. Scope its rules to
+  `.mp-root[data-theme="<id>"]` like the bundled themes, so they can't reach anything else.
+- **Only its own folder:** the app's asset protocol serves nothing outside `<app data dir>/themes/`, and the content
+  security policy loads nothing from anywhere else (no remote `url()` or `@import`).
+- **Checked first** (each failure has a machine code; the settings window will show them with copy, "Theme failed to
+  load" in COPY.md, still `[NEEDS COPY]`):
+  - the folder name is a valid `id` and equals `theme.json`'s `id` (`bad-folder`, `bad-id`, `id-not-folder`); not a
+    bundled theme's id (`id-taken`);
+  - `theme.json` is a regular file under 64 KB, valid JSON, an object (`no-json`, `too-large`, `not-json`,
+    `not-object`); `theme.css` a regular file under 512 KB (`no-css`, `too-large`); neither is a link (`link`);
+  - `name` is 1–80 characters with no control characters (`bad-name`); `contract` equals this file's version
+    (`contract-mismatch`); `layout` and any `layouts` are layouts (`bad-layout`); `window` has a `width` and a
+    `height` from 40 to 1600 (`bad-window`);
+  - `fx`, `companion` and `controls`, when present, follow the rules in the table above (`bad-fx`,
+    `bad-companion`, `bad-controls`). Strict on purpose: a wrong optional field refuses the theme, so its author
+    finds out, rather than running it without.
+- **If its CSS can't be loaded** when picked, nothing changes; if it was the saved theme, the default theme opens
+  instead and is saved.
 
 ---
 

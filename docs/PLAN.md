@@ -259,9 +259,9 @@ Fields and which are enforced: see the contract's field table (`id`, `name`, `au
 **Why fixed markup:** one shared DOM, three layouts (pill / card / strip). Themes pick a layout and style it. A stable contract means themes never break on app updates — the exact failure that made Spicetify-style theming wrong for this project. Any change to a part, attribute or variable name = contract version bump, with the doc updated in the same change.
 
 ### Loading and hot swap
-- Proven in the S4 spike, not yet on `main` (M3): `theme.css` loads through Tauri's asset protocol, scoped to the two theme folders, so relative font URLs resolve naturally.
+- *Built (M3 L2, 2026-11-08) for user themes:* `theme.css` loads through Tauri's asset protocol, scoped to `<app data dir>/themes/` only, as one path segment per folder so relative `url()`s resolve inside the theme's folder (Tauri's `convertFileSrc` encodes the whole path as one segment, which sends them to the protocol's root, where the scope refuses them). The five bundled themes stay bundled.
 - Rust file watcher → event → swap the stylesheet → instant reload while you design. S4 found that guard/theme/user layers must load as **one** shell stylesheet (`@layer guard, theme, user;` + three layered `@import`s) — separate layered `<link>`s flip order when added dynamically (DECISIONS.md 2026-09-17). *Built (M3 L1, 2026-11-08):* the shell, bundled: `src/theme/shell.css` declares `@layer guard, base, theme, user;` (`base` = the app's own CSS, below the themes) and imports every stylesheet into its layer.
-- `theme.json` validated in Rust. Broken theme → fall back to default, show the error in settings.
+- `theme.json` validated in Rust. Broken theme → fall back to default, show the error in settings. *Built (M3 L2):* the checks and the fallback; the error codes are logged until the settings window can show them (L4).
 
 ### Customization layers
 
@@ -288,7 +288,7 @@ Fields and which are enforced: see the contract's field table (`id`, `name`, `au
 - Import a `.zip` containing `theme.json` + `theme.css` (+ `fonts/`, `preview.svg`). Validated in Rust before copying to `<app data dir>/themes/`. Invalid package → rejected with error.
 
 **Safety (all layers)**
-- Tauri CSP restricts style, font and image loading to the app (plus `data:` images). *Built:* the CSP is set (Slice 5); `asset:`/`blob:` get added when the runtime loader lands. No remote `url()` or `@import`.
+- Tauri CSP restricts style, font and image loading to the app (plus `data:` images). *Built:* the CSP is set (Slice 5); `blob:` (style only) and the asset origin (`http://asset.localhost` on Windows, `asset:` on macOS, untested) were added with the runtime loader (M3 L2). No remote `url()` or `@import`.
 - User CSS, snippets and variants apply to the player window only, never the settings window.
 - Tray menu item "Reset appearance" disables all snippets and variants and restores the default theme.
 - No in-app code editor in v1 (parking lot: CodeMirror panel).
@@ -424,7 +424,7 @@ locally on `main` ("Slice N: …"), never pushed unless you ask. Hour ranges are
 - **Done:** Phase 0; spikes S1 (window), S2 (GSMTC), S4 (themes) — on their spike branches, learnings merged; Phase 2 core; Phase 3 design system + contract; Phase 4 themes T1–T5, the D16 effects layer, contract v5.
 - **Production slices on `main`:** 1 theme applied + remembered · 2 real frameless transparent window · 3 click-through · 4 right-click theme picker · 5 CSP + named Stanza · 6 player centred side to side.
 - **M1 Real music (done 2026-10-17, DECISIONS.md M1 R1–R3b):** the GSMTC adapter on `main` (20-track gate passed), position drift ≤ 0.2 s over 5 min, keyboard seek, a "Spotify not running" state with recovery, Spotify's own volume through Core Audio, the lyrics button (contract v6), and a CPU pass (every theme 0.1–0.7 s of CPU per 10 s while playing). The Slice 5/6 real-exe checks passed along the way.
-- **Tests at last full run (2026-11-08):** 590 unit (Vitest), 907 e2e + 65 skipped (Playwright, Chromium + WebKit), `cargo test` 15 (last run 2026-10-17; no Rust has changed since).
+- **Tests at last full run (2026-11-08):** 603 unit (Vitest), 921 e2e + 65 skipped (Playwright, Chromium + WebKit), `cargo test` 23.
 - **Open from M1:** R4 tray + hide (added 2026-10-22); the remaining `[NEEDS COPY]` labels (the first ones were filled 2026-10-22); the Store build of Spotify; 125%/150% scaling.
 
 ### v1 phases → milestones
@@ -478,7 +478,7 @@ locally on `main` ("Slice N: …"), never pushed unless you ask. Hour ranges are
 - Settings window and customizer UI with live preview (both need copy for their chrome), variant export/import as files, snippets, theme `.zip` import, the runtime theme loader + hot swap (S4), theme previews, contrast warning, Reset appearance. Companion options in settings.
 - **Split** (proposed 2026-11-08, DECISIONS.md M3 L1; the order after L1 is yours to change):
   - **L1 Cascade layers** — **done 2026-11-08** (DECISIONS.md): one shell stylesheet, `@layer guard, base, theme, user;`; the guard beats `!important` from anywhere; `data-hide-<part>` now beats a theme's `display` (it never did for controls and volume); every shipped theme computes the same styles as before. No UI, no copy, contract still v12.
-  - **L2 Runtime theme loader:** themes from `<app data dir>/themes/` through the asset protocol into the `theme` layer, `theme.json` validated in Rust, a broken theme falls back to the default. No settings UI yet: a folder put there by hand shows in the right-click menu.
+  - **L2 Runtime theme loader** — **done 2026-11-08** (DECISIONS.md): themes from `<app data dir>/themes/` through the asset protocol into the `theme` layer, `theme.json` checked in Rust and again in the frontend, a broken theme never offered and a saved one that fails falls back to the default. No settings UI yet: a folder put there by hand shows in the right-click menu at the next launch. Checked in the real exe.
   - **L3 Hot swap:** the file watcher; a swap that never shows an unstyled frame (S4: keep the old sheet until the new one loads); the gate's 20 swaps, frame-captured.
   - **L4 Settings window** (a design round with you, needs copy): the second window and its chrome, companion options, Reset appearance.
   - **L5 Customizer** (needs copy): the theme's `controls`, live preview, the contrast warning, variants as files with export/import.
