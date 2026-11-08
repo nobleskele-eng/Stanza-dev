@@ -3840,3 +3840,55 @@ one of the skin layers (PLAN.md §4b), so nothing structural changes.
   Both are easy to revisit.
 - **Next:** D2c, wearing one in the player: a pick in the Companion submenu (pictures, no text, like the palettes),
   saved app-wide with the species and palette, and the `mp-pet-a1`…`a3` parts in the contract (v12).
+
+## 2026-11-07 — M2 D2c: wearing one in the player; contract v12
+
+- **The picker gains a third row** (after the palettes, a separator): your creature bare, then in each accessory it
+  can wear. Pictures, no text, like C6a; the worn one awake.
+  - Every picture shows what picking it gives: the species and palette pictures wear what it wears now, where that
+    species has it (all three have all four, by the same ids). The submenu's label is the creature as it is.
+  - Picking one turns the companion on wearing it, saved at once. Picking another species or palette keeps it; bare
+    takes it off.
+- **Saved app-wide** with the species and palette: `companion.accessory`, an id the species has, or `null`. Stored data
+  is untrusted, as before: an unknown id, one the species lacks, or anything not a string is nothing worn. Settings
+  saved before D2c load as they were, wearing nothing.
+- **In the player:** `App.tsx` paints it into the frames (`dress`, memoised on the species and the accessory), so the
+  layer, the brain and every placement rule see the dressed creature. Changing what it wears keeps its brain (the same
+  id), so it carries on where it was; a new species still restarts it. The window's margin is unchanged: everything
+  worn fits the creature's 16 px box.
+- **Contract v12:** `.mp-pet-a1`…`.mp-pet-a3` and the app-provided `--mp-acc-1`…`--mp-acc-3`, present only while it
+  wears something. Every rule holds dressed, with D2b's one allowance (a hat may stick up into the margin while it
+  climbs). Nothing renamed or removed.
+- **Tests:**
+  - Unit: `parseCompanion`/`pickCompanion` with accessories (old saves, unknown ids, a species without one);
+    `companionPickerEntries`' third row and the dressed pictures, for every species × palette × accessory;
+    `skinMenuIcon` drawing an accessory's colours.
+  - e2e (`companion-player.spec.ts`):
+    - The picker's new shape.
+    - Picking the headphones: drawn in their colours, saved, awake in the next menu, every bookworm picture wearing
+      them. The cassette keeps them, in its own colours; bare takes them off.
+    - A saved scarf renders the v12 slots and variables in the right colour, with the same window margin.
+    - A dressed time-lapse in every theme (one species and one accessory each, taking turns): inside the window,
+      over no part. Chromium only, like the brain arithmetic it checks.
+- **Real exe (ran),** `npm run tauri build -- --no-bundle` OK (0 warnings, check-fixtures-excluded OK). Neither Stanza
+  nor Spotify was running; nothing touched your music.
+  - Synthetic CDP right-click (your cursor never moved). The native menu: the five themes, a separator, the on/off
+    picture, then the picker, a real submenu with a picture. Its 15 items: 3 pictures, a separator, 5, a separator,
+    5, no text.
+  - Up, Right, Up ×4 selected the headphones (index 11, read back as highlighted); Enter: the pet wore them
+    (`mp-pet-a1`/`a2`, `#8a90a0`), saved `{ on: true, skin: "pilcrow", palette: "default", accessory: "headphones" }`,
+    and the window grew by the margin, as turning it on does. The next menu had the same shape. No page errors.
+  - Your settings put back: turned off through the menu (the window moved back), the stored value restored exactly
+    and the page reloaded. The window ended where it started (2199, 372, 340×600). Closed with `CloseMainWindow`.
+- **Surprise (diagnosed after the same failure twice):** the first two drives saw the menu open, then closed before
+  the first key landed. The driver started a new `powershell.exe` for every read and key, and starting one while a
+  native menu is open can take activation and close the menu. One persistent hidden helper, started before the menu
+  and fed commands over stdin, fixed it: the menu was found in 66 ms instead of ~1 s and stayed open. That's how C6a's
+  helper was meant to be used; now it's written down.
+- **Checks run (Windows):**
+  - `npx tsc --noEmit` clean.
+  - `npx vitest run`: 582 passed.
+  - `npm run tauri build -- --no-bundle` (includes `npm run build`) OK, check-fixtures-excluded OK.
+  - `npx playwright test`: 833 passed, 29 skipped (Chromium + WebKit). The five new skips are the dressed time-lapses
+    in WebKit, Chromium only by design.
+  - The real exe, as above. Not run: `cargo test` (no Rust changed).

@@ -1,8 +1,8 @@
 // The theme picker, first cut (docs/DECISIONS.md, Slice 4): right-click the player for a native menu
 // listing every theme by its theme.json `name`, the active one checked. The names are the menu's only
 // text, so it needs no other copy; the companion item after them is an icon (companionIcon.ts), and so is its picker
-// (C6a): a submenu of pictures, every species and the current one's palettes, the chosen ones awake. Previews come
-// with the settings window (PLAN.md Phase 4/5).
+// (C6a): a submenu of pictures, every species, the current one's palettes and what it can wear (D2c), the chosen ones
+// awake. Previews come with the settings window (PLAN.md Phase 4/5).
 // No-op outside Tauri, where the browser's own context menu stays.
 import { isTauri } from "@tauri-apps/api/core";
 import { LogicalPosition } from "@tauri-apps/api/dpi";
@@ -36,10 +36,11 @@ export function companionMenuItem(on: boolean, icon: Image | null, action: () =>
   return icon ? { text: "", icon, action } : { text: copy("companionToggle"), checked: on, action };
 }
 
-/** A species and one of its palettes. */
+/** A species, one of its palettes and what it wears (one of its accessories, or null). */
 export interface CompanionChoice {
   skin: string;
   palette: string;
+  accessory: string | null;
 }
 
 /** One picture in the picker: what picking it chooses, and whether it's drawn awake (it's the current choice). */
@@ -47,27 +48,40 @@ export interface PickerPicture extends CompanionChoice {
   awake: boolean;
 }
 
+/** The accessory if `skin` has one by that id, else null (what picking that species would wear). */
+const wears = (skin: string, accessory: string | null) => (accessory && SKINS[skin]?.accessories?.[accessory] ? accessory : null);
+
 /**
- * The picker's pictures (C6a): every species (each in its default palette, the current one in its current palette),
- * then the current species in each of its palettes. The current species and palette are awake, the rest asleep.
+ * The picker's pictures (C6a, D2c), each showing what picking it gives you:
+ * - every species, each in its default palette (the current one in its current palette), wearing what it wears now
+ *   if that species has it;
+ * - the current species in each of its palettes;
+ * - the current species bare, then in each accessory it can wear (none for a species without any).
+ * The current species, palette and accessory are awake, the rest asleep.
  */
-export function companionPickerEntries(current: CompanionChoice): { species: PickerPicture[]; palettes: PickerPicture[] } {
+export function companionPickerEntries(current: CompanionChoice): { species: PickerPicture[]; palettes: PickerPicture[]; accessories: PickerPicture[] } {
+  const accessory = wears(current.skin, current.accessory);
   const species = SPECIES.map((skin) => {
     const mine = skin === current.skin;
-    return { skin, palette: mine ? current.palette : "default", awake: mine };
+    return { skin, palette: mine ? current.palette : "default", accessory: wears(skin, accessory), awake: mine };
   });
   const palettes = Object.keys(SKINS[current.skin]?.palettes ?? {}).map((palette) => ({
     skin: current.skin,
     palette,
+    accessory,
     awake: palette === current.palette,
   }));
-  return { species, palettes };
+  const ids = Object.keys(SKINS[current.skin]?.accessories ?? {});
+  const accessories = ids.length
+    ? [null, ...ids].map((id) => ({ skin: current.skin, palette: current.palette, accessory: id, awake: id === accessory }))
+    : [];
+  return { species, palettes, accessories };
 }
 
 export interface CompanionMenu {
   isOn: () => boolean;
   toggle: () => void;
-  /** The species and palette chosen now (shown even while the companion is off). */
+  /** The species, palette and accessory chosen now (shown even while the companion is off). */
   current: () => CompanionChoice;
   /** Picked from the picker. */
   pick: (choice: CompanionChoice) => void;
@@ -96,16 +110,16 @@ export function installThemeMenu(
   let menu: Menu | null = null;
   let submenu: Submenu | null = null;
   let busy = false;
-  // Each picture (a skin, a palette, awake or asleep) per scale, made once and kept: `Image.new` is a resource
-  // command too, so it only ever runs inside the request chain below, after the previous menu has closed (the
+  // Each picture (a skin, a palette, an accessory, awake or asleep) per scale, made once and kept: `Image.new` is a
+  // resource command too, so it only ever runs inside the request chain below, after the previous menu has closed (the
   // deadlock rule).
   const icons = new Map<string, Promise<Image | null>>();
-  const iconFor = ({ skin, palette, awake }: PickerPicture): Promise<Image | null> => {
+  const iconFor = ({ skin, palette, accessory, awake }: PickerPicture): Promise<Image | null> => {
     const dpr = doc.defaultView?.devicePixelRatio ?? 1;
-    const key = `${skin}/${palette}/${awake}@${menuIconScale(dpr)}`;
+    const key = `${skin}/${palette}/${accessory ?? ""}/${awake}@${menuIconScale(dpr)}`;
     let icon = icons.get(key);
     if (!icon) {
-      const { rgba, width, height } = skinMenuIcon(SKINS[skin], palette, awake, dpr);
+      const { rgba, width, height } = skinMenuIcon(SKINS[skin], palette, awake, dpr, accessory);
       icon = Image.new(rgba, width, height).catch((err) => {
         console.error("companion menu icon failed", err);
         return null;
@@ -122,13 +136,16 @@ export function installThemeMenu(
    */
   const picker = async (c: CompanionMenu): Promise<Submenu | null> => {
     const current = c.current();
-    const { species, palettes } = companionPickerEntries(current);
-    const [label, ...pictures] = await Promise.all([{ ...current, awake: true }, ...species, ...palettes].map(iconFor));
+    const { species, palettes, accessories } = companionPickerEntries(current);
+    const entries = [...species, ...palettes, ...accessories];
+    // The label is the creature as it is now: the same picture as its awake palette.
+    const [label, ...pictures] = await Promise.all([palettes.find((e) => e.awake) ?? { ...current, awake: true }, ...entries].map(iconFor));
     if (!label || pictures.some((p) => !p)) return null;
-    const item = (entry: PickerPicture, i: number) => ({ text: "", icon: pictures[i]!, action: () => c.pick(entry) });
+    const item = (entry: PickerPicture) => ({ text: "", icon: pictures[entries.indexOf(entry)]!, action: () => c.pick(entry) });
+    const rows = [species, palettes, accessories].filter((row) => row.length);
     const sub = await Submenu.new({
       text: "",
-      items: [...species.map(item), { item: "Separator" }, ...palettes.map((p, i) => item(p, species.length + i))],
+      items: rows.flatMap((row, i) => [...(i ? [{ item: "Separator" as const }] : []), ...row.map(item)]),
     });
     submenu = sub;
     await sub.setIcon(label);
@@ -154,7 +171,7 @@ export function installThemeMenu(
       .then(async () => {
         if (companion) {
           // The on/off cassette first (its picture is the first one made), then the picker.
-          const icon = await iconFor({ skin: MENU_ICON_SKIN, palette: "default", awake: on });
+          const icon = await iconFor({ skin: MENU_ICON_SKIN, palette: "default", accessory: null, awake: on });
           items.push({ item: "Separator" }, companionMenuItem(on, icon, () => companion.toggle()));
           const sub = await picker(companion).catch((err) => {
             console.error("companion picker failed", err);

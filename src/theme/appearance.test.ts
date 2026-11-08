@@ -65,8 +65,8 @@ describe("appearance persistence", () => {
 });
 
 describe("companion setting", () => {
-  it("is off, with the default species and palette, when nothing is stored (opt-in)", () => {
-    expect(loadAppearance(memory(), MANIFESTS).companion).toEqual({ on: false, skin: DEFAULT_SKIN, palette: "default" });
+  it("is off, with the default species and palette and nothing worn, when nothing is stored (opt-in)", () => {
+    expect(loadAppearance(memory(), MANIFESTS).companion).toEqual({ on: false, skin: DEFAULT_SKIN, palette: "default", accessory: null });
   });
 
   it("keeps old saved data valid: an appearance saved before the companion existed loads with it off", () => {
@@ -76,22 +76,28 @@ describe("companion setting", () => {
     expect(a.companion).toEqual(defaultCompanion());
   });
 
-  it("round-trips on, a species and one of its palettes", () => {
+  it("keeps a companion saved before accessories (D2c) as it was, wearing nothing", () => {
+    const companion = { on: true, skin: "cassette", palette: "chrome" };
+    expect(parseAppearance(JSON.stringify({ theme: DEFAULT_THEME, companion }), MANIFESTS).companion).toEqual({ ...companion, accessory: null });
+  });
+
+  it("round-trips on, a species, one of its palettes and one of its accessories", () => {
     const store = memory();
     const skin = "bookworm";
     const palette = Object.keys(SKINS[skin].palettes).find((p) => p !== "default") ?? "default";
-    const a = selectTheme(MANIFESTS, "t2-artwork", { on: true, skin, palette });
+    const accessory = Object.keys(SKINS[skin].accessories!)[1];
+    const a = selectTheme(MANIFESTS, "t2-artwork", { on: true, skin, palette, accessory });
     saveAppearance(store, a);
-    expect(loadAppearance(store, MANIFESTS).companion).toEqual({ on: true, skin, palette });
+    expect(loadAppearance(store, MANIFESTS).companion).toEqual({ on: true, skin, palette, accessory });
   });
 
   it("survives a theme switch, unlike the variant", () => {
-    const on = { on: true, skin: "cassette", palette: "default" };
+    const on = { on: true, skin: "cassette", palette: "default", accessory: "scarf" };
     expect(selectTheme(MANIFESTS, "t3-pill", on).companion).toEqual(on);
   });
 
   it("survives a broken theme or variant", () => {
-    const companion = { on: true, skin: "pilcrow", palette: "default" };
+    const companion = { on: true, skin: "pilcrow", palette: "default", accessory: "bow" };
     expect(parseAppearance(JSON.stringify({ theme: "evil", companion }), MANIFESTS).companion).toEqual(companion);
     const bad = { theme: "t5-kinetic", variant: { nonsense: 1 }, companion };
     const a = parseAppearance(JSON.stringify(bad), MANIFESTS);
@@ -99,24 +105,37 @@ describe("companion setting", () => {
     expect(a.companion).toEqual(companion);
   });
 
-  it("falls back field by field on unknown skins, palettes and non-boolean on", () => {
+  it("falls back field by field on unknown skins, palettes, accessories and non-boolean on", () => {
     const parse = (c: unknown) => parseAppearance(JSON.stringify({ theme: DEFAULT_THEME, companion: c }), MANIFESTS).companion;
-    expect(parse({ on: "yes", skin: "evil", palette: "x" })).toEqual(defaultCompanion());
-    expect(parse({ on: true, skin: "bookworm", palette: "no-such-palette" })).toEqual({ on: true, skin: "bookworm", palette: "default" });
-    expect(parse({ on: true, skin: "__proto__" })).toEqual({ on: true, skin: DEFAULT_SKIN, palette: "default" });
+    expect(parse({ on: "yes", skin: "evil", palette: "x", accessory: "beanie" })).toEqual(defaultCompanion());
+    expect(parse({ on: true, skin: "bookworm", palette: "no-such-palette" })).toEqual({ on: true, skin: "bookworm", palette: "default", accessory: null });
+    expect(parse({ on: true, skin: "__proto__" })).toEqual({ on: true, skin: DEFAULT_SKIN, palette: "default", accessory: null });
+    // An accessory belongs to its species: one the skin doesn't have, or anything not an id, is nothing worn.
+    expect(parse({ on: true, skin: "cassette", palette: "mint", accessory: "crown" })).toEqual({ on: true, skin: "cassette", palette: "mint", accessory: null });
+    expect(parse({ on: true, skin: "test-dummy", accessory: "beanie" }).accessory).toBeNull();
+    expect(parse({ on: true, skin: "pilcrow", accessory: "__proto__" }).accessory).toBeNull();
+    expect(parse({ on: true, skin: "pilcrow", accessory: 3 }).accessory).toBeNull();
     expect(parse("junk")).toEqual(defaultCompanion());
     expect(parse(null)).toEqual(defaultCompanion());
   });
 });
 
-describe("pickCompanion (C6a)", () => {
-  const off = { on: false, skin: "pilcrow", palette: "ink" };
+describe("pickCompanion (C6a, D2c)", () => {
+  const off = { on: false, skin: "pilcrow", palette: "ink", accessory: null };
   it("picks the species, turned on, keeping a palette it also has and otherwise its default", () => {
-    expect(pickCompanion(off, "pilcrow", "marker")).toEqual({ on: true, skin: "pilcrow", palette: "marker" });
-    expect(pickCompanion(off, "bookworm")).toEqual({ on: true, skin: "bookworm", palette: "default" }); // no "ink"
-    expect(pickCompanion({ ...off, palette: "default" }, "cassette")).toEqual({ on: true, skin: "cassette", palette: "default" });
-    expect(pickCompanion(off, "cassette", "chrome")).toEqual({ on: true, skin: "cassette", palette: "chrome" });
-    expect(pickCompanion(off, "cassette", "kraft")).toEqual({ on: true, skin: "cassette", palette: "default" });
+    expect(pickCompanion(off, "pilcrow", "marker")).toEqual({ on: true, skin: "pilcrow", palette: "marker", accessory: null });
+    expect(pickCompanion(off, "bookworm")).toEqual({ on: true, skin: "bookworm", palette: "default", accessory: null }); // no "ink"
+    expect(pickCompanion({ ...off, palette: "default" }, "cassette")).toEqual({ on: true, skin: "cassette", palette: "default", accessory: null });
+    expect(pickCompanion(off, "cassette", "chrome")).toEqual({ on: true, skin: "cassette", palette: "chrome", accessory: null });
+    expect(pickCompanion(off, "cassette", "kraft")).toEqual({ on: true, skin: "cassette", palette: "default", accessory: null });
+  });
+  it("picks an accessory, turned on; another species keeps it if it has one by that id; null takes it off", () => {
+    const worn = pickCompanion(off, "pilcrow", "ink", "beanie");
+    expect(worn).toEqual({ on: true, skin: "pilcrow", palette: "ink", accessory: "beanie" });
+    expect(pickCompanion(worn, "cassette")).toEqual({ on: true, skin: "cassette", palette: "default", accessory: "beanie" });
+    expect(pickCompanion(worn, "test-dummy").accessory, "the dummy has none").toBeNull();
+    expect(pickCompanion(worn, "pilcrow", "ink", null)).toEqual({ on: true, skin: "pilcrow", palette: "ink", accessory: null });
+    expect(pickCompanion(off, "pilcrow", "ink", "crown").accessory).toBeNull();
   });
   it("an unknown species changes nothing", () => {
     expect(pickCompanion(off, "dragon", "default")).toBe(off);

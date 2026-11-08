@@ -22,6 +22,7 @@ const skinJson = (id: string) =>
     anchor: { y: number };
     palettes: Record<string, string[]>;
     animations: Record<string, { anchor?: { y: number } }>;
+    accessories?: Record<string, { colours: string[] }>;
   };
 const skinGrid = (id: string) => skinJson(id).grid;
 /** The art row a pose rests on its surface by (the animation's anchor, else the skin's). */
@@ -240,30 +241,38 @@ test("the menu turns it on and off: the parts come and go, the window grows by t
   expect(stored.companion).toMatchObject({ on: false });
 });
 
-test("the picker (C6a): pictures only, every species and the current one's palettes; a pick turns it on as that creature, saved, and the next menu shows it awake", async ({ page }) => {
+test("the picker (C6a, D2c): pictures only, every species, the current one's palettes and what it can wear; a pick turns it on as that creature, saved, and the next menu shows it awake", async ({ page }) => {
   await saveAppearance(page, "t1-default", { on: false, skin: "pilcrow", palette: "default" });
   await fakeTauri(page, spotifyState(Date.now()));
   await page.goto("/");
   await expect(page.locator(".mp-root")).toHaveAttribute("data-status", "playing");
-  /** The picker's items as [the label picture, species ×3, `skin`'s palettes], checking its shape: pictures, no text. */
+  /**
+   * The picker's items as [the label picture, species ×3, `skin`'s palettes, bare + its accessories], checking its
+   * shape: pictures, no text.
+   */
   const pickerOf = async (skin: string) => {
     const { picker } = await companionItems(page, await openMenu(page));
     const items = picker.items!;
     expect(picker.text, "the submenu has no text").toBe("");
     const palettes = Object.keys(skinJson(skin).palettes).length;
-    expect(items.map((i) => i.item ?? "picture")).toEqual([...Array(3).fill("picture"), "Separator", ...Array(palettes).fill("picture")]);
+    const wears = 1 + Object.keys(skinJson(skin).accessories!).length;
+    const pictures = (n: number) => Array(n).fill("picture");
+    expect(items.map((i) => i.item ?? "picture")).toEqual([...pictures(3), "Separator", ...pictures(palettes), "Separator", ...pictures(wears)]);
     for (const i of items.filter((i) => !i.item)) expect(i, "a picture, no text, no check").toEqual({ text: "", icon: expect.any(Number), handler: expect.any(String) });
-    return { label: picker.icon!, species: items.slice(0, 3), palettes: items.slice(4) };
+    return { label: picker.icon!, species: items.slice(0, 3), palettes: items.slice(4, 4 + palettes), accessories: items.slice(5 + palettes) };
   };
-  /** The colours the pet is drawn in now. */
+  /** The colours the pet is drawn in now, and the first colour of what it wears ("" for nothing). */
   const colours = () => page.locator(".mp-companion svg").evaluate((el) => (el as SVGElement).style.getPropertyValue("--mp-pet-1").trim());
+  const worn = () => page.locator(".mp-companion svg").evaluate((el) => (el as SVGElement).style.getPropertyValue("--mp-acc-1").trim());
+  const stored = async () => (await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!), APPEARANCE_STORAGE_KEY)).companion;
 
-  // Off, pilcrow in its default palette: the current species and palette are the label's own picture (awake); every
-  // other picture differs from it and from each other.
+  // Off, pilcrow in its default palette, bare: the current species, palette and accessory are the label's own picture
+  // (awake); every other picture differs from it and from each other.
   let p = await pickerOf("pilcrow");
   expect(p.species[0].icon).toBe(p.label);
   expect(p.palettes[0].icon).toBe(p.label);
-  const others = [...p.species.slice(1), ...p.palettes.slice(1)].map((i) => i.icon);
+  expect(p.accessories[0].icon, "bare").toBe(p.label);
+  const others = [...p.species.slice(1), ...p.palettes.slice(1), ...p.accessories.slice(1)].map((i) => i.icon);
   expect(new Set([p.label, ...others]).size).toBe(1 + others.length);
   await expect(page.locator(".mp-companion")).toHaveCount(0);
 
@@ -271,8 +280,7 @@ test("the picker (C6a): pictures only, every species and the current one's palet
   await fireAndClose(page, p.species[1]);
   await expect(page.locator(".mp-companion")).toHaveCount(1);
   await expect.poll(colours).toBe(skinJson("bookworm").palettes.default[0]);
-  let stored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!), APPEARANCE_STORAGE_KEY);
-  expect(stored.companion).toEqual({ on: true, skin: "bookworm", palette: "default" });
+  expect(await stored()).toEqual({ on: true, skin: "bookworm", palette: "default", accessory: null });
 
   // The next menu: the bookworm awake, and its palettes now. Its third palette: recoloured, saved.
   p = await pickerOf("bookworm");
@@ -282,11 +290,38 @@ test("the picker (C6a): pictures only, every species and the current one's palet
   const third = Object.keys(skinJson("bookworm").palettes)[2];
   await fireAndClose(page, p.palettes[2]);
   await expect.poll(colours).toBe(skinJson("bookworm").palettes[third][0]);
-  stored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!), APPEARANCE_STORAGE_KEY);
-  expect(stored.companion).toEqual({ on: true, skin: "bookworm", palette: third });
+  expect(await stored()).toEqual({ on: true, skin: "bookworm", palette: third, accessory: null });
   p = await pickerOf("bookworm");
   expect(p.palettes[2].icon).toBe(p.label);
   expect(p.species[1].icon, "the bookworm's own picture is in its new palette").toBe(p.label);
+  expect(await worn(), "wearing nothing").toBe("");
+
+  // What it wears (D2c), the row after the palettes: [bare, headphones, beanie, scarf, bow]. The headphones: drawn in
+  // their colours, saved, and awake in the next menu, where every picture of the bookworm wears them.
+  expect(Object.keys(skinJson("bookworm").accessories!)[0]).toBe("headphones");
+  await fireAndClose(page, p.accessories[1]);
+  await expect.poll(worn).toBe(skinJson("bookworm").accessories!.headphones.colours[0]);
+  await expect(page.locator(".mp-companion svg path.mp-pet-a1")).toHaveCount(1);
+  expect(await colours(), "still in its palette").toBe(skinJson("bookworm").palettes[third][0]);
+  expect(await stored()).toEqual({ on: true, skin: "bookworm", palette: third, accessory: "headphones" });
+  p = await pickerOf("bookworm");
+  expect(p.accessories[1].icon).toBe(p.label);
+  expect(p.palettes[2].icon, "its palette picture wears them").toBe(p.label);
+  expect(p.species[1].icon, "and its species picture").toBe(p.label);
+  expect(p.accessories[0].icon, "bare is another picture now").not.toBe(p.label);
+
+  // Another species keeps them: the cassette, in its own headphones.
+  await fireAndClose(page, p.species[2]);
+  await expect.poll(worn).toBe(skinJson("cassette").accessories!.headphones.colours[0]);
+  expect(await stored()).toEqual({ on: true, skin: "cassette", palette: "default", accessory: "headphones" });
+  // Bare takes them off.
+  p = await pickerOf("cassette");
+  expect(p.accessories[1].icon).toBe(p.label);
+  await fireAndClose(page, p.accessories[0]);
+  await expect(page.locator(".mp-companion svg path[class^='mp-pet-a']")).toHaveCount(0);
+  expect(await stored()).toEqual({ on: true, skin: "cassette", palette: "default", accessory: null });
+  p = await pickerOf("cassette");
+  expect(p.accessories[0].icon).toBe(p.label);
   await page.evaluate(() => (window as unknown as { __closeMenu: () => void }).__closeMenu());
 
   // No item the app sends inline has both an icon and nested items: Tauri reads that as a plain icon item and drops
@@ -305,6 +340,27 @@ test("the picker (C6a): pictures only, every species and the current one's palet
     if (cmd === "plugin:resources|close") open = false;
     if (["plugin:image|new", "plugin:menu|new", "plugin:menu|set_icon"].includes(cmd)) expect(open, `${cmd} while a menu was open`).toBe(false);
   }
+});
+
+test("wearing something (contract v12): saved worn, the sprite adds its slots, filled from --mp-acc-N, and the window is no bigger", async ({ page }) => {
+  const scarf = skinJson("pilcrow").accessories!.scarf;
+  await saveAppearance(page, "t1-default", { on: true, skin: "pilcrow", palette: "default", accessory: "scarf" });
+  await fakeTauri(page, spotifyState(Date.now()));
+  await page.goto("/");
+  await expect(page.locator(".mp-companion")).toHaveCount(1);
+  const shape = await page.locator(".mp-companion svg").evaluate((svg) => ({
+    slots: [...svg.querySelectorAll("path")].map((p) => p.getAttribute("class")!),
+    vars: Object.fromEntries([...(svg as SVGElement).style].filter((n) => n.startsWith("--mp-acc-")).map((n) => [n, (svg as SVGElement).style.getPropertyValue(n).trim()])),
+    fill: getComputedStyle(svg.querySelector("path.mp-pet-a1")!).fill,
+  }));
+  for (const c of shape.slots) expect(c).toMatch(/^mp-pet-(c[1-8]|a[1-3])$/);
+  expect(shape.slots).toContain("mp-pet-a1");
+  expect(shape.vars).toEqual(Object.fromEntries(scarf.colours.map((c, i) => [`--mp-acc-${i + 1}`, c])));
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(scarf.colours[0].slice(i, i + 2), 16));
+  expect(shape.fill).toBe(`rgb(${r}, ${g}, ${b})`);
+  // The same margin as bare: what it wears fits the creature's box.
+  const margin = await page.locator(".app-stage").evaluate((el) => parseFloat(getComputedStyle(el).paddingTop));
+  expect(margin).toBe(spriteBoxPx(skinGrid("pilcrow"), artPixelPx(await page.evaluate(() => devicePixelRatio))));
 });
 
 test("saved on, a launch sizes the window with the margin but doesn't move it (the restored position already has the margin)", async ({ page }) => {
@@ -439,13 +495,13 @@ const STEP = 1000;
  * under the paused fake clock that frame sometimes hadn't come by the first check (the moving card has its own test,
  * on the real clock, below).
  */
-async function timeLapse(page: Page, theme: string, skin: string) {
+async function timeLapse(page: Page, theme: string, skin: string, accessory: string | null = null) {
   const margin = spriteBoxPx(skinGrid(skin), artPixelPx(await page.evaluate(() => devicePixelRatio)));
   const { width, height } = themeJson(theme).window;
   const view = { width: width + 2 * margin, height: height + 2 * margin };
   await page.setViewportSize(view);
   const t0 = Date.now();
-  await saveAppearance(page, theme, { on: true, skin, palette: "default" });
+  await saveAppearance(page, theme, { on: true, skin, palette: "default", accessory });
   await fakeTauri(page, spotifyState(t0));
   await page.clock.install({ time: t0 });
   await page.goto("/");
@@ -514,6 +570,24 @@ for (const [i, theme] of THEME_IDS.entries())
       for (let n = 0; n < 30; n++) await page.clock.runFor(STEP);
       expect(JSON.stringify(await snapshot(page)), "still, paused").toBe(held);
     });
+
+// Dressed (D2c): each theme with one species in one accessory, taking turns, so every species and every accessory
+// lives on a real card. Chromium only: where it goes is the brain's arithmetic, and the unit tests run every placement
+// rule for every outfit (place.test.ts, measure.test.ts).
+const WEAR = ["headphones", "beanie", "scarf", "bow"];
+const SPECIES_IDS = ["pilcrow", "bookworm", "cassette"];
+for (const [i, theme] of THEME_IDS.entries()) {
+  const skin = SPECIES_IDS[i % SPECIES_IDS.length];
+  const accessory = WEAR[i % WEAR.length];
+  test(`time-lapse dressed, ${theme} × ${skin} + ${accessory}: it stays inside the window and covers no part, wearing it`, async ({ page, browserName }) => {
+    test.skip(browserName === "webkit", "Chromium only: the same arithmetic");
+    test.setTimeout(180_000);
+    const run = await timeLapse(page, theme, skin, accessory);
+    await expect(page.locator(".mp-companion svg path.mp-pet-a1")).toHaveCount(1);
+    while (run.elapsed() < PLAY[browserName] && !run.around()) await run.step();
+    expect(run.seen, "it walked").toContain("top/walk");
+  });
+}
 
 for (const theme of THEME_IDS)
   test(`around ${theme}: a pet climbs a side and hangs under the bottom, checked pixel by pixel all the way`, async ({ page, browserName }) => {

@@ -8,7 +8,8 @@ import "../themes/t3-pill/theme.css";
 import "../themes/t4-extreme/theme.css";
 import "../themes/t5-kinetic/theme.css";
 import { isTauri } from "@tauri-apps/api/core";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { dress } from "./companion/accessory";
 import { SKINS } from "./companion/registry";
 import { artPixelPx, spriteBoxPx } from "./companion/pixel";
 import { useDevicePixelRatio } from "./companion/useDevicePixelRatio";
@@ -63,7 +64,10 @@ function ProductionApp() {
   // every side, the pet's box, so it can walk the card's top, climb its sides and hang under it without the card
   // moving on screen.
   const dpr = useDevicePixelRatio();
-  const skin = SKINS[appearance.companion.skin];
+  // What it wears (D2c) is painted into its frames, so the player and its rules see the dressed creature. Kept until
+  // the choice changes: a new skin object makes the layer measure the card again.
+  const species = SKINS[appearance.companion.skin];
+  const skin = useMemo(() => dress(species, appearance.companion.accessory), [species, appearance.companion.accessory]);
   const margin = appearance.companion.on ? spriteBoxPx(skin.grid, artPixelPx(dpr)) : 0;
   const marginRef = useRef(margin);
   marginRef.current = margin;
@@ -108,7 +112,8 @@ function ProductionApp() {
     },
     [sizeWindow],
   );
-  // The companion's own setting changes (on/off, or a species and palette from the picker, C6a), saved at once.
+  // The companion's own setting changes (on/off, or a species, palette or accessory from the picker, C6a, D2c), saved
+  // at once.
   const setCompanion = useCallback((next: CompanionSetting) => {
     companion.current = next;
     setAppearance((a) => {
@@ -123,7 +128,7 @@ function ProductionApp() {
         isOn: () => companion.current.on,
         toggle: () => setCompanion({ ...companion.current, on: !companion.current.on }),
         current: () => companion.current,
-        pick: ({ skin, palette }) => setCompanion(pickCompanion(companion.current, skin, palette)),
+        pick: ({ skin, palette, accessory }) => setCompanion(pickCompanion(companion.current, skin, palette, accessory)),
       }),
     [pickTheme, setCompanion],
   );

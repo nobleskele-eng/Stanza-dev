@@ -65,6 +65,23 @@ describe("skinMenuIcon (C6a)", () => {
     }
   });
 
+  it("draws what it wears (D2c) in the accessory's own colours, awake and asleep; nothing, or one it lacks, draws it bare", () => {
+    for (const skin of ["pilcrow", "bookworm", "cassette"].map((id) => SKINS[id]))
+      for (const awake of [true, false]) {
+        const bare = JSON.stringify(skinMenuIcon(skin, "default", awake, 1).rgba);
+        expect(JSON.stringify(skinMenuIcon(skin, "default", awake, 1, "crown").rgba), `${skin.id}: unknown`).toBe(bare);
+        for (const [id, acc] of Object.entries(skin.accessories!)) {
+          const icon = skinMenuIcon(skin, "default", awake, 1, id);
+          expect(JSON.stringify(icon.rgba), `${skin.id}+${id}`).not.toBe(bare);
+          // Its first colour is drawn somewhere.
+          const [r, g, b] = [1, 3, 5].map((i) => parseInt(acc.colours[0].slice(i, i + 2), 16));
+          const has = icon.rgba.some((_, i) => i % 4 === 0 && icon.rgba[i] === r && icon.rgba[i + 1] === g && icon.rgba[i + 2] === b && icon.rgba[i + 3] === 255);
+          expect(has, `${skin.id}+${id}: its colour`).toBe(true);
+        }
+      }
+    expect(frameToRgba(["a1"], ["#000000"], 1, ["#ff0000"]).rgba).toEqual([255, 0, 0, 255, 0, 0, 0, 255]);
+  });
+
   it("awake and asleep differ for every species, and the on/off icon is the cassette's", () => {
     for (const id of ["pilcrow", "bookworm", "cassette"]) {
       const skin = SKINS[id];

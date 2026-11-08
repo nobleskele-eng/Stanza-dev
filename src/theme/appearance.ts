@@ -16,17 +16,29 @@ export interface CompanionSetting {
   skin: string;
   /** One of that skin's palette names. */
   palette: string;
+  /** What it wears (D2c): one of that skin's accessory ids, or null for nothing. */
+  accessory: string | null;
 }
 
-export const defaultCompanion = (): CompanionSetting => ({ on: false, skin: DEFAULT_SKIN, palette: "default" });
+export const defaultCompanion = (): CompanionSetting => ({ on: false, skin: DEFAULT_SKIN, palette: "default", accessory: null });
+
+/** An accessory id the skin has, else null (accessories belong to a species, like palettes). */
+const wearable = (skin: string, accessory: unknown): string | null =>
+  typeof accessory === "string" && has(SKINS[skin].accessories ?? {}, accessory) ? accessory : null;
 
 /**
- * Picked from the menu (C6a): that species, turned on, since picking it means wanting to see it. A palette it doesn't
- * have (palettes belong to a species) falls back to its default; an unknown species changes nothing.
+ * Picked from the menu (C6a, D2c): that species in that palette, wearing that accessory, turned on, since picking any
+ * of them means wanting to see it. A palette it doesn't have (palettes belong to a species) falls back to its default,
+ * an accessory it doesn't have to nothing; an unknown species changes nothing.
  */
-export function pickCompanion(current: CompanionSetting, skin: string, palette = current.palette): CompanionSetting {
+export function pickCompanion(
+  current: CompanionSetting,
+  skin: string,
+  palette = current.palette,
+  accessory: string | null = current.accessory,
+): CompanionSetting {
   if (!has(SKINS, skin)) return current;
-  return { on: true, skin, palette: has(SKINS[skin].palettes, palette) ? palette : "default" };
+  return { on: true, skin, palette: has(SKINS[skin].palettes, palette) ? palette : "default", accessory: wearable(skin, accessory) };
 }
 
 export interface Appearance {
@@ -42,11 +54,12 @@ const has = (o: object, k: string) => Object.prototype.hasOwnProperty.call(o, k)
 export function parseCompanion(raw: unknown): CompanionSetting {
   const out = defaultCompanion();
   if (typeof raw !== "object" || raw === null) return out;
-  const { on, skin, palette } = raw as { on?: unknown; skin?: unknown; palette?: unknown };
+  const { on, skin, palette, accessory } = raw as { on?: unknown; skin?: unknown; palette?: unknown; accessory?: unknown };
   if (on === true) out.on = true;
   if (typeof skin === "string" && has(SKINS, skin)) {
     out.skin = skin;
     if (typeof palette === "string" && has(SKINS[skin].palettes, palette)) out.palette = palette;
+    out.accessory = wearable(skin, accessory);
   }
   return out;
 }

@@ -113,7 +113,7 @@ export function CompanionLayer({
     <div className="mp-companion-layer" aria-hidden="true">
       {measured && (
         <Companion
-          // A new skin is a new body: restart its brain.
+          // A new species is a new body: restart its brain. A new accessory (D2c, the same id, dressed) keeps its place.
           key={skin.id}
           skin={skin}
           palette={palette}
