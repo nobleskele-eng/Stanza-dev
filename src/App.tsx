@@ -1,12 +1,4 @@
-import "./App.css";
-import "./theme/structure.css";
-import "./theme/guard.css";
-import "./fx/fx.css";
-import "../themes/t1-default/theme.css";
-import "../themes/t2-artwork/theme.css";
-import "../themes/t3-pill/theme.css";
-import "../themes/t4-extreme/theme.css";
-import "../themes/t5-kinetic/theme.css";
+import "./theme/shell.css";
 import { isTauri } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { dress } from "./companion/accessory";

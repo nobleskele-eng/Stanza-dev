@@ -86,7 +86,11 @@
 .mp-root[data-layout="card"] .mp-empty,
 .mp-root[data-layout="card"] .mp-error { grid-area: 1 / 1 / 8 / 2; min-width: 0; }
 
-/* --- data-hide-<part>: customizer support (D14), never for .mp-source-badge or artwork --- */
+/* --- data-hide-<part>: customizer support (D14), never for .mp-source-badge or artwork ---
+   `!important`: the owner hid it, so no theme brings it back. Every theme gives .mp-controls and .mp-volume-wrap
+   `display: flex` (T4 gives .mp-title a display too), which beat this rule before M3 L1 by specificity and would
+   beat it now by layer order (base < theme). An important declaration in base outranks the theme and user layers,
+   important or not (DECISIONS.md, M3 L1). */
 .mp-root[data-hide-title] .mp-title,
 .mp-root[data-hide-artist] .mp-artist,
 .mp-root[data-hide-album] .mp-album,
@@ -96,7 +100,7 @@
 .mp-root[data-hide-controls] .mp-controls,
 .mp-root[data-hide-volume] .mp-volume-wrap,
 .mp-root[data-hide-link-out] .mp-link-out {
-  display: none;
+  display: none !important;
 }
 
 /* Baseline visible keyboard focus (Phase 3 gate) — themes may restyle, not remove. */

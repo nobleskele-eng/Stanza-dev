@@ -3934,3 +3934,76 @@ one of the skin layers (PLAN.md §4b), so nothing structural changes.
     29, plus the gate's 36 WebKit skips by design.
   - Then, after dressing the shelf test: the five shelf tests in both engines, 10 passed.
   - `tsc`/`vitest` not rerun this slice: no `src` change (e2e and docs only); 582 passed at D2c.
+
+## 2026-11-08 — M2 open items: not answered, so left as they were
+
+- **Your visual review** of the creature in every theme (the review sheet sent 2026-11-07) is still open, so the M2
+  gate stays "automated checks passed, your review open". It doesn't block M3.
+- **CPU with music playing:** not taken (it needs your Spotify playing).
+- **Your window position** (Stanza opens at (2492, 583), not (2199, 372)): not moved back. Say if you didn't move it.
+- **Next:** M3, not the optional drag-swing (the D2 stretch). The swing can come back any time.
+
+## 2026-11-08 — M3 L1: cascade layers, the one shell stylesheet
+
+- **M3 split** (proposed, PLAN.md §5; the order after L1 is yours to change): L1 cascade layers, L2 the runtime theme
+  loader, L3 hot swap, L4 the settings window (a design round, needs copy), L5 the customizer (needs copy), L6
+  snippets and `.zip` import (needs copy), S7 genre fonts (needs your Client ID). L1 first: the theme loader and
+  snippets both load into these layers, and it needs no copy and no design call.
+- **What changed:** `src/theme/shell.css` is now the only stylesheet the app imports (App.tsx's nine CSS imports and
+  Sprite.tsx's one are gone). It declares `@layer guard, base, theme, user;` and imports every stylesheet into its
+  layer: `guard.css` into `guard`; App.css, structure.css, fx.css and companion.css into `base`; the five themes into
+  `theme`. `user` is empty until snippets arrive. Vite inlines it into one CSS file (the built CSS has one block per
+  layer, in that order).
+  - `base` is new to the contract's layer order (was `guard, theme, user`). The app's own CSS has to be in a layer:
+    unlayered CSS beats every layer for ordinary declarations, so it would have outranked the themes.
+  - **The guard now beats `!important`.** Before, a later stylesheet with its own `!important` could undo it (the
+    contract called the guarantee *planned*). Now nothing can: the first layer wins for important declarations.
+- **Surprise, a bug from before this change (fixed):** `data-hide-controls` and `data-hide-volume` never hid anything
+  in any theme, nor `data-hide-title` in T4. Every theme gives `.mp-controls` and `.mp-volume-wrap` `display: flex`
+  (T4 gives `.mp-title` a display), with selectors more specific than structure.css's hide rule. Nothing tested
+  hiding per theme, and the customizer UI doesn't exist yet, so nobody saw it. With layers it would have stayed broken
+  (theme beats base). Fix: the hide rule is `!important`, which in `base` outranks the theme and user layers. A new e2e
+  hides every hideable part in every theme; it failed on the controls before the fix.
+- **Contract:** no version bump (it stays 12): no part, attribute or variable was renamed or added, the same call as
+  the D10 relaxation in v3. A changelog line says so; **Layer order** is live and explains what it means for a theme
+  author (layers before specificity; `!important` the other way round); **Hidden parts** says a hidden part stays
+  hidden whatever `display` a theme gives it.
+- **Proof the themes look the same** (a scratchpad script, not kept): every element's and `::before`/`::after`'s full
+  computed style, before (a copy of the last commit) and after, side by side in Chromium with a frozen clock and a
+  seeded `Math.random`. 604 pages: 5 themes × 20 fixtures × 6 states (plain, hover, keyboard focus, reduced motion,
+  two effect mixes), plus the companion lab, its wardrobe, a dressed lab and the dev harness. 80,240 element styles.
+  - **602 identical.** The other 2 (T5 with the split-flap title) differ only in `z-index` on split-flap's flaps,
+    which `@splitflap/core` writes inline from its flip progress: timing, not CSS.
+  - A control run (old against old) first showed what's noise: the simulated `--mp-beat`, written inline on its own
+    timing, and the pet's frame geometry (`d`, a JS timer). Both were pinned or left out of the real run.
+- **Surprise:** stylesheet rules now sit inside `@layer` blocks, so code that walks `document.styleSheets[i].cssRules`
+  only sees four layer rules. `morph.spec.ts` looked for T5's keyframes that way and found none; it walks nested rules
+  now. The runtime loader (L2) will need the same care.
+- **Surprise:** Vitest replaces every CSS import with an empty string, `?raw` included, unless the file matches
+  `css.include`, which only listed structure.css. So `contractDoc.test.ts`'s scan of fx.css and guard.css for
+  undocumented custom properties had been reading nothing. `css.include` now matches every `.css` file; that scan
+  passes with the real contents.
+- **Tests:**
+  - Unit, `src/theme/shell.test.ts` (8): the order is declared first and matches THEME_CONTRACT.md; the shell has
+    nothing unlayered of its own; every stylesheet in `src/` and every `theme.css` is imported exactly once, into the
+    right layer; no module imports any other stylesheet; every guard declaration is `!important`.
+  - e2e, `contract.spec.ts` (6 × 2 engines): `!important` attacks on the artwork, the badge and the decorative layers
+    from a theme, a user snippet, unlayered CSS and an unknown layer, each added after load (the S4 trap); user beats
+    theme beats base whatever the specificity; every hideable part hides in every theme. Mutation-checked: with the
+    guard imported unlayered, all four attack tests fail.
+- **Real exe (ran):** `npm run tauri build -- --no-bundle` OK (0 warnings, check-fixtures-excluded OK). Spotify was
+  open and paused; nothing was pressed, read-only over CDP, closed with `CloseMainWindow`. One stylesheet, layers
+  `guard, base, theme, user` in that order; the same attacks as constructed stylesheets (the CSP allows no inline
+  `<style>`): artwork and badge unchanged for all three, while an unguarded canary in the same sheet (the badge's
+  `outline-color`) took effect each time, so the sheets really applied; hiding the controls: `flex` → `none`; no CSP
+  violations, no console or page errors. (The first probe had no canary; the second added it and was launched and
+  closed the same way.)
+- **Checks run (Windows):**
+  - `npx tsc --noEmit` clean.
+  - `npx vitest run`: 590 passed (582 + the 8 shell tests).
+  - `npm run tauri build -- --no-bundle` (includes `npm run build`) OK, 0 warnings, check-fixtures-excluded OK.
+  - `npx playwright test`: a first full run, while the style comparison loaded the machine, had 5 failures: the morph
+    test in both engines (the nested-rules surprise above, fixed) and three WebKit sprite-crispness tests timing out
+    at 30 s on "waiting for element to be stable" (they pass alone in ~17 s each). Then a clean full run: **907
+    passed, 65 skipped** (Chromium + WebKit; the 12 new tests included, the skips unchanged).
+  - The style comparison and the real exe, as above. Not run: `cargo test` (no Rust changed).

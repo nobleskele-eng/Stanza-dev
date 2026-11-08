@@ -1,0 +1,28 @@
+/* The one shell stylesheet (PLAN.md §4 "Customization layers", the S4 spike; docs/THEME_CONTRACT.md
+   "Layer order"). Every stylesheet the player uses goes into a named cascade layer, declared once,
+   here, before anything else loads, so the order can't depend on which file arrives first:
+
+   - guard: the D10/C13 locks, all `!important`. For important declarations the FIRST layer wins,
+     so nothing a theme or a user snippet writes, `!important` or not, can undo them.
+   - base:  the app's own CSS (page defaults, structure, effects, companion). Themes restyle it.
+   - theme: the five first-party themes today; the runtime theme loader (M3) adds to this layer.
+   - user:  user snippets (M3), above the theme for ordinary declarations.
+
+   Layered, the order beats specificity: a theme rule wins over a base rule however specific the
+   base rule is. Anything left unlayered would beat every layer for ordinary declarations, so
+   nothing is (src/theme/shell.test.ts checks every .css file is imported here, once). */
+
+@layer guard, base, theme, user;
+
+@import "./guard.css" layer(guard);
+
+@import "../App.css" layer(base);
+@import "./structure.css" layer(base);
+@import "../fx/fx.css" layer(base);
+@import "../companion/companion.css" layer(base);
+
+@import "../../themes/t1-default/theme.css" layer(theme);
+@import "../../themes/t2-artwork/theme.css" layer(theme);
+@import "../../themes/t3-pill/theme.css" layer(theme);
+@import "../../themes/t4-extreme/theme.css" layer(theme);
+@import "../../themes/t5-kinetic/theme.css" layer(theme);

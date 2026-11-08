@@ -72,6 +72,11 @@ needs it.
   app-provided `--mp-acc-1`…`--mp-acc-3`, present only while it wears something. Worn, it keeps every placement rule
   (a hat may stick up into the margin while it climbs). Nothing renamed or removed: a v11 theme keeps working apart
   from its `contract` number.
+- **No bump (2026-11-08, M3 L1):** the **Layer order** below went live: every stylesheet loads into
+  `guard, base, theme, user`, so the guard now beats `!important` too, and a theme rule beats the app's own CSS
+  whatever its specificity. **Hidden parts** now win over any `display` a theme gives the part (it didn't for
+  `controls` and `volume` in any shipped theme, nor `title` in T4). Like the D10 relaxation in v3, no part, attribute
+  or variable was renamed or added, so the version stays 12. The five shipped themes compute the same styles as before.
 
 This file is the source of truth for the class names, data attributes and CSS custom
 properties a Stanza theme may rely on. Most of it is checked by tests, not by hand:
@@ -207,7 +212,8 @@ A theme must look complete in every row, and with every conditional part absent.
 `data-hide-<part>` on `.mp-root` hides a part. Hideable: `title`, `artist`, `album`, `progress`,
 `time` (both time parts), `controls`, `volume` (the wrapper), `link-out`. Never hideable:
 `.mp-source-badge` and the artwork. Artwork radius and appearance are never exposed to any
-customization layer.
+customization layer. A hidden part stays hidden whatever `display` a theme or snippet gives it (the rule is
+`!important` in the `base` layer, see **Layer order**), so a theme may set `display` on a hideable part freely.
 
 ---
 
@@ -534,9 +540,10 @@ guard-layer protections on `.mp-source-badge` and artwork (narrower since D10 re
 
 ## Layer order (customization, D14)
 ```
-@layer guard, theme, user;
+@layer guard, base, theme, user;
 ```
-Theme CSS loads with `layer(theme)`; user snippets with `layer(user)`. The `guard` layer holds
+Theme CSS loads with `layer(theme)`; user snippets with `layer(user)`. A theme never writes `@layer` itself: the app
+puts its whole `theme.css` in the layer. The `guard` layer holds
 `!important` rules that keep `.mp-source-badge` displayed, visible and opaque, and keep
 artwork's `opacity`, `transform`, `mask` and `mix-blend-mode` locked. `border-radius`,
 `clip-path`, `filter` and `animation` are theme/user-authorable (D10 relaxed 2026-09-22 —
@@ -544,10 +551,19 @@ DECISIONS.md). This is a guard/Rules-layer change only: it does not add an artwo
 filter token to any theme's customizer `controls` map — the end-user customizer is unaffected
 unless a theme later chooses to expose one.
 
-**Status:** `src/theme/guard.css` exists and is tested against ordinary declarations, but in
-Phase 3 it is a plain stylesheet, not yet inside `@layer guard`. Until the Phase 4 loader builds
-the single layered shell stylesheet (S4 spike), a later stylesheet using its own `!important` on
-the same property can still win. The guarantee in this section is *planned* until then.
+What that means for a theme author:
+- **Layers decide before specificity.** Any theme rule beats the app's own CSS (`base`: page defaults,
+  `structure.css`'s grid placement, the effect layers' defaults, the companion's sprite colours) however specific the
+  app's rule is, and any user snippet rule beats any theme rule.
+- **`!important` runs the other way:** an important declaration in an earlier layer wins. So nothing, `!important`
+  or not, undoes the guard. `base` has two important rules of its own, which a theme can't undo either:
+  `data-hide-<part>` (see **Hidden parts**) and, under reduced motion, the clamp on every part's
+  `animation-duration`, `animation-iteration-count` and `transition-duration`.
+
+**Status (2026-11-08, M3 L1):** live. `src/theme/shell.css` is the one stylesheet the app imports, and it imports every
+other one into its layer (S4: the order is declared once, up front, in one shell). `e2e/contract.spec.ts` attacks the
+guard with `!important` from a theme, a user snippet, unlayered CSS and an unknown layer, each added after the page has
+loaded. The runtime theme loader and user snippets (M3) arrive later and add to the `theme` and `user` layers.
 
 ## Variants (customizer, D14)
 A variant is one JSON file per saved look, in `<app data dir>/variants/`, tied to one theme:

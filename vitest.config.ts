@@ -4,8 +4,9 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],
-    // structure.css is imported ?raw by variant.test.ts to keep HIDEABLE_PARTS in sync with it;
-    // Vitest otherwise replaces CSS imports with an empty string.
-    css: { include: [/structure.css/] },
+    // Tests read stylesheets ?raw (variant.test.ts: structure.css; shell.test.ts and contractDoc.test.ts: the rest).
+    // Vitest otherwise replaces every CSS import with an empty string, ?raw included (until M3 L1 only structure.css
+    // was listed here, so contractDoc.test.ts's scan of fx.css and guard.css read nothing; DECISIONS.md).
+    css: { include: [/\.css(\?|$)/] },
   },
 });

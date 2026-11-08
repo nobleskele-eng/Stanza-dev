@@ -124,16 +124,19 @@ test("morph: the artwork's own opacity is untouched (guard still holds; the tran
   await expect.poll(() => title(page)).toContain("Track Title");
   await page.waitForTimeout(1200);
   expect(await page.locator(".mp-artwork").evaluate((e) => getComputedStyle(e).opacity)).toBe("1");
-  // T5's cassette animations must not fade: neither keyframe sets opacity.
-  const css = await page.evaluate(() =>
-    [...document.styleSheets].flatMap((s) => {
+  // T5's cassette animations must not fade: neither keyframe sets opacity. The rules sit inside `@layer theme`
+  // (M3 L1), so walk nested rule lists too.
+  const css = await page.evaluate(() => {
+    const walk = (rules: CSSRuleList): CSSRule[] =>
+      [...rules].flatMap((r) => [r, ...("cssRules" in r && !(r instanceof CSSKeyframesRule) ? walk((r as CSSGroupingRule).cssRules) : [])]);
+    return [...document.styleSheets].flatMap((s) => {
       try {
-        return [...s.cssRules].filter((r) => r instanceof CSSKeyframesRule && /^t5-deck-/.test(r.name)).map((r) => r.cssText);
+        return walk(s.cssRules).filter((r) => r instanceof CSSKeyframesRule && /^t5-deck-/.test(r.name)).map((r) => r.cssText);
       } catch {
         return [];
       }
-    }),
-  );
+    });
+  });
   expect(css.length).toBe(2);
   for (const rule of css) expect(rule).not.toMatch(/opacity/);
 });

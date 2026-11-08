@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { artPixelPx, spriteBoxPx } from "./pixel";
 import { animationOf, frameMs, type Skin, type SkinAnimation } from "./skin";
 import { frameToPaths } from "./spritePaths";
-import "./companion.css";
 
 /** `--mp-pet-1..n` for a palette, set on the sprite (or any ancestor) so slot classes pick them up. */
 export function paletteVars(colours: readonly string[]): CSSProperties {

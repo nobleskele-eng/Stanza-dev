@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import { fixtures } from "../dev/fixtures/nowPlaying";
+import { HIDEABLE_PARTS } from "../src/theme/variant";
 
 // docs/THEME_CONTRACT.md is the source of truth. These tests read it and compare it with
 // what the player really renders, so the doc can't quietly drift from the code.
@@ -210,6 +211,88 @@ test("guard: opacity/transform/mask/mix-blend-mode still locked; crop/filter/ani
   });
   await expect(page.locator(".mp-source-badge")).toBeVisible();
   expect(await page.locator(".mp-source-badge").evaluate((e) => getComputedStyle(e).opacity)).toBe("1");
+});
+
+// Cascade layers (M3 L1, "Layer order"): src/theme/shell.css puts every stylesheet in `guard, base, theme, user`.
+// Each attack is added after the page has loaded, the way the runtime loader and user snippets will arrive: the S4
+// spike saw a layer order flip once a layer was registered dynamically (DECISIONS.md 2026-09-17).
+const LOCKED_ATTACK = `
+  .mp-artwork { opacity: .2 !important; transform: rotate(9deg) !important; mask: linear-gradient(#000, transparent) !important;
+                mix-blend-mode: multiply !important; }
+  .mp-source-badge { display: none !important; visibility: hidden !important; opacity: 0 !important; }
+  .mp-shapes, .mp-flow, .mp-debris { pointer-events: auto !important; }`;
+for (const [from, wrap] of [
+  ["a theme", (css: string) => `@layer theme { ${css} }`],
+  ["a user snippet", (css: string) => `@layer user { ${css} }`],
+  ["unlayered CSS", (css: string) => css],
+  ["a layer the app doesn't know", (css: string) => `@layer sneaky { ${css} }`],
+] as const) {
+  test(`guard: !important from ${from} can't undo a lock (M3 L1)`, async ({ page }) => {
+    await open(page, "very light artwork", "card", "t2-artwork", "&fx=shapes,flow,debris");
+    await page.addStyleTag({ content: wrap(LOCKED_ATTACK) });
+    const s = await page.evaluate(() => {
+      const art = getComputedStyle(document.querySelector("img.mp-artwork")!);
+      const badge = getComputedStyle(document.querySelector(".mp-source-badge")!);
+      return {
+        art: { opacity: art.opacity, transform: art.transform, mask: art.mask, blend: art.mixBlendMode },
+        badge: { display: badge.display, visibility: badge.visibility, opacity: badge.opacity },
+        decor: [".mp-shapes", ".mp-flow", ".mp-debris"].map((sel) => getComputedStyle(document.querySelector(sel)!).pointerEvents),
+      };
+    });
+    expect(s).toEqual({
+      art: { opacity: "1", transform: "none", mask: "none", blend: "normal" },
+      badge: { display: "block", visibility: "visible", opacity: "1" },
+      decor: ["none", "none", "none"],
+    });
+  });
+}
+
+test("layers: user beats theme beats base for ordinary declarations, whatever the specificity (M3 L1)", async ({ page }) => {
+  await open(page, "typical / all caps", "card", "t2-artwork");
+  const color = () => page.locator(".mp-title").evaluate((e) => getComputedStyle(e).color);
+  const theme = await color();
+  // A base rule far more specific than the theme's own loses to it: the layer order decides, not specificity.
+  await page.addStyleTag({ content: `@layer base { html body #root .mp-root .mp-window .mp-title.mp-title { color: rgb(1, 2, 3); } }` });
+  expect(await color()).toBe(theme);
+  // A theme rule beats it in turn, and a plain user rule beats a very specific theme rule.
+  await page.addStyleTag({ content: `@layer theme { html body #root .mp-root .mp-window .mp-title.mp-title { color: rgb(4, 5, 6); } }` });
+  expect(await color()).toBe("rgb(4, 5, 6)");
+  await page.addStyleTag({ content: `@layer user { .mp-title { color: rgb(7, 8, 9); } }` });
+  expect(await color()).toBe("rgb(7, 8, 9)");
+});
+
+// What `data-hide-<part>` hides (THEME_CONTRACT.md "Hidden parts"); keys checked against HIDEABLE_PARTS by the test.
+const HIDE_TARGETS: Record<string, string[]> = {
+  title: [".mp-title"],
+  artist: [".mp-artist"],
+  album: [".mp-album"],
+  progress: [".mp-progress"],
+  time: [".mp-time-current", ".mp-time-total"],
+  controls: [".mp-controls"],
+  volume: [".mp-volume-wrap"],
+  "link-out": [".mp-link-out"],
+};
+
+test("data-hide-<part> hides the part in every theme, whatever display the theme gives it (M3 L1)", async ({ page }) => {
+  expect(Object.keys(HIDE_TARGETS).sort()).toEqual([...HIDEABLE_PARTS].sort());
+  for (const { id, json } of THEMES) {
+    await open(page, "with link-out (permalink)", json.layout, id);
+    for (const part of HIDEABLE_PARTS) {
+      const r = await page.evaluate(
+        ([part, selectors]) => {
+          const root = document.querySelector(".mp-root")!;
+          const els = selectors.flatMap((s) => [...document.querySelectorAll(s)]);
+          root.setAttribute(`data-hide-${part}`, "");
+          const shown = els.filter((el) => getComputedStyle(el).display !== "none").map((el) => el.className);
+          root.removeAttribute(`data-hide-${part}`);
+          return { found: els.length, shown };
+        },
+        [part, HIDE_TARGETS[part]] as const,
+      );
+      expect(r.found, `${id}: the fixture renders every ${part} part`).toBe(HIDE_TARGETS[part].length);
+      expect(r.shown, `${id}: data-hide-${part}`).toEqual([]);
+    }
+  }
 });
 
 const CONTROL_SELECTORS = [".mp-btn-prev", ".mp-btn-play", ".mp-btn-next", ".mp-btn-lyrics", ".mp-volume-wrap", ".mp-link-out"];

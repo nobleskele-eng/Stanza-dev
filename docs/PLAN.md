@@ -260,7 +260,7 @@ Fields and which are enforced: see the contract's field table (`id`, `name`, `au
 
 ### Loading and hot swap
 - Proven in the S4 spike, not yet on `main` (M3): `theme.css` loads through Tauri's asset protocol, scoped to the two theme folders, so relative font URLs resolve naturally.
-- Rust file watcher → event → swap the stylesheet → instant reload while you design. S4 found that guard/theme/user layers must load as **one** shell stylesheet (`@layer guard, theme, user;` + three layered `@import`s) — separate layered `<link>`s flip order when added dynamically (DECISIONS.md 2026-09-17).
+- Rust file watcher → event → swap the stylesheet → instant reload while you design. S4 found that guard/theme/user layers must load as **one** shell stylesheet (`@layer guard, theme, user;` + three layered `@import`s) — separate layered `<link>`s flip order when added dynamically (DECISIONS.md 2026-09-17). *Built (M3 L1, 2026-11-08):* the shell, bundled: `src/theme/shell.css` declares `@layer guard, base, theme, user;` (`base` = the app's own CSS, below the themes) and imports every stylesheet into its layer.
 - `theme.json` validated in Rust. Broken theme → fall back to default, show the error in settings.
 
 ### Customization layers
@@ -280,9 +280,9 @@ Fields and which are enforced: see the contract's field table (`id`, `name`, `au
 - Import a single `.css` file via a settings button; copied to `<app data dir>/snippets/`. Each snippet can be toggled on/off. "Open in editor" launches the file in the system editor; file watcher hot-reloads on save.
 - Load order via cascade layers:
   ```
-  @layer guard, theme, user;
+  @layer guard, base, theme, user;
   ```
-  Theme CSS imported with `layer(theme)`, snippets with `layer(user)`. Guard layer holds `!important` rules keeping `.mp-source-badge` displayed, visible and opaque, and keeping the artwork's locked properties locked. Loaded as one shell stylesheet (S4).
+  Theme CSS imported with `layer(theme)`, snippets with `layer(user)`. Guard layer holds `!important` rules keeping `.mp-source-badge` displayed, visible and opaque, and keeping the artwork's locked properties locked. Loaded as one shell stylesheet (S4). *Built (M3 L1):* the layers and the guard (it beats `!important` from any layer or unlayered CSS); snippets themselves not yet.
 
 **Theme packages (c)** — M3
 - Import a `.zip` containing `theme.json` + `theme.css` (+ `fonts/`, `preview.svg`). Validated in Rust before copying to `<app data dir>/themes/`. Invalid package → rejected with error.
@@ -424,7 +424,7 @@ locally on `main` ("Slice N: …"), never pushed unless you ask. Hour ranges are
 - **Done:** Phase 0; spikes S1 (window), S2 (GSMTC), S4 (themes) — on their spike branches, learnings merged; Phase 2 core; Phase 3 design system + contract; Phase 4 themes T1–T5, the D16 effects layer, contract v5.
 - **Production slices on `main`:** 1 theme applied + remembered · 2 real frameless transparent window · 3 click-through · 4 right-click theme picker · 5 CSP + named Stanza · 6 player centred side to side.
 - **M1 Real music (done 2026-10-17, DECISIONS.md M1 R1–R3b):** the GSMTC adapter on `main` (20-track gate passed), position drift ≤ 0.2 s over 5 min, keyboard seek, a "Spotify not running" state with recovery, Spotify's own volume through Core Audio, the lyrics button (contract v6), and a CPU pass (every theme 0.1–0.7 s of CPU per 10 s while playing). The Slice 5/6 real-exe checks passed along the way.
-- **Tests at last full run (2026-11-07):** 582 unit (Vitest), 895 e2e + 65 skipped (Playwright, Chromium + WebKit), `cargo test` 15 (last run 2026-10-17; no Rust has changed since).
+- **Tests at last full run (2026-11-08):** 590 unit (Vitest), 907 e2e + 65 skipped (Playwright, Chromium + WebKit), `cargo test` 15 (last run 2026-10-17; no Rust has changed since).
 - **Open from M1:** R4 tray + hide (added 2026-10-22); the remaining `[NEEDS COPY]` labels (the first ones were filled 2026-10-22); the Store build of Spotify; 125%/150% scaling.
 
 ### v1 phases → milestones
@@ -476,6 +476,14 @@ locally on `main` ("Slice N: …"), never pushed unless you ask. Hour ranges are
 
 ### M3 — Make it yours (Phase 4 leftovers) · ~15–30 h
 - Settings window and customizer UI with live preview (both need copy for their chrome), variant export/import as files, snippets, theme `.zip` import, the runtime theme loader + hot swap (S4), theme previews, contrast warning, Reset appearance. Companion options in settings.
+- **Split** (proposed 2026-11-08, DECISIONS.md M3 L1; the order after L1 is yours to change):
+  - **L1 Cascade layers** — **done 2026-11-08** (DECISIONS.md): one shell stylesheet, `@layer guard, base, theme, user;`; the guard beats `!important` from anywhere; `data-hide-<part>` now beats a theme's `display` (it never did for controls and volume); every shipped theme computes the same styles as before. No UI, no copy, contract still v12.
+  - **L2 Runtime theme loader:** themes from `<app data dir>/themes/` through the asset protocol into the `theme` layer, `theme.json` validated in Rust, a broken theme falls back to the default. No settings UI yet: a folder put there by hand shows in the right-click menu.
+  - **L3 Hot swap:** the file watcher; a swap that never shows an unstyled frame (S4: keep the old sheet until the new one loads); the gate's 20 swaps, frame-captured.
+  - **L4 Settings window** (a design round with you, needs copy): the second window and its chrome, companion options, Reset appearance.
+  - **L5 Customizer** (needs copy): the theme's `controls`, live preview, the contrast warning, variants as files with export/import.
+  - **L6 Snippets and theme `.zip` import** (needs copy).
+  - **S7 genre fonts:** waits for your Spotify app Client ID/Secret.
 - **S7 genre-based fonts:** a scoped Spotify Web API call for artist genres (narrow D7 exception). Needs your own Spotify app Client ID/Secret first. A genre → font mapping becomes a contract question (`data-genre` / `--mp-font-genre` are candidates only).
 - **Gate:** every theme still passes the matrix; swap themes 20× with no flicker (frame-captured this time); memory roughly flat.
 
