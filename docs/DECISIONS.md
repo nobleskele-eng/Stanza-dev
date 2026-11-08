@@ -3892,3 +3892,45 @@ one of the skin layers (PLAN.md §4b), so nothing structural changes.
   - `npx playwright test`: 833 passed, 29 skipped (Chromium + WebKit). The five new skips are the dressed time-lapses
     in WebKit, Chromium only by design.
   - The real exe, as above. Not run: `cargo test` (no Rust changed).
+
+## 2026-11-07 — M2 milestone gate: the automated checks pass; your visual review is open
+
+- **The gate** (PLAN.md §5): a fake-clock time-lapse over all five themes × the fixture matrix (the pet stays in the
+  window and never overlaps the artwork, controls or badge); a still pose under reduced motion; no console errors;
+  CSP clean; the idle CPU budget met in the real exe; your visual review.
+- **Already there:** pixel-checked time-lapses for every theme × species (one state: playing), reduced motion in T1
+  only, a CSP test with the companion off, C2b's CPU run.
+- **Added** (`e2e/companion-player.spec.ts`):
+  - **The matrix:** every theme × the nine states the production player can show, as Spotify's state, with the dev
+    fixtures' strings: playing with volume, long title + artist, CJK / accented, emoji title, no artwork or album, no
+    seek or volume, paused, nothing playing, Spotify not running.
+    - Species and accessories take turns: all three species, all four accessories and bare, in every theme.
+    - Served with the shipped CSP header. Any console or page error, or anything blocked, fails the run.
+    - Three virtual minutes each (two in WebKit), every pixel checked at every step. While the music plays it must
+      walk; with the music off it must hold still and never walk or climb.
+    - Chromium runs all 45; WebKit runs each state once, in a theme that rotates.
+  - **Reduced motion in every theme** (was T1 only), dressed in turns.
+  - **The shelf test dressed** in turns. The review sheet's Glow Card row never reached its shelf in 40 virtual
+    minutes, so I checked that wasn't the scarf closing the door (a dressed corner pose is bigger). Probed both ways:
+    the bookworm bare and in its scarf both land on Glow Card's shelf. It was chance.
+  - **Mutation-checked:** a console error and a blocked remote image injected into one gate run both failed it.
+- **Real exe, CPU** (ran; `npm run tauri build -- --no-bundle` from D2c, no code changed since). Spotify wasn't
+  running, so the player was idle and the pet asleep: the gate's idle budget. Toggled through the native menu.
+  - Off: windows 156, 109, 78, 219, 156, 657 ms of CPU per 10 s (median 156).
+  - On: 94, 141, 62, 94, 31, 47 (median 78). The pet made 5 changes in a minute, its sleep z.
+  - Under 1% of a core either way; the pet adds nothing measurable at idle.
+  - **Not measured:** with music playing (it needs your Spotify playing). C2b's playing run, top edge only, was
+    about +50 ms per 10 s.
+- **Visual review:** a sheet of the production player in all five themes, the pet captured the first time it reaches
+  each spot (top, sitting, side, corner, under, shelf), dressed in turns. Sent to you. **Open: your review.**
+- **Surprise, not resolved:** after the CPU run, Stanza opens at (2492, 583) on your portrait display, not at
+  (2199, 372) where the D2c run left it.
+  - The driver only toggles the companion, which moves the window 32 px up-left and back. The same sequence in the
+    D2c run ended exactly where it started.
+  - Right-button presses never start a window drag.
+  - If you moved the window while it was on screen, that explains it. I didn't move it back; that's your call.
+- **Checks run (Windows):**
+  - `npx playwright test`: 895 passed, 65 skipped (Chromium + WebKit), including the new gate runs. 65 = the earlier
+    29, plus the gate's 36 WebKit skips by design.
+  - Then, after dressing the shelf test: the five shelf tests in both engines, 10 passed.
+  - `tsc`/`vitest` not rerun this slice: no `src` change (e2e and docs only); 582 passed at D2c.

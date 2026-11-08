@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import { fixtures } from "../dev/fixtures/nowPlaying";
-import type { SpotifyState } from "../src/adapters/spotifyFeed";
+import type { SpotifyState, SpotifyVolume } from "../src/adapters/spotifyFeed";
 import { artPixelPx, spriteBoxPx } from "../src/companion/pixel";
 import { CONTRACT_VERSION } from "../src/theme/variant";
 
@@ -65,10 +65,13 @@ const spotifyState = (at: number, over: Partial<SpotifyState> = {}): SpotifyStat
 
 type IpcCall = { cmd: string; args: Record<string, unknown> };
 
-/** A smaller fake than production.spec.ts's: IPC log, Spotify's state, native menus, and the window's position. */
-async function fakeTauri(page: Page, spotify: SpotifyState) {
+/**
+ * A smaller fake than production.spec.ts's: IPC log, Spotify's state and its own volume (none by default), native
+ * menus, and the window's position.
+ */
+async function fakeTauri(page: Page, spotify: SpotifyState, volume: SpotifyVolume | null = null) {
   await page.addInitScript(
-    ({ spotify, at }) => {
+    ({ spotify, volume, at }) => {
       const calls: IpcCall[] = [];
       const callbacks = new Map<number, (raw: unknown) => void>();
       let nextCallback = 1;
@@ -103,6 +106,7 @@ async function fakeTauri(page: Page, spotify: SpotifyState) {
             if (cmd === "plugin:window|outer_position") return Promise.resolve(at);
             if (cmd === "plugin:window|scale_factor") return Promise.resolve(1);
             if (cmd === "spotify_state") return Promise.resolve(spotify);
+            if (cmd === "spotify_volume") return Promise.resolve(volume);
             if (cmd.startsWith("spotify_")) return Promise.resolve(null);
             return Promise.resolve(null);
           },
@@ -114,8 +118,32 @@ async function fakeTauri(page: Page, spotify: SpotifyState) {
         },
       });
     },
-    { spotify, at: AT },
+    { spotify, volume, at: AT },
   );
+}
+
+// The shipped content security policy (Slice 5): Tauri sends tauri.conf.json's CSP as a header in release builds, so
+// the gate serves the bundle with it, as production.spec.ts does, and fails on anything it blocks.
+const CSP = (JSON.parse(readFileSync(new URL("../src-tauri/tauri.conf.json", import.meta.url), "utf8")) as { app: { security: { csp: string } } }).app
+  .security.csp;
+/** Serves the bundle with the shipped CSP header and collects what goes wrong: CSP violations, page and console errors. */
+async function watchForProblems(page: Page) {
+  await page.route(
+    (url) => url.pathname === "/" || url.pathname.endsWith(".html"),
+    async (route) => {
+      const response = await route.fetch();
+      await route.fulfill({ response, headers: { ...response.headers(), "content-security-policy": CSP } });
+    },
+  );
+  await page.addInitScript(() => {
+    const seen: string[] = [];
+    Object.assign(window, { __cspViolations: seen });
+    window.addEventListener("securitypolicyviolation", (e) => seen.push(`CSP: ${e.violatedDirective} ${e.blockedURI}`), true);
+  });
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(`page error: ${e.message}`));
+  page.on("console", (m) => m.type() === "error" && errors.push(`console: ${m.text()}`));
+  return async () => [...errors, ...(await page.evaluate(() => (window as unknown as { __cspViolations: string[] }).__cspViolations))];
 }
 
 const ipcCalls = (page: Page, cmd: string) =>
@@ -495,14 +523,25 @@ const STEP = 1000;
  * under the paused fake clock that frame sometimes hadn't come by the first check (the moving card has its own test,
  * on the real clock, below).
  */
-async function timeLapse(page: Page, theme: string, skin: string, accessory: string | null = null) {
+interface TimeLapseOptions {
+  accessory?: string | null;
+  /** Spotify's state, over the playing default (the gate's matrix). */
+  state?: Partial<SpotifyState>;
+  volume?: SpotifyVolume | null;
+  /** Serve with the shipped CSP and collect problems (`problems()`). */
+  watch?: boolean;
+  reducedMotion?: boolean;
+}
+async function timeLapse(page: Page, theme: string, skin: string, { accessory = null, state = {}, volume = null, watch = false, reducedMotion = false }: TimeLapseOptions = {}) {
+  const problems = watch ? await watchForProblems(page) : async () => [] as string[];
+  if (reducedMotion) await page.emulateMedia({ reducedMotion: "reduce" });
   const margin = spriteBoxPx(skinGrid(skin), artPixelPx(await page.evaluate(() => devicePixelRatio)));
   const { width, height } = themeJson(theme).window;
   const view = { width: width + 2 * margin, height: height + 2 * margin };
   await page.setViewportSize(view);
   const t0 = Date.now();
   await saveAppearance(page, theme, { on: true, skin, palette: "default", accessory });
-  await fakeTauri(page, spotifyState(t0));
+  await fakeTauri(page, spotifyState(t0, state), volume);
   await page.clock.install({ time: t0 });
   await page.goto("/");
   await page.locator(".mp-companion").waitFor();
@@ -537,7 +576,7 @@ async function timeLapse(page: Page, theme: string, skin: string, accessory: str
   /** It has climbed a side and hung under the bottom. */
   const around = () => (seen.has("left/climb") || seen.has("right/climb")) && seen.has("bottom/hang");
   const pause = () => emitSpotify(page, spotifyState(t0, { seq: 4, status: "paused" }));
-  return { step, seen, elapsed, around, pause };
+  return { step, seen, elapsed, around, pause, problems };
 }
 
 /**
@@ -582,12 +621,57 @@ for (const [i, theme] of THEME_IDS.entries()) {
   test(`time-lapse dressed, ${theme} × ${skin} + ${accessory}: it stays inside the window and covers no part, wearing it`, async ({ page, browserName }) => {
     test.skip(browserName === "webkit", "Chromium only: the same arithmetic");
     test.setTimeout(180_000);
-    const run = await timeLapse(page, theme, skin, accessory);
+    const run = await timeLapse(page, theme, skin, { accessory });
     await expect(page.locator(".mp-companion svg path.mp-pet-a1")).toHaveCount(1);
     while (run.elapsed() < PLAY[browserName] && !run.around()) await run.step();
     expect(run.seen, "it walked").toContain("top/walk");
   });
 }
+
+// The M2 milestone gate (PLAN.md §5): every theme × every state the production player can show (the fixture matrix,
+// as Spotify's state: the strings are the dev fixtures'), served with the shipped CSP. The pet stays inside the window
+// and over no part at every step, walks while the music plays and holds still once it doesn't, with no console error
+// and nothing blocked. Species and accessories take turns. Chromium runs it all; WebKit each state once, in a theme
+// that rotates.
+const track = (name: string) => {
+  const t = fixtures[name].track!;
+  return { title: t.title, artist: t.artist, album: t.album ?? "", durationMs: t.durationMs! };
+};
+const NOTHING = { title: "", artist: "", album: "", artworkId: 0, artwork: null, positionMs: 0, durationMs: 0 };
+const GATE_STATES: { name: string; state: Partial<SpotifyState>; volume?: SpotifyVolume; playing: boolean }[] = [
+  { name: "playing, with volume", state: {}, volume: { available: true, level: 0.6 }, playing: true },
+  { name: "long title + artist", state: track("long title + artist (overflow test)"), playing: true },
+  { name: "CJK / accented", state: track("CJK / accented characters"), playing: true },
+  { name: "emoji title", state: track("emoji title (split-flap falls back to plain text)"), playing: true },
+  { name: "no artwork, no album", state: { ...track("no artwork, no album"), album: "", artworkId: 0, artwork: null }, playing: true },
+  { name: "no seek, no volume", state: { canSeek: false }, playing: true },
+  { name: "paused", state: { status: "paused" }, playing: false },
+  { name: "nothing playing", state: { status: "idle", ...NOTHING }, playing: false },
+  { name: "Spotify not running", state: { session: false, status: "idle", ...NOTHING }, playing: false },
+];
+const GATE_PLAY = { chromium: 3 * 60_000, webkit: 2 * 60_000 } as Record<string, number>;
+for (const [t, theme] of THEME_IDS.entries())
+  for (const [v, { name, state, volume, playing }] of GATE_STATES.entries()) {
+    const k = t + v;
+    const skin = SPECIES_IDS[k % SPECIES_IDS.length];
+    const accessory = [null, ...WEAR][k % (WEAR.length + 1)];
+    test(`M2 gate, ${theme} × ${name} (${skin}${accessory ? ` + ${accessory}` : ""}): inside the window, over no part, no error, nothing blocked`, async ({ page, browserName }) => {
+      test.skip(browserName === "webkit" && k % THEME_IDS.length !== 0, "WebKit: each state once, in a rotating theme");
+      test.setTimeout(240_000);
+      const run = await timeLapse(page, theme, skin, { accessory, state, volume, watch: true });
+      if (accessory) await expect(page.locator(".mp-companion svg path.mp-pet-a1")).toHaveCount(1);
+      while (run.elapsed() < GATE_PLAY[browserName]) await run.step();
+      if (playing) expect(run.seen, "it walked while the music played").toContain("top/walk");
+      else {
+        // The music is off: asleep on the top, or holding still off it, changing nothing.
+        const held = JSON.stringify(await run.step());
+        for (let n = 0; n < 30; n++) await page.clock.runFor(STEP);
+        expect(JSON.stringify(await snapshot(page)), "still while the music is off").toBe(held);
+        expect([...run.seen].filter((s) => /walk|climb/.test(s)), "it never moved").toEqual([]);
+      }
+      expect(await run.problems()).toEqual([]);
+    });
+  }
 
 for (const theme of THEME_IDS)
   test(`around ${theme}: a pet climbs a side and hangs under the bottom, checked pixel by pixel all the way`, async ({ page, browserName }) => {
@@ -686,7 +770,9 @@ for (const [i, theme] of THEME_IDS.entries())
     test.setTimeout(150_000);
     const skin = SKIN_IDS[(i + 1) % SKIN_IDS.length]; // not the pointer test's species for this theme
     const shelf = (themeJson(theme) as { companion?: { shelf?: unknown } }).companion?.shelf;
-    const run = await timeLapse(page, theme, skin);
+    // Wearing something, taking turns (the gate): a dressed corner pose must still fit the shelf's door (D2c).
+    const accessory = skinJson(skin).accessories ? WEAR[i % WEAR.length] : null;
+    const run = await timeLapse(page, theme, skin, { accessory });
     let s = await run.step();
     await noViewTransition(page);
     const badge = s.parts.find((p) => /\bmp-source-badge\b/.test(p.part))!;
@@ -756,10 +842,11 @@ test("it rides a moving card: when the window resizes and the card moves under i
   await expect.poll(async () => ((r) => (r.onCard ? "on the card" : r.where))(await onCard())).toBe("on the card");
 });
 
-test("under reduced motion the pet holds a still pose while the music plays", async ({ page }) => {
+for (const [t, theme] of THEME_IDS.entries())
+test(`under reduced motion the pet holds a still pose while the music plays, ${theme}`, async ({ page }) => {
   const t0 = Date.now();
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await saveAppearance(page, "t1-default", { on: true, skin: "pilcrow", palette: "default" });
+  await saveAppearance(page, theme, { on: true, skin: SPECIES_IDS[t % SPECIES_IDS.length], palette: "default", accessory: [null, ...WEAR][t % (WEAR.length + 1)] });
   await fakeTauri(page, spotifyState(t0));
   await page.clock.install({ time: t0 });
   await page.goto("/");
