@@ -4195,3 +4195,20 @@ one of the skin layers (PLAN.md §4b), so nothing structural changes.
     (2492, 583), the window-state file unchanged. Closed with `CloseMainWindow`.
 - **Not tested:** macOS (FSEvents watcher, WebKit), untested on a real Mac.
 - **Next:** L4, the settings window. A design round with you, and it needs copy.
+
+## 2026-11-08 — M3 L4 design round: the settings window, three directions, waiting for your pick
+- **Sheet:** `docs/design/l4-settings-concepts.png`, built by `scripts/settings-sheet.mjs` (static mockups at 1 px = 1
+  logical px; the theme thumbnails are the review captures, cropped to the card; the creatures are the real sprites).
+  Every word the window would show is a dashed slot: no wording of mine. The only real copy on it is the five theme
+  names COPY.md already has.
+- **A · Index (my pick):** Stanza's own look (T1's ink and type), a section rail (themes, companion; L5 and L6 add
+  more), live previews of every theme with your current track, the one you wear outlined; broken user themes shown
+  with their code and not pickable; open the themes folder; Reset appearance, which asks first.
+- **B · Sheet:** the same look on one scrolling page, themes as a sideways row.
+- **C · System:** a plain Windows settings page, theme names with radio buttons, no previews.
+- **Open questions:** the direction; Windows' own title bar or frameless; live / static / no previews; a gear
+  picture or a text item in the right-click menu; whether Reset appearance resets the companion too; the size.
+- **Copy the window needs (for A),** listed on the sheet: window title, rail and heading names, the folder and reset
+  buttons, the reset question and its buttons, spoken names for every picture (species, palettes, accessories,
+  on/off) and for the theme you're wearing. Not added to COPY.md until the direction is picked.
+- **Nothing built.** No code in `src/` changed.
