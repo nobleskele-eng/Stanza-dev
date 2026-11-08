@@ -3766,3 +3766,65 @@ one of the skin layers (PLAN.md §4b), so nothing structural changes.
 - **Checks run (Windows):** `npx tsc --noEmit` clean; `npx vitest run` 331 passed; `npm run build` passed,
   check-fixtures-excluded OK; `npx playwright test` 814 passed, 24 skipped (Chromium + WebKit). Not run: the real exe
   (only skin colours changed); `cargo test` (no Rust changed).
+
+## 2026-11-07 — M2 D2b: accessories on a rig, drafted for all three species (lab only, for your review)
+
+- **Picked up:** an unfinished start from the 2026-11-01 session, never committed or logged: the rig format, `dress`,
+  the pilcrow's mounts and its four drafts. One of its tests failed (the pilcrow's headphones fell off the grid in its
+  corner poses). Finished here.
+- **The rig** (docs/COMPANION.md, "Optional: accessories"):
+  - An accessory is drawn once, upright and facing right, in 1–3 colours of its own (`a`–`c`), with an anchor pixel.
+  - Each animation's `rig` puts it on a mount (`head` or `neck`) in every frame: a pixel, a quarter turn and a flip.
+    Climbing, a hat turns with the creature; hanging upside down, it's flipped.
+  - `dress(skin, id)` paints it into every frame, so everything that reads a skin sees the dressed creature with no
+    special cases. Its `climb`/`hang` anchors are pinned to the bare creature's: wearing never moves it.
+  - Its colours render as `mp-pet-a1`…`a3` from `--mp-acc-1`…`3`, the same in every palette.
+- **Still format 2:** both keys are optional and old files stay valid, like C3c's corner poses. No skin outside this
+  repo exists yet (the loader is M3).
+- **Contract unchanged:** the `mp-pet-a*` classes appear only in the lab. The player wears nothing until D2c, which
+  adds the parts with a contract bump.
+- **Drafts** (headphones, a knitted beanie, a scarf and a little bow, each species):
+  - Shared colours where they read: a teal beanie with a gold pompom, a blue scarf with a gold stripe, a pink bow.
+    Grey headphones on the pilcrow and the bookworm; on the cassette, black with red cups (grey vanished into its
+    grey shell).
+  - **pilcrow:** the hat on the bowl's top, the scarf round the bowl's lower half. The earlier draft's scarf sat on
+    the legs in a yellow/blue checkerboard: it read as noise and hid the legs, so it was redrawn.
+  - **bookworm:** its poses are different letters, so each shape has its own mounts. The hat sits on top where the
+    head points forward or up (r, dash, o, c, i, u), and on its side where the head points down (the arch, the drape,
+    round the corner) or the silk is in the way (J, held).
+  - **cassette:** drawn the shell's width and kept inside its outline: held and falling, the shell already touches the
+    grid's top. The beanie covers the top like a knit cap. The bow sits on the top-left corner (on the right it
+    touched the sleep z, the same pink).
+- **Changes to approved art, for your review:**
+  - **The pilcrow's react hop is one row, not two.** Two left no room above its head for a hat.
+  - Its corner poses moved 2 px on the grid, with their anchors (12, 12) and (12, 3), for room around the head. They
+    look and sit exactly as before.
+  - Every other bare frame is unchanged, byte for byte (compared against the committed files).
+- **Surprise:** the bookworm's arch (the second walk frame) plants its head on the floor, so a hat can only go on the
+  head's side. Every step the hat turns a quarter with the head: walking, it flips between the top and the side.
+  A hat that skips frames would blink at 3 fps, so every frame has a mount.
+- **Tests:**
+  - `accessory.test.ts`: turning, dressing, pinned anchors, the validator, and every bundled accessory fits every
+    frame (`misfits`).
+  - `place.test.ts` and `measure.test.ts` now run every placement rule for every outfit (3 species × 4 accessories,
+    plus bare): 240 → 400 tests.
+  - One allowance: climbing, a hat may stick up past the card's top, out in the margin. The bookworm's hat, on its side
+    while it climbs, does. The creature itself stays level with the top, and nothing it wears may reach onto the
+    card's side.
+  - e2e (`companion-lab.spec.ts`): the wardrobe draws every accessory on every rigged frame in its own colour; dressed
+    sprites are crisp at 100/125/150/200%; `?wear` dresses the live cards.
+- **Lab:** `?lab=companion&wardrobe` shows each species in each accessory, round the mock card and frame by frame;
+  `?wear=<id>` dresses the live cards. The review sheets (one per species, 2×) were sent to you.
+- **Your calls:**
+  - Which accessories to keep, per species.
+  - Whether the pilcrow's lower hop is fine.
+  - Whether a hat may stick up past the card's top while climbing.
+  - Then D2c: wearing one in the player (the picker, the saved setting, contract v12).
+- **Checks run (Windows):**
+  - `npx tsc --noEmit` clean.
+  - `npx vitest run`: 578 passed.
+  - `npm run build` passed, check-fixtures-excluded OK.
+  - `npx playwright test`: 822 passed, 24 skipped, 4 failed. The 4 were the new dressed-sprite crispness check in
+    WebKit, which hit the 30 s test timeout taking 156 screenshots (it had already passed every pilcrow and bookworm
+    outfit). With a 120 s timeout, `companion-lab.spec.ts` in WebKit: 17 passed. So 826 pass, 24 skipped.
+  - Not run: the real exe (the player wears nothing yet); `cargo test` (no Rust changed).

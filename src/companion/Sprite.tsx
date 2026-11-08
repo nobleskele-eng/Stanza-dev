@@ -9,6 +9,13 @@ export function paletteVars(colours: readonly string[]): CSSProperties {
   return Object.fromEntries(colours.map((c, i) => [`--mp-pet-${i + 1}`, c])) as CSSProperties;
 }
 
+/** `--mp-acc-1..3` for a worn accessory's colours (D2b), read by the `.mp-pet-a1..3` slot classes. */
+const accessoryVars = (colours: readonly string[] = []): CSSProperties =>
+  Object.fromEntries(colours.map((c, i) => [`--mp-acc-${i + 1}`, c])) as CSSProperties;
+
+/** A slot's class: `mp-pet-c1`–`c8` for the palette, `mp-pet-a1`–`a3` for a worn accessory's colours. */
+const slotClass = (slot: string) => (/^[1-8]$/.test(slot) ? `mp-pet-c${slot}` : `mp-pet-a${"abc".indexOf(slot) + 1}`);
+
 
 /**
  * The frame index of a playing animation, advanced by a `setTimeout` chain (never a CSS animation,
@@ -75,11 +82,11 @@ export function Sprite({
       viewBox={`0 0 ${units} ${units}`}
       shapeRendering="crispEdges"
       aria-hidden="true"
-      style={{ display: "block", ...paletteVars(colours) }}
+      style={{ display: "block", ...paletteVars(colours), ...accessoryVars(skin.worn?.colours) }}
     >
       <g transform={mirrored ? `translate(${skin.grid} 0) scale(-1 1)` : undefined}>
         {paths.map(({ slot, d }) => (
-          <path key={slot} className={`mp-pet-c${slot}`} d={d} />
+          <path key={slot} className={slotClass(slot)} d={d} />
         ))}
       </g>
     </svg>

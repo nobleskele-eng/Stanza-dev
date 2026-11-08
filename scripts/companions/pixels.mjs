@@ -96,3 +96,27 @@ export function writeSkin(skin, out) {
   writeFileSync(out, JSON.stringify(skin, null, 2) + "\n");
   console.log(`wrote ${skin.id}: ${Object.keys(skin.animations).length} animations`);
 }
+
+// Accessory mounts (D2b): a frame posed with where its head and neck are, so a hat follows every pose. A mount is
+// { x, y, turn, flip } (src/companion/skin.ts `Mount`): the art pixel an accessory's anchor sits on, and how the
+// accessory is turned there (clockwise quarter turns, then a vertical flip).
+
+/** A frame and its mounts (either may be null: nothing worn there in that frame). */
+export const posed = (f, head = null, neck = null) => ({ f, head, neck });
+/** A mount moved by (dx, dy), as when its frame is placed at an offset. */
+export const at = (m, dx, dy) => m && { ...m, x: m.x + dx, y: m.y + dy };
+/** The mount once its frame is turned a quarter counter-clockwise (`rotCCW`, 16-px grids). */
+const rotMountCCW = (m) =>
+  m && { x: m.y, y: N - 1 - m.x, turn: ((m.turn ?? 0) + (m.flip ? 90 : 270)) % 360, ...(m.flip ? { flip: true } : {}) };
+/** The mount once its frame is flipped upside down (`flipY`). */
+const flipMountY = (m) => m && { x: m.x, y: N - 1 - m.y, ...(m.turn ? { turn: m.turn } : {}), ...(m.flip ? {} : { flip: true }) };
+export const rotPosedCCW = (p) => posed(rotCCW(p.f), rotMountCCW(p.head), rotMountCCW(p.neck));
+export const flipPosedY = (p) => posed(flipY(p.f), flipMountY(p.head), flipMountY(p.neck));
+/** Draws more layers over a posed frame (a heart, a "z"), keeping its mounts. */
+export const over = (p, ...layers) => posed(layers.reduce((f, [s, x, y]) => place(f, s, x, y), p.f), p.head, p.neck);
+/** An animation from posed frames: its `frames`, and its `rig` for both mounts. */
+export const animated = (opts, frames) => ({
+  ...opts,
+  frames: frames.map((p) => p.f),
+  rig: { head: frames.map((p) => p.head), neck: frames.map((p) => p.neck) },
+});

@@ -5,7 +5,10 @@
 // side by side (C1). Never in production (DevHarness is DEV-only). `?pause` holds every animation on its first frame
 // (screenshots, crispness checks); `?skin=<id>` shows one skin and leaves out the live cards; `?live` shows only the
 // top-edge live cards, `?around` only the ones that travel the outline, `?shelf` only the ones with a shelf.
+// `?wardrobe` shows the wardrobe instead (D2b): each species in each accessory it can wear. `?wear=<id>` dresses every
+// creature on the page that has accessory <id>, the live cards too.
 import { useState, type CSSProperties, type ReactNode } from "react";
+import { dress } from "../companion/accessory";
 import { Companion } from "../companion/Companion";
 import { measureShelf, type Box } from "../companion/measure";
 import { placeAround, type EdgeBox, type Surface } from "../companion/place";
@@ -27,6 +30,11 @@ const BACKDROPS = { light: "#f2f0ea", dark: "#16161a" } as const;
 /** CSS px per art pixel in the zoomed view: whole device px at every quarter-step scaling (8/10/12/14/16). */
 const ZOOM_PIXEL = 8;
 const LINE: CSSProperties = { lineHeight: `${LAYOUT_GRID * 4}px`, margin: 0 };
+/** CSS px per art pixel in the wardrobe's frame strips: half the zoom, still whole device px at every quarter step. */
+const STRIP_PIXEL = 4;
+
+/** The page's creatures, each dressed in `?wear=<id>` if it has that accessory (D2b). */
+const worn = (): Skin[] => Object.values(SKINS).map((skin) => dress(skin, new URLSearchParams(window.location.search).get("wear")));
 
 function Playing({
   skin,
@@ -183,7 +191,7 @@ function Live({ around = false, shelf = false }: { around?: boolean; shelf?: boo
         ))}
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-        {Object.values(SKINS).map((skin) => (
+        {worn().map((skin) => (
           <MockCard key={skin.id} backdrop="light" shelf={shelf} {...{ [card]: skin.id }}>
             <Companion
               skin={skin}
@@ -204,6 +212,52 @@ function Live({ around = false, shelf = false }: { around?: boolean; shelf?: boo
   );
 }
 
+/**
+ * The wardrobe (D2b): each species in each accessory it can wear, round the mock card on light and dark (the scene's
+ * poses), then every animation's frames side by side on both backdrops. Default palette; the accessory brings its own
+ * colours. Lab-only: the player wears nothing yet.
+ */
+function Wardrobe({ skins, paused }: { skins: Skin[]; paused: boolean }) {
+  return (
+    <section data-lab-wardrobe="" style={{ marginBottom: 24 }}>
+      {skins.flatMap((skin) =>
+        Object.keys(skin.accessories ?? {}).map((id) => {
+          const dressed = dress(skin, id);
+          return (
+            <div key={`${skin.id}/${id}`} data-lab-skin={skin.id} data-lab-accessory={id} style={{ marginBottom: 12 }}>
+              <h2 style={{ ...LINE, fontSize: 13, marginBottom: 8 }}>
+                {skin.id} + {id}
+              </h2>
+              <div data-lab-scenes-worn="" style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+                <Scene skin={dressed} palette="default" backdrop="light" paused={paused} />
+                <Scene skin={dressed} palette="default" backdrop="dark" paused={paused} />
+              </div>
+              {(Object.keys(BACKDROPS) as (keyof typeof BACKDROPS)[]).map((backdrop) => (
+                <div
+                  key={backdrop}
+                  data-lab-frames={backdrop}
+                  style={{ display: "flex", flexWrap: "wrap", gap: 16, padding: 12, background: BACKDROPS[backdrop], color: backdrop === "dark" ? "#ddd" : "#333" }}
+                >
+                  {animationsOf(dressed).map((animation) => (
+                    <figure key={animation} data-lab-anim={animation} style={{ margin: 0, display: "grid", gap: LAYOUT_GRID }}>
+                      <div style={{ display: "flex", gap: LAYOUT_GRID }}>
+                        {animationOf(dressed, animation).frames.map((_, f) => (
+                          <Sprite key={f} skin={dressed} animation={animation} frame={f} pixel={STRIP_PIXEL} />
+                        ))}
+                      </div>
+                      <figcaption style={LINE}>{animation}</figcaption>
+                    </figure>
+                  ))}
+                </div>
+              ))}
+            </div>
+          );
+        }),
+      )}
+    </section>
+  );
+}
+
 export function CompanionLab() {
   const params = new URLSearchParams(window.location.search);
   const paused = params.has("pause");
@@ -216,13 +270,19 @@ export function CompanionLab() {
         <Live around={params.has("around")} shelf={params.has("shelf")} />
       </div>
     );
+  if (params.has("wardrobe"))
+    return (
+      <div style={page}>
+        <Wardrobe skins={Object.values(SKINS).filter((s) => !only || s.id === only)} paused={paused} />
+      </div>
+    );
   return (
     <div style={page}>
       {!only && <Live />}
       {!only && <Live around />}
       {!only && <Live shelf />}
       <section data-lab-scenes="" style={{ marginBottom: 24 }}>
-        {Object.values(SKINS)
+        {worn()
           .filter((s) => !only || s.id === only)
           .map((skin) => (
             <div key={skin.id} data-lab-skin={skin.id} style={{ marginBottom: 12 }}>

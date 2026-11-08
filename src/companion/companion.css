@@ -10,6 +10,10 @@
 .mp-pet-c6 { fill: var(--mp-pet-6); }
 .mp-pet-c7 { fill: var(--mp-pet-7); }
 .mp-pet-c8 { fill: var(--mp-pet-8); }
+/* A worn accessory's own colours (D2b), set inline from the accessory, not the palette. */
+.mp-pet-a1 { fill: var(--mp-acc-1); }
+.mp-pet-a2 { fill: var(--mp-acc-2); }
+.mp-pet-a3 { fill: var(--mp-acc-3); }
 
 /* The production layer (CompanionLayer): zero-size and fixed at the window's origin, so a theme's positioning or
    clipping on .mp-root / .mp-window can't reach the pet. The layer never intercepts input; the pet itself does (C4b). */

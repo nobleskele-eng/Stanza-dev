@@ -53,8 +53,8 @@ function rasterise(paths: ReturnType<typeof frameToPaths>, width: number, height
 describe("frameToPaths", () => {
   it("merges runs into one path per slot, slots in order", () => {
     expect(frameToPaths([".11.", "2222", "...."])).toEqual([
-      { slot: 1, d: "M1 0h2v1h-2z" },
-      { slot: 2, d: "M0 1h4v1h-4z" },
+      { slot: "1", d: "M1 0h2v1h-2z" },
+      { slot: "2", d: "M0 1h4v1h-4z" },
     ]);
     expect(frameToPaths(["....", "...."])).toEqual([]);
   });

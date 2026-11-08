@@ -1,7 +1,7 @@
 // D1 concept A, "pilcrow": the paragraph mark ¶ as a creature. Its bowl is the head (one eye), its two stems are
 // the legs. Proofreader's-pencil red, so it reads on light and dark cards. Drawn for Stanza (docs/COMPANION.md,
 // Originality); no reference sprite was used.
-import { art, blank, flipY, frame, place, rotCCW } from "./pixels.mjs";
+import { animated, art, at, blank, flipPosedY, frame, over, place, posed, rotPosedCCW, shift } from "./pixels.mjs";
 
 // Slots: 1 red, 2 shade, 3 eye white, 4 pupil, 5 accent (z, heart).
 const EYES = {
@@ -40,11 +40,17 @@ const LEGS = {
 };
 
 const X = 2; // the creature's left edge in the frame
+// Where it wears things (D2b), in the body's art: the head mount is the bowl's top, the neck mount the left end of
+// a band round the bowl's lower half, where the stems leave it.
+const HEAD = { x: 4, y: 0 };
+const NECK = { x: 4, y: 5 };
+/** The body at (x, y) in a frame, posed: its mounts moved with it. */
+const posedAt = (f, x, y) => posed(f, at(HEAD, x, y), at(NECK, x, y));
 /** A standing-type frame: body + legs, feet on row 14 (the anchor row); `lift` raises the whole creature. */
 function stand(eyes = "open", legs = "stand", lift = 0) {
   const l = LEGS[legs];
   const top = 15 - l.length - 7 - lift;
-  return frame([body(eyes), X, top], [l, X, top + 7]);
+  return posedAt(frame([body(eyes), X, top], [l, X, top + 7]), X, top);
 }
 
 // The sleep z: one legible glyph in both frames, drifting up between them (C6b: a 2-wide second z read as a "c").
@@ -56,21 +62,24 @@ const standing = stand();
 const blink = stand("closed");
 
 // Sit: the thighs (row 10) rest on the edge; the shins hang below it, over the card's face.
-const sit = (eyes) => frame([body(eyes), X, 3], [LEGS.sit, X, 10]);
+const sit = (eyes) => posedAt(frame([body(eyes), X, 3], [LEGS.sit, X, 10]), X, 3);
 
 // Hang: upside down, feet hooked on the edge above (row 0), like a bat. `dx` sways the body.
-const hang = (dx) => flipY(frame([body("open"), X + dx, 4], [LEGS.dangle, X, 11]));
+const hang = (dx) =>
+  flipPosedY(posed(frame([body("open"), X + dx, 4], [LEGS.dangle, X, 11]), at(HEAD, X + dx, 4), at(NECK, X, 4)));
 
 // Climb: the walk turned a quarter so the feet grip a wall on the right, heading up.
-const climb = (legs) => rotCCW(stand("open", legs));
+const climb = (legs) => rotPosedCCW(stand("open", legs));
 
-const sleeping = (z, zx = 13, zy = 2) => frame([body("closed"), X, 6], [LEGS.tuck, X, 13], [z, zx, zy]);
+const sleeping = (z, zx = 13, zy = 2) => posedAt(frame([body("closed"), X, 6], [LEGS.tuck, X, 13], [z, zx, zy]), X, 6);
 const held = stand("wide", "dangle", 1);
 
 // Over a corner (C3c): the standing ¶ turned 45° about its feet (supersampled, then checked by eye), one foot on the
-// top edge and one against the side. The corner is the bottom-right of pixel (10, 10). Under the bottom corner it's
-// the same, upside down, as its hang is (the corner then the top-right of pixel (10, 5)).
-const OVER = art([
+// top edge and one against the side. The corner is the bottom-right of pixel (12, 12). Under the bottom corner it's
+// the same, upside down, as its hang is (the corner then the top-right of pixel (12, 3)).
+// Moved 2 px right and down from C3c (the anchor with it, so it sits on the corner as before): room on the grid
+// above and left of its head for a hat (D2b).
+const OVER_ART = shift(art([
   "................",
   "................",
   ".....12.........",
@@ -87,7 +96,18 @@ const OVER = art([
   "................",
   "................",
   "................",
-]);
+]), 2, 2);
+// Its head is the bowl at the lower left, turned 45°: a hat sits on its top, upright (D2b, the nearest quarter turn).
+const OVER = posed(OVER_ART, { x: 5, y: 7 }, { x: 6, y: 11 });
+
+// What it can wear (D2b, drafts for your review). Each is anchored on its mount: the head (the bowl's top) or the
+// neck (the bowl's lower half, where the stems leave it). Colours read on the lab's light and dark backdrops.
+const ACCESSORIES = {
+  headphones: { mount: "head", colours: ["#8a90a0", "#5c6170"], art: [".aaaaaa.", "a......a", "bb......", "bb......"], anchor: { x: 4, y: 1 } },
+  beanie: { mount: "head", colours: ["#f2b134", "#2e8b7a", "#22685b"], art: ["...a...", ".bbbbb.", "ccccccc"], anchor: { x: 3, y: 2 } },
+  scarf: { mount: "neck", colours: ["#3d63dd", "#f2b134"], art: [".aaaaaaaa", "abbbbbbbb", "aa.......", "b........"], anchor: { x: 1, y: 0 } },
+  bow: { mount: "head", colours: ["#ff5d8f", "#c2185b"], art: ["a...a", "aabaa", "a...a"], anchor: { x: 0, y: 2 } },
+};
 
 export const pilcrow = {
   id: "pilcrow",
@@ -104,19 +124,21 @@ export const pilcrow = {
     highlighter: ["#ff8a1f", "#c45f05", "#fff8ec", "#2a1608", "#ff5d8f"],
   },
   animations: {
-    idle: { fps: 1, loop: true, frames: [standing, blink], durations: [2800, 160] },
-    walk: { fps: 4, loop: true, frames: [stand("open", "stepA"), stand("open", "stepB")], steps: [2, 2] },
-    sit: { fps: 1, loop: true, frames: [sit("open"), sit("closed")], durations: [3200, 160], anchor: { x: 10, y: 10 } },
-    climb: { fps: 3, loop: true, frames: [climb("stepA"), climb("stepB")], steps: [2, 2] }, // the walk turned: same stride
-    hang: { fps: 1, loop: true, frames: [hang(0), hang(1)], durations: [1400, 1400] },
-    sleep: { fps: 1, loop: true, frames: [sleeping(Z, 13, 2), sleeping(Z, 13, 0)], durations: [4000, 4000] },
-    wake: { fps: 4, loop: false, frames: [sleeping(blank(1, 1)), stand("half", "squat"), standing] },
-    // A hop, then a landing crouch under the heart, then up (C6b: standing or hopping, it leaves no room for a 5×4 heart).
-    react: { fps: 2, loop: false, frames: [stand("open", "stand", 2), frame([stand("open", "squat"), 0, 0], [HEART, 11, 1]), standing], durations: [250, 700, 250] },
-    held: { fps: 2, loop: true, frames: [held, held.map((r, y) => (y > 10 ? r.slice(1) + "." : r))] },
-    fall: { fps: 1, loop: true, frames: [stand("wide", "spread", 3)] },
-    land: { fps: 6, loop: false, frames: [stand("closed", "squat"), standing] },
-    over: { fps: 3, loop: false, frames: [OVER], durations: [300], anchor: { x: 10, y: 10 } },
-    under: { fps: 3, loop: false, frames: [flipY(OVER)], durations: [300], anchor: { x: 10, y: 5 } },
+    idle: animated({ fps: 1, loop: true, durations: [2800, 160] }, [standing, blink]),
+    walk: animated({ fps: 4, loop: true, steps: [2, 2] }, [stand("open", "stepA"), stand("open", "stepB")]),
+    sit: animated({ fps: 1, loop: true, durations: [3200, 160], anchor: { x: 10, y: 10 } }, [sit("open"), sit("closed")]),
+    climb: animated({ fps: 3, loop: true, steps: [2, 2] }, [climb("stepA"), climb("stepB")]), // the walk turned: same stride
+    hang: animated({ fps: 1, loop: true, durations: [1400, 1400] }, [hang(0), hang(1)]),
+    sleep: animated({ fps: 1, loop: true, durations: [4000, 4000] }, [sleeping(Z, 13, 2), sleeping(Z, 13, 0)]),
+    wake: animated({ fps: 4, loop: false }, [sleeping(blank(1, 1)), stand("half", "squat"), standing]),
+    // A hop, then a landing crouch under the heart, then up (C6b: standing or hopping, it leaves no room for a 5×4
+    // heart). The hop is one row (D2b: two left no room above it for a hat).
+    react: animated({ fps: 2, loop: false, durations: [250, 700, 250] }, [stand("open", "stand", 1), over(stand("open", "squat"), [HEART, 11, 1]), standing]),
+    held: animated({ fps: 2, loop: true }, [held, posed(held.f.map((r, y) => (y > 10 ? r.slice(1) + "." : r)), held.head, held.neck)]),
+    fall: animated({ fps: 1, loop: true }, [stand("wide", "spread", 3)]),
+    land: animated({ fps: 6, loop: false }, [stand("closed", "squat"), standing]),
+    over: animated({ fps: 3, loop: false, durations: [300], anchor: { x: 12, y: 12 } }, [OVER]),
+    under: animated({ fps: 3, loop: false, durations: [300], anchor: { x: 12, y: 3 } }, [flipPosedY(OVER)]),
   },
+  accessories: ACCESSORIES,
 };

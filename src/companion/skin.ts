@@ -48,7 +48,42 @@ export interface SkinAnimation {
    * than its feet because its legs hang over the edge.
    */
   anchor?: Anchor;
+  /**
+   * Optional (D2b): where an accessory sits in each frame, per mount: one entry per frame, null where none is worn.
+   * Needed by every animation for every mount the skin's accessories use.
+   */
+  rig?: Partial<Record<MountName, (Mount | null)[]>>;
 }
+
+/** Where on a creature an accessory sits (D2b): a hat or headphones on the head, a scarf at the neck. */
+export const MOUNTS = ["head", "neck"] as const;
+export type MountName = (typeof MOUNTS)[number];
+
+/**
+ * A mount in one frame: the art pixel the accessory's anchor sits on, and how the accessory is turned there (clockwise
+ * quarter turns, then a vertical flip: a climb is a turn, an upside-down hang a flip).
+ */
+export interface Mount {
+  x: number;
+  y: number;
+  turn?: 0 | 90 | 180 | 270;
+  flip?: boolean;
+}
+
+/**
+ * Something a creature can wear (D2b): drawn once, upright and facing right, in its own 1–3 colours (`a`–`c` in its
+ * rows), and placed at a mount of every frame by `dress` (accessory.ts).
+ */
+export interface Accessory {
+  mount: MountName;
+  colours: string[];
+  art: string[];
+  /** The art pixel that sits on the mount. */
+  anchor: Anchor;
+}
+
+/** The pixels an accessory's art may use: its colours, in order. */
+export const ACCESSORY_SLOTS = ["a", "b", "c"] as const;
 
 /** An art pixel whose bottom edge rests on the surface the creature stands or sits on. */
 export interface Anchor {
@@ -66,6 +101,10 @@ export interface Skin {
   /** Named palettes; each is the colours of slots 1..n. Must include "default". */
   palettes: Record<string, string[]>;
   animations: Record<RequiredAnimation, SkinAnimation> & Partial<Record<OptionalAnimation, SkinAnimation>>;
+  /** Optional (D2b): what it can wear, by id. */
+  accessories?: Record<string, Accessory>;
+  /** Set only on a dressed skin (`dress`), never in a file: the accessory worn, and its colours. */
+  worn?: { id: string; colours: string[] };
 }
 
 /** An animation the skin has; throws for an optional one it lacks (callers check `skin.animations[name]` first). */
@@ -96,7 +135,10 @@ export type SkinIssueCode =
   | "row-length"
   | "pixel-invalid"
   | "slot-out-of-range"
-  | "corner-invalid";
+  | "corner-invalid"
+  | "accessory-invalid"
+  | "rig-invalid"
+  | "rig-missing";
 
 export interface SkinIssue {
   code: SkinIssueCode;
@@ -108,7 +150,10 @@ const isInt = (v: unknown, min: number, max: number) => Number.isInteger(v) && (
 const HEX = /^#[0-9a-f]{6}$/i;
 const ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const TOP_KEYS = ["id", "name", "format", "grid", "anchor", "palettes", "animations"];
-const ANIMATION_KEYS = ["fps", "loop", "frames", "durations", "steps", "anchor"];
+const OPTIONAL_TOP_KEYS = ["accessories"];
+const ANIMATION_KEYS = ["fps", "loop", "frames", "durations", "steps", "anchor", "rig"];
+const ACCESSORY_KEYS = ["mount", "colours", "art", "anchor"];
+const TURNS = [0, 90, 180, 270];
 const isAnchor = (v: unknown, grid: number | null) =>
   isObject(v) && Object.keys(v).every((k) => k === "x" || k === "y") && grid !== null && isInt(v.x, 0, grid - 1) && isInt(v.y, 0, grid - 1);
 export const MIN_FRAME_MS = 50;
@@ -120,7 +165,7 @@ export function validateSkin(raw: unknown): { skin: Skin | null; issues: SkinIss
   const add = (code: SkinIssueCode, path: string) => issues.push({ code, path });
   if (!isObject(raw)) return { skin: null, issues: [{ code: "not-an-object", path: "" }] };
 
-  for (const key of Object.keys(raw)) if (!TOP_KEYS.includes(key)) add("unknown-key", key);
+  for (const key of Object.keys(raw)) if (!TOP_KEYS.includes(key) && !OPTIONAL_TOP_KEYS.includes(key)) add("unknown-key", key);
   for (const key of TOP_KEYS) if (!(key in raw)) add("missing", key);
   if ("format" in raw && raw.format !== SKIN_FORMAT) add("format-mismatch", "format");
   if ("id" in raw && !(typeof raw.id === "string" && ID.test(raw.id))) add("id-invalid", "id");
@@ -184,6 +229,7 @@ export function validateSkin(raw: unknown): { skin: Skin | null; issues: SkinIss
           if (!ok) add("steps-invalid", `${path}.steps`);
         }
         if ("anchor" in anim && !isAnchor(anim.anchor, grid)) add("anchor-invalid", `${path}.anchor`);
+        if ("rig" in anim) checkRig(anim.rig, frames.length, grid, `${path}.rig`, add);
         // A corner pose places by its own anchor, and never on the card's side of it (C3c).
         if (name === "over" || name === "under") {
           if (!("anchor" in anim)) add("missing", `${path}.anchor`);
@@ -193,7 +239,58 @@ export function validateSkin(raw: unknown): { skin: Skin | null; issues: SkinIss
     }
   }
 
+  // Accessories (D2b): each well-formed, and every animation rigged for the mount it uses.
+  if ("accessories" in raw) {
+    if (!isObject(raw.accessories)) add("accessory-invalid", "accessories");
+    else
+      for (const [id, acc] of Object.entries(raw.accessories)) {
+        const path = `accessories.${id}`;
+        if (!ID.test(id) || !isAccessory(acc)) {
+          add("accessory-invalid", path);
+          continue;
+        }
+        if (isObject(raw.animations))
+          for (const [name, anim] of Object.entries(raw.animations))
+            if (isObject(anim) && !(isObject(anim.rig) && Array.isArray(anim.rig[acc.mount]))) add("rig-missing", `animations.${name}.rig.${acc.mount}`);
+      }
+  }
+
   return { skin: issues.length ? null : (raw as unknown as Skin), issues };
+}
+
+function checkRig(rig: unknown, frames: number, grid: number | null, path: string, add: (c: SkinIssueCode, p: string) => void) {
+  if (!isObject(rig)) return add("rig-invalid", path);
+  for (const [mount, list] of Object.entries(rig)) {
+    const ok =
+      (MOUNTS as readonly string[]).includes(mount) &&
+      Array.isArray(list) &&
+      list.length === frames &&
+      list.every(
+        (m) =>
+          m === null ||
+          (isObject(m) &&
+            Object.keys(m).every((k) => ["x", "y", "turn", "flip"].includes(k)) &&
+            grid !== null &&
+            isInt(m.x, 0, grid - 1) &&
+            isInt(m.y, 0, grid - 1) &&
+            (m.turn === undefined || TURNS.includes(m.turn as number)) &&
+            (m.flip === undefined || typeof m.flip === "boolean")),
+      );
+    if (!ok) add("rig-invalid", `${path}.${mount}`);
+  }
+}
+
+function isAccessory(acc: unknown): acc is Accessory {
+  if (!isObject(acc) || !Object.keys(acc).every((k) => ACCESSORY_KEYS.includes(k))) return false;
+  const { mount, colours, art, anchor } = acc;
+  if (!(MOUNTS as readonly string[]).includes(mount as string)) return false;
+  if (!Array.isArray(colours) || colours.length < 1 || colours.length > ACCESSORY_SLOTS.length) return false;
+  if (!colours.every((c) => typeof c === "string" && HEX.test(c))) return false;
+  if (!Array.isArray(art) || art.length < 1 || art.length > MAX_GRID) return false;
+  const width = typeof art[0] === "string" ? art[0].length : 0;
+  const allowed = new Set([".", ...ACCESSORY_SLOTS.slice(0, colours.length)]);
+  if (width < 1 || !art.every((r) => typeof r === "string" && r.length === width && [...r].every((c) => allowed.has(c)))) return false;
+  return isObject(anchor) && isInt(anchor.x, 0, width - 1) && isInt(anchor.y, 0, art.length - 1);
 }
 
 /** No opaque pixel of a corner pose on the card's side of its anchor: below-right (`over`) or above-right (`under`). */

@@ -3,7 +3,11 @@ import { advance, createBrain, drop, nextChangeAt, pickUp, pose, type World } fr
 import { spriteBoxPx } from "./pixel";
 import { measureShelf } from "./measure";
 import { FLOOR_ANIMATIONS, carryPoint, edgeLength, landingFor, noSitRanges, placeAround, placeOnEdge, type Surface } from "./place";
+import { outfitName, outfits } from "./accessory";
 import { SKINS } from "./registry";
+
+/** Every bundled skin, bare and in each accessory it can wear (D2b): the rules hold for every outfit. */
+const WORN = Object.values(SKINS).flatMap(outfits);
 import { anchorOf, animationOf, type AnimationName, type Skin } from "./skin";
 
 describe("companion placement", () => {
@@ -61,19 +65,24 @@ describe("companion placement around the card (C3a)", () => {
   const most = (xs: number[]) => Math.max(...xs);
   const least = (xs: number[]) => Math.min(...xs);
 
-  for (const skin of Object.values(SKINS)) {
-    it(`${skin.id}: climbing, the art touches the side from outside, and at the top corner it's level with the top`, () => {
+  for (const skin of WORN) {
+    it(`${outfitName(skin)}: climbing, the art touches the side from outside, and at the top corner it's level with the top`, () => {
+      // The creature is level with the card's top; a hat may stick up past it, out in the margin, as wearing never
+      // moves the creature (D2b). Nothing it wears may reach onto the card's side.
+      const bare = SKINS[skin.id];
+      const top = least(pixels(bare, "climb", "left", 0, 1).map((b) => b.top));
       const left = pixels(skin, "climb", "left", 0, 1);
       expect(most(left.map((b) => b.right)), "touches the left side").toBe(card.left);
-      expect(least(left.map((b) => b.top)), "level with the card's top").toBe(card.top);
+      expect(top, "level with the card's top").toBe(card.top);
+      expect(least(left.map((b) => b.top)), "nothing below the creature's top").toBeLessThanOrEqual(top);
       const right = pixels(skin, "climb", "right", 0, -1); // mirrored on the right, whichever way it climbs
       expect(least(right.map((b) => b.left)), "touches the right side").toBe(card.left + card.width);
-      expect(least(right.map((b) => b.top))).toBe(card.top);
+      expect(least(pixels(bare, "climb", "right", 0, -1).map((b) => b.top))).toBe(card.top);
       // Lower down it's the same pose, moved by whole art pixels.
-      expect(least(pixels(skin, "climb", "left", 10, 1).map((b) => b.top))).toBe(card.top + 10 * px);
+      expect(least(pixels(skin, "climb", "left", 10, 1).map((b) => b.top))).toBe(least(left.map((b) => b.top)) + 10 * px);
     });
 
-    it(`${skin.id}: hanging, the art touches the bottom from below, at the bottom's position from the card's left`, () => {
+    it(`${outfitName(skin)}: hanging, the art touches the bottom from below, at the bottom's position from the card's left`, () => {
       for (const facing of [1, -1] as const) {
         const hang = pixels(skin, "hang", "bottom", 30, facing);
         expect(least(hang.map((b) => b.top)), `facing ${facing}`).toBe(card.top + card.height);
@@ -134,12 +143,12 @@ describe("companion placement in the pointer's hand (C4a)", () => {
       b.left >= room.left - EPS && b.right <= room.left + room.width + EPS && b.top >= room.top - EPS && b.bottom <= room.top + room.height + EPS;
 
     for (const [layout, art] of Object.entries(LAYOUTS))
-      for (const skin of Object.values(SKINS)) {
+      for (const skin of WORN) {
         const box = spriteBoxPx(skin.grid, px);
         // The component's default: the card and a sprite's box around it (the window's margin, C3b).
         const room = { left: card.left - box, top: card.top - box, width: card.width + 2 * box, height: card.height + 2 * box };
 
-        it(`${skin.id} at ${px} px, artwork ${layout}: carried anywhere, never over the artwork; let go, it falls only down and lands`, () => {
+        it(`${outfitName(skin)} at ${px} px, artwork ${layout}: carried anywhere, never over the artwork; let go, it falls only down and lands`, () => {
           const surfaces = new Set<string>();
           const wrong: string[] = []; // collected, then checked once: tens of thousands of expect() calls are slow
           const count = { falls: 0, faceFalls: 0, turns: 0, overCard: 0 };
@@ -271,8 +280,8 @@ describe("companion placement with a shelf (C5a)", () => {
   const toBox = (b: typeof art) => ({ left: b.left, top: b.top, right: b.left + b.width, bottom: b.top + b.height });
 
   for (const px of [2, 2.4])
-    for (const skin of Object.values(SKINS)) {
-      it(`${skin.id} at ${px} px: dropped anywhere over the card, some land on the shelf; every fall stays off the artwork`, () => {
+    for (const skin of WORN) {
+      it(`${outfitName(skin)} at ${px} px: dropped anywhere over the card, some land on the shelf; every fall stays off the artwork`, () => {
         const shelf = measureShelf(skin, toBox(card), line, [toBox(art), badge], px)!;
         expect(shelf, "the lab's shelf fits every skin").not.toBeNull();
         const at = Math.round((shelf.edge.top - card.top) / px) - 1;
@@ -387,9 +396,9 @@ describe("companion placement round a corner (C3c)", () => {
   const inside = (b: { left: number; top: number; right: number; bottom: number }) =>
     b.left < card.left + card.width - E && b.right > card.left + E && b.top < card.top + card.height - E && b.bottom > card.top + E;
 
-  for (const skin of Object.values(SKINS).filter((s) => s.animations.over && s.animations.under))
+  for (const skin of WORN.filter((s) => s.animations.over && s.animations.under))
     for (const px of [2, 2.4])
-      it(`${skin.id} at ${px} px: bent round each corner from outside, a foot on each edge`, () => {
+      it(`${outfitName(skin)} at ${px} px: bent round each corner from outside, a foot on each edge`, () => {
         const right = card.left + card.width;
         const bottom = card.top + card.height;
         for (const side of ["left", "right"] as const) {

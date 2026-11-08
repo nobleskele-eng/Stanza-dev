@@ -33,6 +33,50 @@ test("every skin × palette × animation renders, with no console errors", async
   expect(errors).toEqual([]);
 });
 
+// The wardrobe (D2b): every species in every accessory it can wear, every animation's frames on both backdrops.
+const accessoriesOf = (skin: Skin) => Object.entries(skin.accessories ?? {});
+
+test("the wardrobe: every accessory shows on every frame it's rigged for, in its own colours, with no console errors", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
+  await page.goto("/?lab=companion&pause&wardrobe");
+  await page.locator("[data-lab-wardrobe]").waitFor();
+  let checked = 0;
+  for (const skin of Object.values(SKINS))
+    for (const [id, acc] of accessoriesOf(skin)) {
+      const section = page.locator(`[data-lab-wardrobe] [data-lab-skin="${skin.id}"][data-lab-accessory="${id}"]`);
+      for (const anim of animationsOf(skin))
+        for (const backdrop of ["light", "dark"]) {
+          const frames = section.locator(`[data-lab-frames="${backdrop}"] [data-lab-anim="${anim}"] svg`);
+          const rig = skin.animations[anim]!.rig?.[acc.mount] ?? [];
+          await expect(frames, `${skin.id}+${id}/${anim}`).toHaveCount(skin.animations[anim]!.frames.length);
+          for (let f = 0; f < rig.length; f++) {
+            if (!rig[f]) continue;
+            // Its first colour is drawn, filled from the accessory, not the palette.
+            const fill = await frames.nth(f).locator("path.mp-pet-a1").evaluateAll((ps) => ps.map((p) => getComputedStyle(p).fill));
+            expect(fill, `${skin.id}+${id}/${anim}[${f}]`).toEqual([`rgb(${rgb(acc.colours[0]).split(",").join(", ")})`]);
+            checked++;
+          }
+        }
+    }
+  expect(checked, "every bundled species rigs every frame").toBeGreaterThan(0);
+  expect(errors).toEqual([]);
+});
+
+test("?wear dresses the live creatures too; the default page wears nothing", async ({ page }) => {
+  await page.goto("/?lab=companion&live&wear=beanie");
+  const live = page.locator("[data-lab-live] svg");
+  await expect(live.first()).toBeVisible();
+  // Every species has a beanie; the test dummy has no accessories and stays bare.
+  for (const id of ["pilcrow", "bookworm", "cassette"])
+    await expect(page.locator(`[data-lab-live-skin="${id}"] svg path.mp-pet-a1`), id).toHaveCount(1);
+  await expect(page.locator(`[data-lab-live-skin="test-dummy"] svg path[class^="mp-pet-a"]`)).toHaveCount(0);
+  await page.goto("/?lab=companion&live");
+  await expect(live.first()).toBeVisible();
+  await expect(page.locator(`[data-lab-live] svg path[class^="mp-pet-a"]`)).toHaveCount(0);
+});
+
 test("frames advance from JS timers, and nothing on the page is a running CSS/WAAPI animation", async ({ page }) => {
   await page.goto("/?lab=companion");
   const walk = sprite("walk");
@@ -115,6 +159,26 @@ for (const dpr of [1, 1.25, 1.5, 2]) {
           expect(a.runs.filter((r) => r % k !== 0), `${what}: runs not a multiple of ${k}`).toEqual([]);
         }
       }
+    });
+
+    test(`dressed sprites are crisp too: only the palette, the accessory's colours and the backdrop, every art pixel ${4 * dpr} device px`, async ({ page }) => {
+      test.setTimeout(120_000); // 156 screenshots: ~16 s in Chromium, over 30 s in WebKit
+      await page.goto("/?lab=companion&pause&wardrobe");
+      await page.locator("[data-lab-wardrobe]").waitFor();
+      const k = 4 * dpr; // the wardrobe's strips draw 4 CSS px per art pixel
+      for (const skin of Object.values(SKINS))
+        for (const [id, acc] of accessoriesOf(skin)) {
+          const allowed = new Set([...skin.palettes.default.map(rgb), ...acc.colours.map(rgb), rgb("#f2f0ea")]);
+          // Each animation's first frame: every pose a hat takes, turned and flipped.
+          for (const anim of animationsOf(skin)) {
+            const what = `${skin.id}+${id}/${anim}`;
+            const svg = page.locator(`[data-lab-skin="${skin.id}"][data-lab-accessory="${id}"] [data-lab-frames="light"] [data-lab-anim="${anim}"] svg`).first();
+            await svg.scrollIntoViewIfNeeded();
+            const a = await analyse(page, await svg.screenshot({ animations: "disabled" }), skin.grid * k);
+            expect(a.colours.filter((c) => !allowed.has(c)), `${what}: blended colours`).toEqual([]);
+            expect(a.runs.filter((r) => r % k !== 0), `${what}: runs not a multiple of ${k}`).toEqual([]);
+          }
+        }
     });
 
     test("the in-context scenes place every pose on whole device px", async ({ page }) => {

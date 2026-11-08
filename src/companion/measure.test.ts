@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { measureOutline, measureShelf, shelfLine, type Box } from "./measure";
 import { FLOOR_ANIMATIONS, placeOnEdge, sitDepth } from "./place";
+import { outfitName, outfits } from "./accessory";
 import { SKINS } from "./registry";
 import { animationOf } from "./skin";
+
+/** Every bundled skin, bare and in each accessory it can wear (D2b), by name. */
+const WORN = Object.values(SKINS).flatMap(outfits).map((s) => [outfitName(s), s] as const);
 
 const card: Box = { left: 40, top: 100, right: 340, bottom: 500 };
 const box = (left: number, top: number, right: number, bottom: number): Box => ({ left, top, right, bottom });
 
-describe.each(Object.entries(SKINS))("measureOutline · %s", (_id, skin) => {
+describe.each(WORN)("measureOutline · %s", (_id, skin) => {
   const px = 2;
   const depth = sitDepth(skin, px);
 
@@ -40,7 +44,7 @@ describe.each(Object.entries(SKINS))("measureOutline · %s", (_id, skin) => {
   });
 });
 
-describe.each(Object.entries(SKINS))("measureShelf · %s", (_id, skin) => {
+describe.each(WORN)("measureShelf · %s", (_id, skin) => {
   const px = 2;
   const card: Box = { left: 40, top: 100, right: 340, bottom: 400 };
   /** Every floor pose at every position on `shelf`, facing both ways: the opaque pixels as boxes. */
@@ -119,7 +123,7 @@ describe("measureShelf and the corner pose at a door (C3c)", () => {
 
   it("closes the door where only the over pose would cover a part; a skin without one keeps it", () => {
     let tried = 0;
-    for (const skin of Object.values(SKINS).filter((s) => s.animations.over)) {
+    for (const [, skin] of WORN.filter(([, s]) => s.animations.over)) {
       const a = skin.animations.over!.anchor!;
       const over = new Set(pixels(skin, [{ animation: "over", left: card.left - (a.x + 1) * px, top: line.top - (a.y + 1) * px, mirrored: false }]));
       const floor = new Set(
@@ -137,8 +141,8 @@ describe("measureShelf and the corner pose at a door (C3c)", () => {
       tried++;
       const [x, y] = only.split(",").map(Number);
       const part = box(x, y, x + px, y + px);
-      expect(measureShelf(skin, card, line, [part], px), `${skin.id}: its only door is closed`).toBeNull();
-      expect(measureShelf(skin, card, line, [], px)?.doors, `${skin.id}: open without the part`).toEqual(["left"]);
+      expect(measureShelf(skin, card, line, [part], px), `${outfitName(skin)}: its only door is closed`).toBeNull();
+      expect(measureShelf(skin, card, line, [], px)?.doors, `${outfitName(skin)}: open without the part`).toEqual(["left"]);
     }
     expect(tried, "a species whose over pose reaches past its floor poses").toBeGreaterThan(0);
   });
