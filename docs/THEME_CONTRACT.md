@@ -72,6 +72,9 @@ needs it.
   app-provided `--mp-acc-1`…`--mp-acc-3`, present only while it wears something. Worn, it keeps every placement rule
   (a hat may stick up into the margin while it climbs). Nothing renamed or removed: a v11 theme keeps working apart
   from its `contract` number.
+- **No bump (2026-11-08, M3 L3):** **User themes** now reload live: saving a file in a theme's folder updates it
+  on screen, and themes added, removed or broken while Stanza runs come and go in the menu. No part, attribute or
+  variable renamed or added; the version stays 12.
 - **No bump (2026-11-08, M3 L2):** **User themes** (under `theme.json`): theme folders in the app's data folder,
   loaded at runtime into the `theme` layer. `id` must now equal the folder name (checked). No part, attribute or
   variable renamed or added; the version stays 12.
@@ -322,12 +325,25 @@ moves. See docs/DECISIONS.md, Slice 6.
 Unknown fields are ignored, and so are `author`, `version`, `colorMode` and `nativeEffect` for now: the app doesn't
 read them yet. Copy fields hold `[NEEDS COPY]` rather than invented text.
 
-### User themes (M3 L2)
+### User themes (M3 L2, live since L3)
 A theme you write yourself is a folder in the app's data folder, `<app data dir>/themes/<id>/`
 (`%APPDATA%\com.stanza.app\themes\<id>\` on Windows), holding `theme.json` and `theme.css`, plus anything
-`theme.css` points at with a relative `url()` (fonts, images), which resolves inside the folder. The app reads the
-folder at launch: a theme that passes the checks below appears in the right-click menu after the five bundled ones,
-by its `name`. There is no settings window yet (M3 L4); a theme added while Stanza runs appears at the next launch.
+`theme.css` points at with a relative `url()` (fonts, images), which resolves inside the folder. A theme that passes
+the checks below appears in the right-click menu after the five bundled ones, by its `name`, in folder order. There
+is no settings window yet (M3 L4).
+
+- **Live while Stanza runs (M3 L3):** the folder is watched. Within about a second of a save:
+  - the theme on screen reloads: its new `theme.css` loads unapplied and replaces the old one in a single frame,
+    so no frame is unstyled or mixes old and new rules, and a new `theme.json` (`name`, `window`, `layout`, …) takes
+    effect in the same frame (the window grows first if the theme got bigger);
+  - themes added, removed or now failing a check appear in or leave the menu;
+  - **while you edit it,** the theme on screen is the one exception: if a save leaves it failing a check (a
+    half-written `theme.json`) or its CSS can't be read, it stays on screen as it last loaded, still in the menu,
+    until a save that checks out; if its folder is deleted, the default theme takes over (the companion kept).
+  - Every load fetches `theme.css` afresh, so a theme edited while not on screen shows its latest version when
+    picked.
+  - **Not live: images and fonts edited in place.** WebView2 keeps the copy it already has, so an edited `bg.svg`
+    still shows the old picture after the CSS reloads. Save it under a new name and point the CSS at that.
 
 - **Loaded only while it's the active theme,** into the `theme` layer (see **Layer order**), so everything this
   contract says about themes applies, the guard included. Scope its rules to

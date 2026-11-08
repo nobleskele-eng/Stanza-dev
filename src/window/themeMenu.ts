@@ -98,9 +98,13 @@ export interface CompanionMenu {
  * after a pick hung the app). So each request awaits the previous menu's close, then creates, then shows, and
  * requests arriving meanwhile are dropped. `popup` resolves only once the menu has closed (Windows; macOS
  * untested).
+ *
+ * The themes are read at each request (`getManifests`), so themes added or edited while the app runs (M3 L3) show
+ * without installing the menu again. Removed while its menu is open, it closes that menu and its pictures once the
+ * popup has returned (sooner is the deadlock above).
  */
 export function installThemeMenu(
-  manifests: Record<string, ThemeManifest>,
+  getManifests: () => Record<string, ThemeManifest>,
   getActive: () => string,
   onPick: (id: string) => void,
   companion?: CompanionMenu,
@@ -110,6 +114,7 @@ export function installThemeMenu(
   let menu: Menu | null = null;
   let submenu: Submenu | null = null;
   let busy = false;
+  let removed = false;
   // Each picture (a skin, a palette, an accessory, awake or asleep) per scale, made once and kept: `Image.new` is a
   // resource command too, so it only ever runs inside the request chain below, after the previous menu has closed (the
   // deadlock rule).
@@ -161,7 +166,7 @@ export function installThemeMenu(
     e.preventDefault();
     if (busy) return;
     busy = true;
-    const items: MenuOptions["items"] = themeMenuEntries(manifests, getActive()).map(({ id, text, checked }) => ({
+    const items: MenuOptions["items"] = themeMenuEntries(getManifests(), getActive()).map(({ id, text, checked }) => ({
       text,
       checked,
       action: () => onPick(id),
@@ -188,11 +193,20 @@ export function installThemeMenu(
       .catch((err) => console.error("theme menu failed", err))
       .finally(() => {
         busy = false;
+        if (removed) void dispose();
       });
+  };
+  /** The menu, then every picture made: all of them resources, closed one at a time. */
+  const dispose = async () => {
+    await release();
+    const made = [...icons.values()];
+    icons.clear();
+    for (const icon of made) await (await icon)?.close().catch(() => {});
   };
   doc.addEventListener("contextmenu", onContextMenu);
   return () => {
+    removed = true;
     doc.removeEventListener("contextmenu", onContextMenu);
-    if (!busy) void release(); // mid-request the popup is open; closing now is the very deadlock above
+    if (!busy) void dispose(); // mid-request the popup is open: closing now is the very deadlock above, so after it
   };
 }

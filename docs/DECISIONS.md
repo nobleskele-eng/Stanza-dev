@@ -4090,3 +4090,108 @@ one of the skin layers (PLAN.md §4b), so nothing structural changes.
   - The real exe, as above, then rebuilt after the fix and launched once with no user themes: `user_themes` empty,
     no user sheet, the L1 guard and hide checks still pass, no CSP violations, no console errors (Spotify was
     playing; read-only).
+
+## 2026-11-08 — M3 L3: live reload of user themes (hot swap)
+
+- **What it does:** while Stanza runs, saving a file in a user theme's folder updates it on screen within about a
+  second; themes added, removed or broken come and go in the right-click menu. The theme on screen is swapped with no
+  unstyled frame and no frame mixing old and new rules. No UI, no copy, contract still v12.
+- **Rust** (`src-tauri/src/theme_watch.rs`): a `notify` 8 watcher (the S4 spike's method) on its own thread, sending
+  the Tauri event `themes:changed` with the theme folders that changed (`{ folders, all }`). It watches the app data
+  dir recursively, not `themes/` itself: `themes/` may not exist yet, and a watch on a folder that's deleted sees
+  nothing after; everything outside `themes/` (the window-state file) is ignored. A save is a burst of events, so a
+  report waits for 120 ms of quiet (at most 1 s). Reads never count (`Access` events ignored; notify's Windows backend
+  doesn't ask for last-access changes anyway), so the app reading a theme can't set off another reload. It creates the
+  app data dir if missing (the app's own folder; `themes/` is left to the person). If the watcher can't start, the app
+  works as in L2.
+- **Frontend** (`src/theme/liveThemes.ts`, `App.tsx`): on the event it lists the themes again (`user_themes`) and
+  plans (`planRescan`, unit-tested):
+  - the menu offers what the folder holds now, by the launch rules;
+  - the theme on screen, its folder touched and still checking out: **reload**. Its new CSS loads unapplied, the new
+    `theme.json` is rendered (`flushSync`), the new sheet applied and the old one removed, all in one task, so the
+    next frame has exactly the new version. A bigger `window` grows the window first;
+  - the theme on screen now failing a check, or its CSS unreadable (mid-write): it **stays** as it last loaded, still
+    offered, until a save that checks out. Better for someone editing it than being thrown to the default;
+  - its folder gone: the **default theme** takes over, companion kept, saved (as at launch).
+  - Changes arriving during a reload are merged into one more run (`oneAtATime`); a failed listing changes nothing.
+  - The listener is registered **before** the launch's listing, and changes are held until the app has rendered, so a
+    save made while it starts isn't lost.
+- **Loading unapplied** (`themeSheetText`): the shell sheet is now `@import url("…") layer(theme) not all;` and
+  `show()` switches the import's media to `all` through the CSSOM, synchronously. Probed in both engines first:
+  - Changing the `<link>`'s own `media` attribute instead makes **WebKit fetch the sheet again** (a second request,
+    not applied for the length of the fetch): not a swap. The CSSOM switch (on the import rule, or on `link.sheet`)
+    fetches once and applies at once in both.
+  - Without it (the L2 sheet, applied when it loads) WebKit drew a frame mixing the old and new versions in the gate
+    (2 of 2 runs, mutation M2 below); Chromium didn't show one.
+- **Every load is fetched afresh** (`theme.css?v=<n>`; Tauri's asset protocol reads only the URL's path), so a theme
+  edited while not on screen shows its latest version when picked, and a reload never gets a cached copy.
+- **Surprise (WebKit, reduced motion, pre-existing):** with reduced motion on, structure.css clamps every transition in
+  the player to 0.001 ms (`.mp-root *`), which, with the default `transition-property: all`, starts a transition on
+  every property that changes. WebKit draws the first frame of each at the old value, so on any theme switch (bundled
+  ones too) one frame shows the old theme's colours, corners and shadow with the new theme's background image. Chromium
+  doesn't. Not caused by L3 and not changed here (the 0.001 ms is there so `transitionend` still fires, which the
+  companion and hit region listen for); macOS (WebKit) is untested anyway. The frame recorder switches transitions and
+  animations off (in the guard layer) so it measures loading only.
+- **Contract:** no bump (still 12): the User themes section says it's live and what happens mid-edit. Changelog line.
+- **Fixtures:** a second user theme, `dev/fixtures/user-themes/fixture-ink/` (user-to-user swaps), and
+  `dev/fixtures/user-theme-edits/fixture-paper/` (the paper theme as if edited: new colours, corners, a shadow, no
+  padding rule, a new name and a bigger window), so a mixed frame would show. Synthetic, marked, not imported by `src/`.
+- **Tests:**
+  - `cargo test`: 10 new in `theme_watch.rs`: what counts as a theme folder (case-insensitive `themes`, renames name
+    both sides, the folder itself means all, everything else and every read ignored, a lost-track watcher means all),
+    one report per burst, a burst that never goes quiet still reported, a pending report sent when the watcher stops,
+    the payload shape, and **the real watcher on a temp folder** (a theme made, edited, deleted, each reported by its
+    folder; noise outside `themes/` never). 33 in all.
+  - Unit: `src/theme/liveThemes.test.ts` (15: the event name equals Rust's, the payload, `planRescan`'s four cases,
+    `oneAtATime`, `refreshAppearance`) and 1 more in `userThemes.test.ts` (merge order); the sheet text updated.
+  - e2e, `e2e/user-themes.spec.ts` (+10 × 2 engines, with the menu test below): an edit of the theme on screen (new
+    CSS and theme.json in one frame, the window grown, the new name in the menu, fetched afresh, every frame clean);
+    another folder's change
+    leaves it alone while themes come and go; broken mid-edit stays; CSS unreadable stays; deleted falls back; saves
+    during a reload merged; edited off screen then picked shows the latest; a save during the launch listing isn't
+    missed; and **the gate:** 20 swaps (picks bundled↔user and user↔user, live edits back and forth, edits off screen),
+    every frame recorded in requestAnimationFrame: each theme and version drawn exactly one way, and a user theme
+    never without its CSS.
+  - Mutation-checked: removing the old sheet before the new one loads fails the edit test ("drawn without its CSS")
+    in both engines; rendering a picked user theme before its CSS loads fails the gate in both; loading applied (no
+    `not all`) fails the gate in WebKit (a mixed frame).
+  - Caught by the first full run (fixed): the gate counted 19 of 20 swaps in its frames under full-suite load in
+    Chromium. Each step waited for the new state in the DOM, and one was replaced before any frame drew it (nothing
+    drawn wrong). Each step now waits until a frame has drawn it: 12 gate runs in a row passed.
+  - **Caught by the second full run (fixed, a real leak):** the gate found 4 native menus alive, not at most 2 (one
+    menu and its picker). The theme list changing re-ran the effect that installs the right-click menu; when that
+    happened while a menu was open, the old install skipped closing it (closing mid-popup deadlocks, Slice 4) and
+    nothing closed it later. Each reinstall also made a new set of companion pictures and never closed the old ones.
+    Unreachable before L3 (the list never changed during a run). Fix: `installThemeMenu` takes `getManifests` and
+    reads the themes at each right-click, so it's installed once; and removed while a menu is open, it now closes that
+    menu and every picture once the popup returns. New e2e (× 2 engines): the themes change while the menu is open,
+    the next menu lists them, and after three right-clicks one menu and its picker are alive. Mutation-checked:
+    reinstalling on every change fails it.
+  - Then a clean full run: **941 passed, 65 skipped** (Chromium + WebKit; the 20 new included, the skips unchanged).
+- **Real exe (ran),** `npm run tauri build -- --no-bundle` OK (0 warnings, check-fixtures-excluded OK). Both fixture
+  themes copied into your app data for the run and removed after (`themes` didn't exist before and doesn't now).
+  Real file writes, the real watcher; the native menu read and driven by the persistent helper; Spotify read-only,
+  nothing pressed; your cursor never moved.
+  - Both fixtures offered after the five, by name. Paper picked: 280×507 at your window's place.
+  - theme.css saved over: the new CSS on screen **~155 ms after the write** (153–185 ms over 24 saves in three
+    runs). theme.json saved over: the new name in the native menu, the window 300×540 at the same place. A half-written theme.json: it
+    stayed on screen and in the menu (its code logged). The original files back: v1, 280×507.
+  - The ink folder deleted, then put back: it left the menu and came back; paper untouched meanwhile.
+  - **The gate in the exe:** 20 swaps (native-menu picks between the fixtures, T1, T2 and T3, and real saves of the
+    paper theme back and forth), about 3,500 frames recorded in the page each run: every theme and version drawn one
+    way, every swap drawn, one user sheet at rest.
+  - Paper's folder deleted while on screen: T1 took over, the companion setting kept, saved; paper left the menu, its
+    sheet removed.
+  - No CSP violations, no console or page errors, every asset 200.
+  - The first exe run failed one check, a test artifact: T3 drawn two ways (radius 999px and 249.75px). T3 opens up
+    under the pointer (`[data-hover]`, radius ÷ 4), and the synthetic right-click that opened the native menu had put
+    the page's pointer on the card. The rerun opens the menu with a bare contextmenu event (as the e2e gate does) and
+    keys frames by hover too: all checks passed. Rebuilt after the menu fix above and run once more: all passed.
+  - **Found (not fixed): images and fonts edited in place aren't live.** bg.svg rewritten, then the CSS saved: bg.svg
+    was requested once in all, so WebView2 keeps its copy while Stanza runs. `?v=` on theme.css doesn't reach the
+    URLs inside it. Workaround in the contract: save under a new name. A fix would need the app to serve theme files
+    itself with no-cache headers; not done. Whether a restart picks the edit up wasn't checked.
+  - Afterwards: your saved appearance put back byte for byte (T1, no user sheet), the window back to 340×600 at
+    (2492, 583), the window-state file unchanged. Closed with `CloseMainWindow`.
+- **Not tested:** macOS (FSEvents watcher, WebKit), untested on a real Mac.
+- **Next:** L4, the settings window. A design round with you, and it needs copy.

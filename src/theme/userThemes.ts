@@ -3,11 +3,15 @@
 // checks what Rust sends (untrusted, like everything stored), merges them after the five bundled themes, and loads the
 // active one's CSS into the `theme` cascade layer (src/theme/shell.css, M3 L1).
 //
-// Loading: one `<link>` whose stylesheet is a `blob:` holding `@import url("<theme.css>") layer(theme);`. A `<link>`
-// can't be put in a layer itself, and wrapping the CSS text in `@layer theme { … }` would let a stray `}` in it close
-// the layer early; an imported sheet is parsed on its own, wholly inside the layer (the S4 spike's method,
+// Loading: one `<link>` whose stylesheet is a `blob:` holding `@import url("<theme.css>") layer(theme) not all;`. A
+// `<link>` can't be put in a layer itself, and wrapping the CSS text in `@layer theme { … }` would let a stray `}` in it
+// close the layer early; an imported sheet is parsed on its own, wholly inside the layer (the S4 spike's method,
 // DECISIONS.md 2026-09-17). The order `guard, base, theme, user` was declared by the bundled shell first, so a sheet
 // added later joins the existing `theme` layer and can't reorder anything.
+//
+// `not all` keeps a loaded sheet from applying until `show()` (M3 L3): a live reload swaps a theme's old and new sheets
+// in one task, so no frame shows neither, or a mix of both. The import's media is switched through the CSSOM; changing
+// the `<link>`'s own `media` attribute instead makes WebKit fetch the sheet again.
 //
 // Problems are machine codes, never prose (COPY.md rule): "Theme failed to load" is still [NEEDS COPY], and the
 // settings window that will show it doesn't exist yet (M3 L4).
@@ -157,35 +161,66 @@ export function parseUserThemes(
   return { themes, problems };
 }
 
-/** Asks Rust for the user themes. Outside Tauri, or if the call fails: none. Never rejects. */
-export async function loadUserThemes(bundled: Record<string, ThemeManifest>): Promise<Record<string, UserTheme>> {
-  if (!isTauri()) return {};
+export interface UserThemeScan {
+  themes: Record<string, UserTheme>;
+  problems: UserThemeProblem[];
+}
+
+/**
+ * Asks Rust for the user themes, checked. Outside Tauri: none. `null` if the call failed, so a live reload changes
+ * nothing rather than taking the theme on screen for gone. Never rejects.
+ */
+export async function scanUserThemes(bundled: Record<string, ThemeManifest>): Promise<UserThemeScan | null> {
+  if (!isTauri()) return { themes: {}, problems: [] };
   try {
     const raw = await invoke("user_themes");
     // No folders (the usual case): nothing to parse, and the asset protocol isn't touched.
-    if (!Array.isArray(raw) || raw.length === 0) return {};
-    const { themes, problems } = parseUserThemes(raw, bundled, convertFileSrc("", "asset"));
+    if (!Array.isArray(raw) || raw.length === 0) return { themes: {}, problems: [] };
+    const scan = parseUserThemes(raw, bundled, convertFileSrc("", "asset"));
     // Codes only, for whoever is writing a theme; the settings window will show them with copy (M3 L4).
-    if (problems.length) console.warn("user themes not offered", problems);
-    return themes;
+    if (scan.problems.length) console.warn("user themes not offered", scan.problems);
+    return scan;
   } catch (err) {
     console.error("listing user themes failed", err);
-    return {};
+    return null;
   }
 }
 
-/** The shell sheet's text: the theme's CSS, imported into the `theme` layer. */
-export const themeSheetText = (cssUrl: string) => `@import url("${cssUrl}") layer(theme);\n`;
+/** The user themes to offer at launch. If the call fails: none. Never rejects. */
+export async function loadUserThemes(bundled: Record<string, ThemeManifest>): Promise<Record<string, UserTheme>> {
+  return (await scanUserThemes(bundled))?.themes ?? {};
+}
+
+/** The bundled themes, then the user themes: every theme the menu offers, in its order. */
+export function mergeManifests(bundled: Record<string, ThemeManifest>, user: Record<string, UserTheme>): Record<string, ThemeManifest> {
+  const out = { ...bundled };
+  for (const [id, t] of Object.entries(user)) out[id] = t.manifest;
+  return out;
+}
+
+/** The shell sheet's text: the theme's CSS, imported into the `theme` layer, not applied (`not all`) until shown. */
+export const themeSheetText = (cssUrl: string) => `@import url("${cssUrl}") layer(theme) not all;\n`;
 
 /** How long a user theme's CSS may take before it counts as failed. */
 export const SHEET_TIMEOUT_MS = 5000;
 
+/** A user theme's loaded sheet. */
+export interface ThemeSheet {
+  /** Applies it, synchronously: the next frame has it. */
+  show(): void;
+  /** Takes it out of the page. */
+  remove(): void;
+}
+
+/** Every load asks for theme.css afresh (`?v=`, which the asset protocol ignores), so an edit since the last is seen. */
+let loads = 0;
+
 /**
- * Adds the theme's sheet and resolves, with a function that removes it, once it has loaded (the `<link>`'s load waits
- * for the import). Rejects on an error or after SHEET_TIMEOUT_MS, leaving nothing behind.
+ * Adds the theme's sheet, not yet applied, and resolves once it has loaded (the `<link>`'s load waits for the import).
+ * Rejects on an error or after SHEET_TIMEOUT_MS, leaving nothing behind.
  */
-export function loadThemeSheet(theme: UserTheme, doc: Document = document): Promise<() => void> {
-  const url = URL.createObjectURL(new Blob([themeSheetText(theme.cssUrl)], { type: "text/css" }));
+export function loadThemeSheet(theme: UserTheme, doc: Document = document): Promise<ThemeSheet> {
+  const url = URL.createObjectURL(new Blob([themeSheetText(`${theme.cssUrl}?v=${++loads}`)], { type: "text/css" }));
   const link = doc.createElement("link");
   link.rel = "stylesheet";
   link.href = url;
@@ -203,7 +238,9 @@ export function loadThemeSheet(theme: UserTheme, doc: Document = document): Prom
     }
     link.onload = () => {
       clearTimeout(timer);
-      resolve(remove);
+      const rule = link.sheet?.cssRules[0];
+      if (!(rule instanceof CSSImportRule)) return fail(new Error("no import"));
+      resolve({ show: () => void (rule.media.mediaText = "all"), remove });
     };
     link.onerror = () => fail(new Error("error"));
     doc.head.append(link);

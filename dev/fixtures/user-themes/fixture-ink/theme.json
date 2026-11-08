@@ -1,0 +1,9 @@
+{
+  "id": "fixture-ink",
+  "name": "Fixture ink (FIXTURE-ONLY-DEV-BUILD)",
+  "author": "FIXTURE-ONLY-DEV-BUILD",
+  "version": "0.0.1",
+  "contract": 12,
+  "layout": "card",
+  "window": { "width": 300, "height": 520 }
+}

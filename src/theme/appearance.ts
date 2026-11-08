@@ -83,6 +83,22 @@ export function selectTheme(manifests: Record<string, ThemeManifest>, theme: str
   return defaultAppearance(manifests, theme, companion);
 }
 
+/**
+ * The theme on screen got a new theme.json (a live reload, M3 L3): its variant, still valid for `after`. A variant that
+ * was the theme as shipped stays that (so a new default `layout` shows); one the new manifest refuses is dropped.
+ * Returns `appearance` itself when nothing changes.
+ */
+export function refreshAppearance(appearance: Appearance, before: ThemeManifest, after: ThemeManifest): Appearance {
+  const { variant } = appearance;
+  if (JSON.stringify(variant) === JSON.stringify(emptyVariant(before))) {
+    const shipped = emptyVariant(after);
+    return JSON.stringify(shipped) === JSON.stringify(variant) ? appearance : { ...appearance, variant: shipped };
+  }
+  const result = validateVariant(variant, after);
+  if (result.variant && !result.issues.length) return appearance;
+  return { ...appearance, variant: emptyVariant(after) };
+}
+
 /** Parse + validate a stored value. Never throws; any problem yields the default theme. */
 export function parseAppearance(raw: string | null, manifests: Record<string, ThemeManifest>): Appearance {
   if (!raw) return defaultAppearance(manifests);

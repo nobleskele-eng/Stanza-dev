@@ -8,18 +8,21 @@ import { useDevicePixelRatio } from "./companion/useDevicePixelRatio";
 import { SpotifyAdapter } from "./adapters/spotifyAdapter";
 import { PlayerStore } from "./store/playerStore";
 import { useInterpolatedPosition, useStoreSnapshot } from "./store/usePlayback";
+import { flushSync } from "react-dom";
 import {
   defaultAppearance,
   loadAppearance,
   pickCompanion,
+  refreshAppearance,
   saveAppearance,
   selectTheme,
   type Appearance,
   type CompanionSetting,
 } from "./theme/appearance";
+import { oneAtATime, planRescan, ThemeChanges, withTheme, type ThemesChanged } from "./theme/liveThemes";
 import { DEFAULT_THEME, MANIFESTS } from "./theme/registry";
-import { loadThemeSheet, loadUserThemes, type UserTheme } from "./theme/userThemes";
-import { variantToDom, type ThemeManifest } from "./theme/variant";
+import { loadThemeSheet, loadUserThemes, mergeManifests, scanUserThemes, type ThemeSheet, type UserTheme } from "./theme/userThemes";
+import { variantToDom } from "./theme/variant";
 import { DevHarness } from "./dev/DevHarness";
 import { Player } from "./player/Player";
 import { installSeekKeys } from "./player/seekKeys";
@@ -46,59 +49,89 @@ function useSpotify(): PlayerStore | null {
   return store;
 }
 
-/** What the player starts from: every theme it can offer, and the saved appearance, its user theme's CSS loaded. */
+/** What the player starts from: the user themes, and the saved appearance, its user theme's CSS loaded. */
 interface Boot {
-  /** The five bundled themes, then the user themes (M3 L2). Fixed for the run. */
-  manifests: Record<string, ThemeManifest>;
+  /** The user themes found at launch (M3 L2). Live reload (M3 L3) changes them after. */
   userThemes: Record<string, UserTheme>;
   appearance: Appearance;
   /** Removes the active user theme's sheet, if the saved theme is one. */
   removeSheet: (() => void) | null;
+  /** Changes to the themes folder, from just before the launch's listing. */
+  changes: ThemeChanges;
 }
 
 /**
  * Before the first paint: find the user themes, so a saved user theme isn't mistaken for an unknown one (and reset to
- * the default), then load its CSS, so it never paints unstyled. A user theme whose CSS fails to load is dropped for
- * the run and the default theme takes its place. Outside Tauri there are no user themes.
+ * the default), then load its CSS, so it never paints unstyled. A user theme whose CSS fails to load is dropped (until
+ * its folder changes) and the default theme takes its place. Outside Tauri there are no user themes.
  */
 async function boot(): Promise<Boot> {
+  // Listening first, so a theme saved while the folder is being listed still reaches the app.
+  const changes = new ThemeChanges();
+  await changes.ready;
   const userThemes = await loadUserThemes(MANIFESTS);
-  const manifests: Record<string, ThemeManifest> = { ...MANIFESTS };
-  for (const [id, t] of Object.entries(userThemes)) manifests[id] = t.manifest;
-  let appearance = loadAppearance(window.localStorage, manifests);
+  let appearance = loadAppearance(window.localStorage, mergeManifests(MANIFESTS, userThemes));
   let removeSheet: (() => void) | null = null;
   const user = userThemes[appearance.theme];
   if (user) {
     try {
-      removeSheet = await loadThemeSheet(user);
+      const sheet = await loadThemeSheet(user);
+      sheet.show();
+      removeSheet = sheet.remove;
     } catch (err) {
       console.error("user theme failed to load", appearance.theme, err);
       delete userThemes[appearance.theme];
-      delete manifests[appearance.theme];
-      appearance = defaultAppearance(manifests, DEFAULT_THEME, appearance.companion);
+      appearance = defaultAppearance(MANIFESTS, DEFAULT_THEME, appearance.companion);
     }
   }
   saveAppearance(window.localStorage, appearance); // normalises anything stale or invalid on disk
-  return { manifests, userThemes, appearance, removeSheet };
+  return { userThemes, appearance, removeSheet, changes };
 }
 
+/** The two windows' sizes, side by side: big enough for either theme, so neither is clipped while they swap. */
+const spanning = (a: { width: number; height: number }, b: { width: number; height: number }) => ({
+  width: Math.max(a.width, b.width),
+  height: Math.max(a.height, b.height),
+});
+
 function ProductionApp({ boot }: { boot: Boot }) {
-  const { manifests, userThemes } = boot;
   const store = useSpotify();
   const nowPlaying = useStoreSnapshot(store);
   const positionMs = useInterpolatedPosition(nowPlaying);
+  // The user themes on offer (M3 L2), kept up to date with the folder while the app runs (M3 L3).
+  const [userThemes, setUserThemes] = useState(boot.userThemes);
+  const manifests = useMemo(() => mergeManifests(MANIFESTS, userThemes), [userThemes]);
+  const latest = useRef({ manifests, userThemes });
+  latest.current = { manifests, userThemes };
   // The active theme + variant persist across restarts; right-click picks the theme (Slice 4).
   const [appearance, setAppearance] = useState(boot.appearance);
-  // Loaded user-theme sheets by theme id. Only the active theme's is kept, removed once another theme has rendered.
+  // What's on screen (`active` below is the latest pick, which may still be loading).
+  const shown = useRef(appearance);
+  shown.current = appearance;
+  const active = useRef(appearance.theme);
+  // Loaded user-theme sheets by theme id. Only the shown theme's is kept (and a pick's that's still on its way),
+  // removed once another theme has rendered.
   const sheets = useRef(new Map<string, () => void>(boot.removeSheet ? [[boot.appearance.theme, boot.removeSheet]] : []));
   useEffect(() => {
     for (const [id, remove] of sheets.current)
-      if (id !== appearance.theme) {
+      if (id !== appearance.theme && id !== active.current) {
         remove();
         sheets.current.delete(id);
       }
   }, [appearance.theme]);
-  const active = useRef(appearance.theme);
+  /** Swaps in a newly loaded sheet for `id`: the new one applied and the old one gone in the same task. */
+  const putSheet = useCallback((id: string, sheet: ThemeSheet) => {
+    sheet.show();
+    sheets.current.get(id)?.();
+    sheets.current.set(id, sheet.remove);
+  }, []);
+  /** Offers these user themes, never dropping the one on screen (its own case moves off it first). */
+  const offer = useCallback((next: Record<string, UserTheme>) => {
+    const id = shown.current.theme;
+    const kept = latest.current.userThemes[id];
+    const themes = kept && !next[id] ? withTheme(next, id, kept) : next;
+    if (JSON.stringify(themes) !== JSON.stringify(latest.current.userThemes)) setUserThemes(themes);
+  }, []);
   const companion = useRef(appearance.companion);
   companion.current = appearance.companion;
   // Last size asked of the native window, so a switch that already grew it to the new size isn't repeated.
@@ -140,33 +173,106 @@ function ProductionApp({ boot }: { boot: Boot }) {
   // Theme picker (Slice 4). Switching clears the old theme's overrides (selectTheme) and is saved at once.
   // The window first grows to fit both themes so neither is clipped while React swaps them; the effect
   // above then sets the new theme's exact size. A user theme's CSS is loaded first (M3 L2), so it never paints
-  // unstyled; if it fails, nothing changes. A newer pick made while it loaded wins.
+  // unstyled; if it fails, nothing changes. Loaded afresh on every pick, so edits made while it wasn't on screen show
+  // (M3 L3). A newer pick made while it loaded wins.
   const pickTheme = useCallback(
     (id: string) => {
       const from = active.current;
-      if (id === from || !manifests[id]) return;
+      if (id === from || !latest.current.manifests[id]) return;
       active.current = id;
-      const user = userThemes[id];
-      const ready =
-        user && !sheets.current.has(id) ? loadThemeSheet(user).then((remove) => void sheets.current.set(id, remove)) : Promise.resolve();
+      const user = latest.current.userThemes[id];
+      const ready = user
+        ? loadThemeSheet(user).then((sheet) => {
+            if (active.current !== id) sheet.remove(); // picked something else meanwhile
+            else putSheet(id, sheet);
+          })
+        : Promise.resolve();
       ready
         .then(() => {
-          if (active.current !== id) return; // picked something else meanwhile; the effect above tidies the sheet
-          const next = selectTheme(manifests, id, companion.current);
+          if (active.current !== id) return;
+          const now = latest.current.manifests;
+          // Its folder went while it loaded: stay where we are.
+          if (!now[id]) {
+            active.current = shown.current.theme;
+            sheets.current.get(id)?.();
+            sheets.current.delete(id);
+            return;
+          }
+          const next = selectTheme(now, id, companion.current);
           saveAppearance(window.localStorage, next);
-          const a = manifests[from].window;
-          const b = manifests[id].window;
-          return sizeWindow({ width: Math.max(a.width, b.width), height: Math.max(a.height, b.height) }, marginRef.current).then(() =>
-            setAppearance(next),
-          );
+          return sizeWindow(spanning((now[from] ?? now[id]).window, now[id].window), marginRef.current).then(() => setAppearance(next));
         })
         .catch((err) => {
           console.error("user theme failed to load", id, err);
           if (active.current === id) active.current = from;
         });
     },
-    [manifests, userThemes, sizeWindow],
+    [sizeWindow, putSheet],
   );
+
+  // Live reload (M3 L3): the themes folder changed, so list it again; then, for the theme on screen, reload it, keep
+  // it as it is, or (its folder gone) move to the default theme. One at a time, changes arriving meanwhile merged.
+  const reconcile = useCallback(
+    async (change: ThemesChanged) => {
+      const scan = await scanUserThemes(MANIFESTS);
+      if (!scan) return; // listing failed: change nothing
+      const prev = latest.current.userThemes;
+      const id = shown.current.theme;
+      const plan = planRescan(prev, scan, id, change);
+      switch (plan.onScreen.kind) {
+        case "keep":
+        case "stale":
+          return offer(plan.offer);
+        case "gone": {
+          // A pick under way moves off it anyway.
+          if (active.current !== id) return offer(plan.offer);
+          const next = defaultAppearance(MANIFESTS, DEFAULT_THEME, companion.current);
+          active.current = next.theme;
+          saveAppearance(window.localStorage, next);
+          await sizeWindow(spanning(prev[id].manifest.window, MANIFESTS[next.theme].window), marginRef.current);
+          if (active.current !== next.theme) return offer(plan.offer); // a pick came meanwhile; it wins
+          // One render: the theme leaves the menu as the default takes the screen.
+          setUserThemes(plan.offer);
+          setAppearance(next);
+          return;
+        }
+        case "reload": {
+          const { theme } = plan.onScreen;
+          const was = prev[id].manifest;
+          let sheet: ThemeSheet;
+          try {
+            sheet = await loadThemeSheet(theme);
+          } catch (err) {
+            // Its CSS won't load (mid-write, say): it stays as it last loaded, until the next save.
+            console.error("user theme failed to load", id, err);
+            return offer(withTheme(plan.offer, id, prev[id]));
+          }
+          // Bigger now: the window grows first, so the new version isn't clipped; the effect above then fits it.
+          const w = theme.manifest.window;
+          if (w.width > was.window.width || w.height > was.window.height) await sizeWindow(spanning(was.window, w), marginRef.current);
+          if (shown.current.theme !== id) {
+            sheet.remove(); // moved off it meanwhile
+            return offer(plan.offer);
+          }
+          const before = shown.current;
+          const next = refreshAppearance(before, was, theme.manifest);
+          // One frame: the new manifest rendered, the new CSS applied and the old CSS gone, all in this task.
+          flushSync(() => {
+            offer(plan.offer);
+            setAppearance(next);
+          });
+          putSheet(id, sheet);
+          if (next !== before) saveAppearance(window.localStorage, next);
+          return;
+        }
+      }
+    },
+    [offer, putSheet, sizeWindow],
+  );
+  useEffect(() => {
+    boot.changes.attach(oneAtATime(reconcile));
+    return () => boot.changes.detach();
+  }, [boot.changes, reconcile]);
   // The companion's own setting changes (on/off, or a species, palette or accessory from the picker, C6a, D2c), saved
   // at once.
   const setCompanion = useCallback((next: CompanionSetting) => {
@@ -177,15 +283,17 @@ function ProductionApp({ boot }: { boot: Boot }) {
       return updated;
     });
   }, []);
+  // Installed once: it reads the themes at each right-click, so live reload (M3 L3) never reinstalls it, which would
+  // strand a menu that's open at that moment.
   useEffect(
     () =>
-      installThemeMenu(manifests, () => active.current, pickTheme, {
+      installThemeMenu(() => latest.current.manifests, () => active.current, pickTheme, {
         isOn: () => companion.current.on,
         toggle: () => setCompanion({ ...companion.current, on: !companion.current.on }),
         current: () => companion.current,
         pick: ({ skin, palette, accessory }) => setCompanion(pickCompanion(companion.current, skin, palette, accessory)),
       }),
-    [manifests, pickTheme, setCompanion],
+    [pickTheme, setCompanion],
   );
   const dom = variantToDom(appearance.variant);
   return (
@@ -226,7 +334,11 @@ function Production() {
   const [ready, setReady] = useState<Boot | null>(null);
   useEffect(() => {
     let live = true;
-    void boot().then((b) => (live ? setReady(b) : b.removeSheet?.()));
+    void boot().then((b) => {
+      if (live) return setReady(b);
+      b.removeSheet?.();
+      b.changes.stop();
+    });
     return () => {
       live = false;
     };

@@ -1,5 +1,6 @@
 mod hit_region;
 mod spotify;
+mod theme_watch;
 mod themes;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -25,6 +26,8 @@ pub fn run() {
         .setup(|app| {
             hit_region::spawn_poller(app.handle().clone(), "main");
             spotify::start(app.handle());
+            // Live reload of user themes (M3 L3): tells the frontend when a theme folder changes.
+            theme_watch::start(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

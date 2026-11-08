@@ -260,7 +260,7 @@ Fields and which are enforced: see the contract's field table (`id`, `name`, `au
 
 ### Loading and hot swap
 - *Built (M3 L2, 2026-11-08) for user themes:* `theme.css` loads through Tauri's asset protocol, scoped to `<app data dir>/themes/` only, as one path segment per folder so relative `url()`s resolve inside the theme's folder (Tauri's `convertFileSrc` encodes the whole path as one segment, which sends them to the protocol's root, where the scope refuses them). The five bundled themes stay bundled.
-- Rust file watcher → event → swap the stylesheet → instant reload while you design. S4 found that guard/theme/user layers must load as **one** shell stylesheet (`@layer guard, theme, user;` + three layered `@import`s) — separate layered `<link>`s flip order when added dynamically (DECISIONS.md 2026-09-17). *Built (M3 L1, 2026-11-08):* the shell, bundled: `src/theme/shell.css` declares `@layer guard, base, theme, user;` (`base` = the app's own CSS, below the themes) and imports every stylesheet into its layer.
+- Rust file watcher → event → swap the stylesheet → instant reload while you design. *Built (M3 L3, 2026-11-08):* `src-tauri/src/theme_watch.rs` sends `themes:changed` with the folders that changed; the theme on screen reloads in one frame (its new CSS loaded unapplied, `@import … not all`, then switched on as the old sheet goes), the menu follows the folder, and a theme that breaks mid-edit stays as it last loaded (DECISIONS.md M3 L3). S4 found that guard/theme/user layers must load as **one** shell stylesheet (`@layer guard, theme, user;` + three layered `@import`s) — separate layered `<link>`s flip order when added dynamically (DECISIONS.md 2026-09-17). *Built (M3 L1, 2026-11-08):* the shell, bundled: `src/theme/shell.css` declares `@layer guard, base, theme, user;` (`base` = the app's own CSS, below the themes) and imports every stylesheet into its layer.
 - `theme.json` validated in Rust. Broken theme → fall back to default, show the error in settings. *Built (M3 L2):* the checks and the fallback; the error codes are logged until the settings window can show them (L4).
 
 ### Customization layers
@@ -424,7 +424,7 @@ locally on `main` ("Slice N: …"), never pushed unless you ask. Hour ranges are
 - **Done:** Phase 0; spikes S1 (window), S2 (GSMTC), S4 (themes) — on their spike branches, learnings merged; Phase 2 core; Phase 3 design system + contract; Phase 4 themes T1–T5, the D16 effects layer, contract v5.
 - **Production slices on `main`:** 1 theme applied + remembered · 2 real frameless transparent window · 3 click-through · 4 right-click theme picker · 5 CSP + named Stanza · 6 player centred side to side.
 - **M1 Real music (done 2026-10-17, DECISIONS.md M1 R1–R3b):** the GSMTC adapter on `main` (20-track gate passed), position drift ≤ 0.2 s over 5 min, keyboard seek, a "Spotify not running" state with recovery, Spotify's own volume through Core Audio, the lyrics button (contract v6), and a CPU pass (every theme 0.1–0.7 s of CPU per 10 s while playing). The Slice 5/6 real-exe checks passed along the way.
-- **Tests at last full run (2026-11-08):** 603 unit (Vitest), 921 e2e + 65 skipped (Playwright, Chromium + WebKit), `cargo test` 23.
+- **Tests at last full run (2026-11-08):** 619 unit (Vitest), 941 e2e + 65 skipped (Playwright, Chromium + WebKit), `cargo test` 33.
 - **Open from M1:** R4 tray + hide (added 2026-10-22); the remaining `[NEEDS COPY]` labels (the first ones were filled 2026-10-22); the Store build of Spotify; 125%/150% scaling.
 
 ### v1 phases → milestones
@@ -435,7 +435,7 @@ locally on `main` ("Slice N: …"), never pushed unless you ask. Hour ranges are
 | 1 Spikes S1–S4 | ✓ S1, S2, S4; S3 deferred (D15) | S3 → Post-v1 |
 | 2 Core | ✓ (manual "switch sources 10×" deferred — one source exists) | Re-run when a second source lands |
 | 3 Design system + default theme | ✓ gate passed (matrix in both engines, sign-off, focus, AA incl. `--mp-art-fg`) | — |
-| 4 Themes + switching | Themes ✓, picker ✓ (menu, no previews), memory flat ✓ (Slice 4) | Customizer, snippets, zip, hot swap, previews → M3 |
+| 4 Themes + switching | Themes ✓, picker ✓ (menu, no previews), memory flat ✓ (Slice 4) | Customizer, snippets, zip, previews → M3 (hot swap ✓ M3 L3) |
 | 5 App shell | Window ✓ (Slices 2–3, 6) | Tray, settings, autostart, single-instance, DPI → M3/M4 |
 | 6 Windows release | ○ | → M4 |
 | 7 macOS | ○ | → M5 |
@@ -479,7 +479,7 @@ locally on `main` ("Slice N: …"), never pushed unless you ask. Hour ranges are
 - **Split** (proposed 2026-11-08, DECISIONS.md M3 L1; the order after L1 is yours to change):
   - **L1 Cascade layers** — **done 2026-11-08** (DECISIONS.md): one shell stylesheet, `@layer guard, base, theme, user;`; the guard beats `!important` from anywhere; `data-hide-<part>` now beats a theme's `display` (it never did for controls and volume); every shipped theme computes the same styles as before. No UI, no copy, contract still v12.
   - **L2 Runtime theme loader** — **done 2026-11-08** (DECISIONS.md): themes from `<app data dir>/themes/` through the asset protocol into the `theme` layer, `theme.json` checked in Rust and again in the frontend, a broken theme never offered and a saved one that fails falls back to the default. No settings UI yet: a folder put there by hand shows in the right-click menu at the next launch. Checked in the real exe.
-  - **L3 Hot swap:** the file watcher; a swap that never shows an unstyled frame (S4: keep the old sheet until the new one loads); the gate's 20 swaps, frame-captured.
+  - **L3 Hot swap** — **done 2026-11-08** (DECISIONS.md): the file watcher; a theme you're editing updates on screen within about a second, swapped in one frame (no unstyled frame, no old-and-new mix); themes added, removed or broken while Stanza runs come and go in the menu; the gate's 20 swaps, every frame recorded, in both engines and in the real exe.
   - **L4 Settings window** (a design round with you, needs copy): the second window and its chrome, companion options, Reset appearance.
   - **L5 Customizer** (needs copy): the theme's `controls`, live preview, the contrast warning, variants as files with export/import.
   - **L6 Snippets and theme `.zip` import** (needs copy).

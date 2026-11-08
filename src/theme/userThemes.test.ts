@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import fixtureManifest from "../../dev/fixtures/user-themes/fixture-paper/theme.json";
 import rust from "../../src-tauri/src/themes.rs?raw";
 import { MANIFESTS } from "./registry";
-import { assetUrl, parseUserManifest, parseUserThemes, themeSheetText } from "./userThemes";
+import { assetUrl, mergeManifests, parseUserManifest, parseUserThemes, themeSheetText } from "./userThemes";
 import { CONTRACT_VERSION } from "./variant";
 
 const BASE = "http://asset.localhost/";
@@ -138,7 +138,16 @@ describe("parseUserThemes", () => {
 
 describe("the shell sheet and Rust", () => {
   it("imports the CSS into the theme layer, nothing else", () => {
-    expect(themeSheetText("http://asset.localhost/C%3A/x/theme.css")).toBe('@import url("http://asset.localhost/C%3A/x/theme.css") layer(theme);\n');
+    // `not all`: loaded but not applied until shown (M3 L3), so a live reload swaps old and new in one frame.
+    expect(themeSheetText("http://asset.localhost/C%3A/x/theme.css?v=3")).toBe('@import url("http://asset.localhost/C%3A/x/theme.css?v=3") layer(theme) not all;\n');
+  });
+
+  it("lists the bundled themes first, then the user themes, in folder order", () => {
+    const { themes } = parseUserThemes([ok(), ok({ ...good(), id: "fixture-zz" }, "fixture-zz")], MANIFESTS, BASE);
+    const merged = mergeManifests(MANIFESTS, themes);
+    expect(Object.keys(merged)).toEqual([...Object.keys(MANIFESTS), "fixture-paper", "fixture-zz"]);
+    expect(merged["fixture-zz"]).toBe(themes["fixture-zz"].manifest);
+    expect(Object.keys(MANIFESTS)).not.toContain("fixture-paper"); // a copy: the registry itself is untouched
   });
 
   it("Rust checks themes against the same contract version", () => {

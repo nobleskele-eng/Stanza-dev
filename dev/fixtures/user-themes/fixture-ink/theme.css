@@ -1,0 +1,18 @@
+/* FIXTURE-ONLY-DEV-BUILD: a second synthetic user theme, so user-to-user swaps are tested too (M3 L3). Used by
+   e2e/user-themes.spec.ts and the real-exe check; never shipped. */
+.mp-root[data-theme="fixture-ink"] {
+  --mp-bg: #14161c;
+  --mp-fg: #e8e6df;
+  --mp-muted: #9a978e;
+  --mp-accent: #d9a441;
+  --fixture-ink-loaded: 1;
+}
+
+.mp-root[data-theme="fixture-ink"] .mp-window {
+  background: var(--mp-bg);
+  color: var(--mp-fg);
+  width: 252px;
+  padding: 20px;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px var(--mp-accent);
+}

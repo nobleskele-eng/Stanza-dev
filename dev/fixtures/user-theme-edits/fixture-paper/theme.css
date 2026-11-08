@@ -1,0 +1,22 @@
+/* FIXTURE-ONLY-DEV-BUILD: dev/fixtures/user-themes/fixture-paper/theme.css as if edited while the app runs (M3 L3).
+   Saved over the original by e2e/user-themes.spec.ts and the real-exe check. Against the original it changes the
+   colours and the corners, drops the padding rule and adds a shadow: a frame mixing old and new would show. */
+.mp-root[data-theme="fixture-paper"] {
+  --mp-bg: #e4ecf2;
+  --mp-fg: #10202c;
+  --mp-muted: #4c5a66;
+  --mp-accent: #8a2f4d;
+  --fixture-paper-loaded: 2;
+}
+
+.mp-root[data-theme="fixture-paper"] .mp-window {
+  background: var(--mp-bg) url(bg.svg) repeat;
+  color: var(--mp-fg);
+  width: 252px;
+  border-radius: 14px;
+  box-shadow: 0 2px 0 var(--mp-accent);
+}
+
+.mp-root[data-theme="fixture-paper"] .mp-artwork {
+  opacity: 0.3 !important;
+}
