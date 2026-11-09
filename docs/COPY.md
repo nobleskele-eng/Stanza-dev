@@ -57,6 +57,22 @@ shows `name`.
 - **Theme package import error:** [NEEDS COPY]
 - **"Reset appearance" tray item:** [NEEDS COPY]
 
+## Settings window (M3 L4: direction A "Index", picked 2026-11-08)
+Mockup with every slot marked: `docs/design/l4-settings-concepts.png`. Until a slot is written the window shows
+`[NEEDS COPY]` there.
+- **Settings window title:** [NEEDS COPY] — the title bar; also what the taskbar and Alt+Tab show.
+- **Settings menu item:** [NEEDS COPY] — only shows if the gear picture fails to load (like the companion item).
+- **Settings — themes section title:** [NEEDS COPY] — the rail entry and the section's heading.
+- **Settings — open themes folder button:** [NEEDS COPY]
+- **Settings — reset appearance button:** [NEEDS COPY] — the tray item above can use the same words.
+- **Settings — reset question:** [NEEDS COPY] — asked before resetting: back to the default theme with nothing
+  customised; the companion stays as it is.
+- **Settings — reset confirm button:** [NEEDS COPY]
+- **Settings — reset cancel button:** [NEEDS COPY]
+- **Settings — companion on/off (spoken):** [NEEDS COPY] — the awake/asleep picture's name for screen readers.
+- The companion section's rail entry and heading use **Companion settings — section title** below.
+- Species, palette and accessory pictures are named for screen readers by the companion entries below.
+
 ## Companion (PLAN.md §4b, planned for M2)
 Nothing reads these yet. More entries (one per skin and per palette) get added when those skins exist. The companion has
 no speech bubbles; its emotes are pixel icons, not text.
@@ -71,6 +87,26 @@ no speech bubbles; its emotes are pixel icons, not text.
 - **Companion menu — skins heading:** [NEEDS COPY]
 - **Companion menu — palettes heading:** [NEEDS COPY]
 - **Companion settings — section title:** [NEEDS COPY]
+- **Companion palette name — pilcrow / default:** [NEEDS COPY]
+- **Companion palette name — pilcrow / ink:** [NEEDS COPY]
+- **Companion palette name — pilcrow / marker:** [NEEDS COPY]
+- **Companion palette name — pilcrow / violet:** [NEEDS COPY]
+- **Companion palette name — pilcrow / highlighter:** [NEEDS COPY]
+- **Companion palette name — bookworm / default:** [NEEDS COPY]
+- **Companion palette name — bookworm / kraft:** [NEEDS COPY]
+- **Companion palette name — bookworm / graph:** [NEEDS COPY]
+- **Companion palette name — bookworm / legal:** [NEEDS COPY]
+- **Companion palette name — bookworm / blueprint:** [NEEDS COPY]
+- **Companion palette name — cassette / default:** [NEEDS COPY]
+- **Companion palette name — cassette / clear:** [NEEDS COPY]
+- **Companion palette name — cassette / chrome:** [NEEDS COPY]
+- **Companion palette name — cassette / pink:** [NEEDS COPY]
+- **Companion palette name — cassette / mint:** [NEEDS COPY]
+- **Companion accessory name — none:** [NEEDS COPY] — the bare creature, wearing nothing.
+- **Companion accessory name — headphones:** [NEEDS COPY]
+- **Companion accessory name — beanie:** [NEEDS COPY]
+- **Companion accessory name — scarf:** [NEEDS COPY]
+- **Companion accessory name — bow:** [NEEDS COPY]
 
 ## Player UI
 - **Generic error (no detail available):** error — message @stayvyxed on Discord

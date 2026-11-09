@@ -4212,3 +4212,16 @@ one of the skin layers (PLAN.md §4b), so nothing structural changes.
   buttons, the reset question and its buttons, spoken names for every picture (species, palettes, accessories,
   on/off) and for the theme you're wearing. Not added to COPY.md until the direction is picked.
 - **Nothing built.** No code in `src/` changed.
+- **Your picks (same day), all four as recommended:**
+  - **A · Index.** Size about 900 × 640, resizable (not asked; the sheet's figure).
+  - **Windows' own title bar, dark.**
+  - **Live previews, in L4:** each theme drawn as the real player, small, with your current track; your own themes in
+    a sandboxed frame so their CSS can't reach the settings window.
+  - **A gear picture in the right-click menu** opens it (no words; like the companion item, words only if the picture
+    fails). **Reset appearance leaves the companion as it is.**
+- **COPY.md:** a "Settings window" section with the window's slots, plus spoken names for every palette and accessory
+  under Companion. All `[NEEDS COPY]`: the window will show that until you write them, with no code change needed.
+  A native menu item has no separate spoken name, so the gear item gets words only as its fallback.
+- **Build split:** **L4a** the window (Tauri's second window, the dark title bar, opened by the gear picture, one at a
+  time), the rail, the companion section kept in step with the player both ways, Reset appearance with its question.
+  **L4b** the themes section: live previews, picking from it, broken themes with their codes, open the themes folder.
