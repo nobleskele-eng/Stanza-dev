@@ -180,9 +180,10 @@ async function fireAndClose(page: Page, item: MenuItemArg) {
  * read as a plain icon item by Tauri: DECISIONS.md C6a); here it's put back together as one item.
  */
 async function companionItems(page: Page, items: MenuItemArg[]) {
-  const [separator, toggle, ref] = items.slice(THEME_IDS.length) as [MenuItemArg, MenuItemArg, unknown];
+  const [separator, toggle, ref, ...rest] = items.slice(THEME_IDS.length) as [MenuItemArg, MenuItemArg, unknown, ...unknown[]];
   expect(separator).toEqual({ item: "Separator" });
-  expect(items).toHaveLength(THEME_IDS.length + 3);
+  // After them, the settings gear (M3 L4): a separator and a picture with no text.
+  expect(rest).toEqual([{ item: "Separator" }, { text: "", icon: expect.any(Number), handler: expect.any(String) }]);
   expect(ref, "the picker, an existing submenu").toEqual([expect.any(Number), "Submenu"]);
   const rid = (ref as [number, string])[0];
   const made = (await ipcCalls(page, "plugin:menu|new")).filter((c) => c.args.kind === "Submenu").at(-1)!;

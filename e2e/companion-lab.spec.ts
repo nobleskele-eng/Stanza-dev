@@ -138,6 +138,9 @@ for (const dpr of [1, 1.25, 1.5, 2]) {
   test.describe(`at ${dpr * 100}% scaling`, () => {
     test.use({ deviceScaleFactor: dpr });
     test(`real-size sprites of every skin are crisp: only the palette and the backdrop, every art pixel ${Math.round(2 * dpr)} device px`, async ({ page }) => {
+      // One screenshot per skin and animation: ~18 s alone in WebKit at 150 %, over the default 30 s under a full run's
+      // load (timed out twice, M3 L4a; the same 17.5 s on the code before it, so not a slowdown: DECISIONS.md).
+      test.setTimeout(90_000);
       await page.goto("/?lab=companion&pause");
       await page.locator(sprite("react")).waitFor();
       const k = Math.round(2 * dpr);

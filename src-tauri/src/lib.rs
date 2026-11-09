@@ -1,4 +1,5 @@
 mod hit_region;
+mod settings_window;
 mod spotify;
 mod theme_watch;
 mod themes;
@@ -42,7 +43,15 @@ pub fn run() {
             spotify::spotify_set_volume,
             spotify::spotify_show_window,
             themes::user_themes,
+            settings_window::open_settings,
         ])
+        // The player is the app: closing it quits, settings window open or not (M3 L4).
+        .on_window_event(|window, event| {
+            use tauri::Manager;
+            if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
+                window.app_handle().exit(0);
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import copyMarkdown from "../docs/COPY.md?raw";
-import { COPY_LABELS, NEEDS_COPY, copy, lookupCopy, parseCopy, type CopyKey } from "./copy";
+import { SKINS, SPECIES } from "./companion/registry";
+import { COMPANION_LABELS, COPY_LABELS, NEEDS_COPY, accessoryName, copy, lookupCopy, paletteName, parseCopy, skinName, type CopyKey } from "./copy";
 
 describe("parseCopy", () => {
   it("reads approved values", () => {
@@ -32,6 +33,18 @@ describe("docs/COPY.md", () => {
   it("has an entry for every label the UI asks for (a typo would silently show [NEEDS COPY] forever)", () => {
     for (const [key, label] of Object.entries(COPY_LABELS)) {
       expect(copyMarkdown, `${key}: "${label}"`).toContain(`- **${label}:**`);
+    }
+  });
+
+  it("has a name entry for every companion species, palette and accessory (the settings window's pictures)", () => {
+    for (const skin of SPECIES) {
+      expect(copyMarkdown).toContain(`- **${COMPANION_LABELS.skin(skin)}:**`);
+      for (const palette of Object.keys(SKINS[skin].palettes)) expect(copyMarkdown).toContain(`- **${COMPANION_LABELS.palette(skin, palette)}:**`);
+      for (const accessory of [null, ...Object.keys(SKINS[skin].accessories ?? {})])
+        expect(copyMarkdown).toContain(`- **${COMPANION_LABELS.accessory(accessory)}:**`);
+      // Only COPY.md's words, or [NEEDS COPY].
+      const approved = new Set(parseCopy(copyMarkdown).values());
+      for (const v of [skinName(skin), paletteName(skin, "default"), accessoryName(null)]) expect(v === NEEDS_COPY || approved.has(v)).toBe(true);
     }
   });
 

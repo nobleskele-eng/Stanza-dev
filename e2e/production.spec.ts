@@ -308,11 +308,14 @@ test("in Tauri, right-click opens a native menu of every theme by name, the acti
   expect(items.map((i) => i.checked)).toEqual([true, false, false, false, false]);
   expect(items.map((i) => i.text)).not.toContain("[NEEDS COPY]");
   // Then the companion's on/off item (M2 C2b): the cassette asleep (it's off), an icon with no text and no check mark;
-  // then its picker (C6a), a submenu made as its own resource (companion-player.spec.ts checks it).
+  // then its picker (C6a), a submenu made as its own resource (companion-player.spec.ts checks it); last, the settings
+  // gear (M3 L4), a picture with no text (settings.spec.ts checks what it opens).
   expect(all.slice(THEME_IDS.length)).toEqual([
     { item: "Separator" },
     { text: "", icon: 500, handler: expect.any(String) },
     [expect.any(Number), "Submenu"],
+    { item: "Separator" },
+    { text: "", icon: expect.any(Number), handler: expect.any(String) },
   ]);
   const [img] = await ipcCalls(page, "plugin:image|new");
   // The cassette's 16-px grid at 1 device px per art pixel below 200%, 2 from 200% (companionIcon.ts). The page's own

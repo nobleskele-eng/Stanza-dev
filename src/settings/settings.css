@@ -1,0 +1,156 @@
+/* The settings window (M3 L4, design A "Index", docs/design/l4-settings-concepts.png): Stanza's own look, T1's ink.
+   Everything is scoped to .st-*, so none of it reaches the player, and it lives in the `base` layer with the rest of
+   the app's CSS (src/theme/shell.css). User themes and snippets never load in this window. */
+
+.st-root {
+  --st-bg: #0b0b0d;
+  --st-fg: #f2f0ea;
+  --st-muted: #9a968d;
+  --st-accent: #c1432e;
+  --st-line: #221d1a;
+  --st-tile: #16130f;
+  --st-danger: #e0806d;
+  --st-display: Georgia, "Times New Roman", serif;
+  --st-body: "Courier New", monospace;
+
+  position: fixed;
+  inset: 0;
+  display: grid;
+  grid-template-columns: 196px minmax(0, 1fr);
+  background: var(--st-bg);
+  color: var(--st-fg);
+  font: 14px/1.5 var(--st-body);
+}
+
+/* --- The rail: one tab per section --- */
+.st-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 26px 0;
+  border-right: 1px solid var(--st-line);
+}
+.st-tab {
+  all: unset;
+  box-sizing: border-box;
+  display: block;
+  padding: 9px 22px 9px 19px;
+  border-left: 3px solid transparent;
+  color: var(--st-muted);
+  font: 17px/1.35 var(--st-display);
+  cursor: pointer;
+}
+.st-tab:hover { color: var(--st-fg); }
+.st-tab[aria-selected="true"] {
+  color: var(--st-fg);
+  border-left-color: var(--st-accent);
+}
+
+/* --- A section --- */
+.st-main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+  padding: 26px 30px;
+}
+.st-heading {
+  margin: 0 0 18px;
+  font: 400 30px/1.2 var(--st-display);
+}
+.st-foot {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: auto;
+  padding-top: 18px;
+  border-top: 1px solid var(--st-line);
+}
+
+.st-btn {
+  all: unset;
+  box-sizing: border-box;
+  padding: 8px 14px;
+  border: 1px solid #3a322d;
+  border-radius: 6px;
+  color: var(--st-fg);
+  font: 14px/1.4 var(--st-body);
+  cursor: pointer;
+}
+.st-btn:hover { border-color: var(--st-muted); }
+.st-btn.st-danger {
+  margin-left: auto;
+  border-color: transparent;
+  color: var(--st-danger);
+}
+.st-btn.st-danger:hover { border-color: var(--st-danger); }
+
+/* --- The companion's pictures --- */
+.st-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.st-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.st-pic {
+  all: unset;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  width: 84px;
+  height: 84px;
+  border-radius: 10px;
+  background: var(--st-tile);
+  outline: 1px solid var(--st-line);
+  cursor: pointer;
+}
+.st-pic:hover { outline-color: var(--st-muted); }
+/* The choice is a ring of its own (a shadow), so the keyboard's focus outline never hides it. */
+.st-pic[aria-pressed="true"],
+.st-switch[aria-checked="true"] .st-pic.is-on,
+.st-switch[aria-checked="false"] .st-pic.is-off {
+  outline-color: transparent;
+  box-shadow: 0 0 0 2px var(--st-accent);
+}
+.st-switch {
+  all: unset;
+  display: flex;
+  gap: 10px;
+  cursor: pointer;
+}
+.st-switch .st-pic { cursor: inherit; }
+
+/* --- Reset's question --- */
+.st-dialog {
+  max-width: 420px;
+  padding: 24px 26px;
+  border: 1px solid var(--st-line);
+  border-radius: 12px;
+  background: var(--st-bg);
+  color: var(--st-fg);
+  font: 14px/1.5 var(--st-body);
+}
+.st-dialog::backdrop { background: rgb(0 0 0 / 0.6); }
+.st-question {
+  margin: 0 0 20px;
+  font: 18px/1.4 var(--st-display);
+}
+.st-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+.st-actions .st-btn.st-danger { margin-left: 0; }
+
+/* Keyboard focus: always visible, never the outline that marks a choice. */
+.st-tab:focus-visible,
+.st-btn:focus-visible,
+.st-pic:focus-visible,
+.st-switch:focus-visible {
+  outline: 2px solid var(--st-fg);
+  outline-offset: 3px;
+}

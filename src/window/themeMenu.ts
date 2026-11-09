@@ -2,7 +2,7 @@
 // listing every theme by its theme.json `name`, the active one checked. The names are the menu's only
 // text, so it needs no other copy; the companion item after them is an icon (companionIcon.ts), and so is its picker
 // (C6a): a submenu of pictures, every species, the current one's palettes and what it can wear (D2c), the chosen ones
-// awake. Previews come with the settings window (PLAN.md Phase 4/5).
+// awake. Last, a gear picture opens the settings window (M3 L4), where the previews are (L4b).
 // No-op outside Tauri, where the browser's own context menu stays.
 import { isTauri } from "@tauri-apps/api/core";
 import { LogicalPosition } from "@tauri-apps/api/dpi";
@@ -12,6 +12,7 @@ import { SKINS, SPECIES } from "../companion/registry";
 import { copy, NEEDS_COPY } from "../copy";
 import type { ThemeManifest } from "../theme/variant";
 import { MENU_ICON_SKIN, menuIconScale, skinMenuIcon } from "./companionIcon";
+import { gearMenuIcon } from "./gearIcon";
 
 export interface ThemeMenuEntry {
   id: string;
@@ -108,6 +109,8 @@ export function installThemeMenu(
   getActive: () => string,
   onPick: (id: string) => void,
   companion?: CompanionMenu,
+  /** The settings window (M3 L4): a gear picture at the end of the menu opens it. */
+  onSettings?: () => void,
   doc: Document = document,
 ): () => void {
   if (!isTauri()) return () => {};
@@ -127,6 +130,21 @@ export function installThemeMenu(
       const { rgba, width, height } = skinMenuIcon(SKINS[skin], palette, awake, dpr, accessory);
       icon = Image.new(rgba, width, height).catch((err) => {
         console.error("companion menu icon failed", err);
+        return null;
+      });
+      icons.set(key, icon);
+    }
+    return icon;
+  };
+  /** The settings gear (gearIcon.ts), made once per scale like the creatures; null if it failed. */
+  const gear = (): Promise<Image | null> => {
+    const scale = menuIconScale(doc.defaultView?.devicePixelRatio ?? 1);
+    const key = `gear@${scale}`;
+    let icon = icons.get(key);
+    if (!icon) {
+      const { rgba, width, height } = gearMenuIcon(scale);
+      icon = Image.new(rgba, width, height).catch((err) => {
+        console.error("settings menu icon failed", err);
         return null;
       });
       icons.set(key, icon);
@@ -183,6 +201,11 @@ export function installThemeMenu(
             return null;
           });
           if (sub) items.push(sub);
+        }
+        if (onSettings) {
+          // Last: the gear picture, with words only if the picture failed (COPY.md "Settings menu item").
+          const icon = await gear();
+          items.push({ item: "Separator" }, icon ? { text: "", icon, action: onSettings } : { text: copy("settingsMenuItem"), action: onSettings });
         }
         return Menu.new({ items });
       })

@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "settings",
+  "description": "Capability for the settings window (M3 L4): events to and from the player window, nothing else.",
+  "windows": ["settings"],
+  "permissions": ["core:default"]
+}

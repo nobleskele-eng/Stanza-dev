@@ -1,5 +1,8 @@
 import "./theme/shell.css";
-import { isTauri } from "@tauri-apps/api/core";
+import { invoke, isTauri } from "@tauri-apps/api/core";
+import { copy } from "./copy";
+import { currentWindowLabel, installPlayerBridge, publishAppearance, SETTINGS_LABEL } from "./settings/bridge";
+import { SettingsApp } from "./settings/SettingsApp";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { dress } from "./companion/accessory";
 import { SKINS } from "./companion/registry";
@@ -287,14 +290,38 @@ function ProductionApp({ boot }: { boot: Boot }) {
   // strand a menu that's open at that moment.
   useEffect(
     () =>
-      installThemeMenu(() => latest.current.manifests, () => active.current, pickTheme, {
-        isOn: () => companion.current.on,
-        toggle: () => setCompanion({ ...companion.current, on: !companion.current.on }),
-        current: () => companion.current,
-        pick: ({ skin, palette, accessory }) => setCompanion(pickCompanion(companion.current, skin, palette, accessory)),
-      }),
+      installThemeMenu(
+        () => latest.current.manifests,
+        () => active.current,
+        pickTheme,
+        {
+          isOn: () => companion.current.on,
+          toggle: () => setCompanion({ ...companion.current, on: !companion.current.on }),
+          current: () => companion.current,
+          pick: ({ skin, palette, accessory }) => setCompanion(pickCompanion(companion.current, skin, palette, accessory)),
+        },
+        // The gear picture (M3 L4): opens the settings window, or brings it forward.
+        () => void invoke("open_settings", { title: copy("settingsTitle") }).catch((err) => console.error("settings window failed", err)),
+      ),
     [pickTheme, setCompanion],
   );
+
+  // Reset appearance (from the settings window): the default theme with nothing customised, the companion kept (your
+  // call, M3 L4). Through the theme picker's own path when the theme changes, so the window sizing and a user theme's
+  // sheet are handled as for any switch.
+  const resetAppearance = useCallback(() => {
+    if (active.current !== DEFAULT_THEME) return pickTheme(DEFAULT_THEME);
+    const next = selectTheme(latest.current.manifests, DEFAULT_THEME, companion.current);
+    saveAppearance(window.localStorage, next);
+    setAppearance(next);
+  }, [pickTheme]);
+  // The settings window asks; this window owns the appearance and answers (src/settings/bridge.ts).
+  useEffect(
+    () => installPlayerBridge({ appearance: () => shown.current, setCompanion, reset: resetAppearance }),
+    [setCompanion, resetAppearance],
+  );
+  useEffect(() => void publishAppearance(appearance), [appearance]);
+
   const dom = variantToDom(appearance.variant);
   return (
     <div className="app-stage" style={margin ? { padding: margin } : undefined}>
@@ -319,6 +346,8 @@ function ProductionApp({ boot }: { boot: Boot }) {
 }
 
 function App() {
+  // The settings window (M3 L4) is this same page in a second window, told apart by its label.
+  if (currentWindowLabel() === SETTINGS_LABEL) return <SettingsApp />;
   if (import.meta.env.DEV) {
     // esbuild inlines import.meta.env.DEV to `false` in production builds, which
     // makes this whole branch dead code — Rollup's tree-shaking then drops the

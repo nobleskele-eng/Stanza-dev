@@ -4225,3 +4225,80 @@ one of the skin layers (PLAN.md §4b), so nothing structural changes.
 - **Build split:** **L4a** the window (Tauri's second window, the dark title bar, opened by the gear picture, one at a
   time), the rail, the companion section kept in step with the player both ways, Reset appearance with its question.
   **L4b** the themes section: live previews, picking from it, broken themes with their codes, open the themes folder.
+
+## 2026-11-08 — M3 L4a: the settings window (rail, companion, Reset appearance)
+
+- **What it does:** the right-click menu now ends with a gear picture (after a separator). Picking it opens the
+  settings window, direction A: a second, ordinary window with Windows' own title bar, dark, about 900 × 640,
+  resizable down to 640 × 480; picking it again brings the open one forward. Inside, Stanza's ink: a rail of two
+  sections. **Companion:** the on/off switch (the awake and asleep cassette), every species, the current one's
+  palettes, what it can wear: the menu's pictures, bigger, the choices ringed in red. **Themes:** for now its heading
+  and Reset appearance (the previews are L4b). Every word is a COPY.md slot, so today it reads `[NEEDS COPY]`
+  throughout, the window title included.
+- **The player owns the appearance** (`src/settings/bridge.ts`): the settings window only asks
+  (`settings:companion`, `settings:reset`, `settings:hello`, sent to the player by label) and shows what the player
+  reports (`appearance:changed`, on every change and in answer to hello). It never writes the saved appearance
+  itself. Both ends check what they receive, field by field (`parseCompanion`). One writer, so the two windows can't
+  race or disagree for long. Before the first report it shows what was last saved (the windows share storage).
+- **Reset appearance** (your call: the companion stays): the default theme with nothing customised, through the
+  theme picker's own path when the theme changes (window sizing, a user theme's sheet removed), saved. From L6 it
+  will switch snippets off too. It asks first, in a dialog whose safe button has the focus.
+- **Rust** (`src-tauri/src/settings_window.rs`): `open_settings(title)` builds the window (label `settings`, the
+  same bundle; `App.tsx` renders the settings UI for that label), `theme(Dark)` for the title bar, an ink background so
+  it never flashes white. Async, because building a window in a synchronous command deadlocks on Windows. The title
+  comes from COPY.md through the frontend, control characters stripped, at most 80 characters. Closing the player
+  now quits the app even with settings open (it used to be the only window). `capabilities/settings.json` gives the
+  settings window `core:default` only (events, nothing else).
+- **The gear** (`src/window/gearIcon.ts`): an original 16 × 16 pixel gear (a ring, eight teeth), one mid-grey
+  (`#7d8594`): a dark outline vanished on the dark Windows menu, so it's a single colour that reads on both. 32 × 32
+  from 200 %. If the picture fails, the item shows COPY.md's "Settings menu item" words instead.
+- **Accessibility:** the rail is a vertical tab list (arrows, Home, End; one tab stop); every picture is a button
+  with `aria-pressed` and a spoken name from COPY.md (species, palette, accessory; all `[NEEDS COPY]` for now); the
+  on/off is a `switch`. Keyboard focus is a white outline; a choice is a red ring drawn as a shadow, so focus never
+  hides it.
+- **Copy:** `copy.ts` gains the settings labels and `skinName` / `paletteName` / `accessoryName`, which look up
+  COPY.md's per-species, per-palette and per-accessory entries (a unit test checks every one exists).
+- **Tests:**
+  - `cargo test` (+2, 35 in all): the title cleaned and bounded; the window's label equals the frontend's.
+  - Unit (+3, 622 in all): the gear grid (16 × 16, one colour, symmetric, a hole), its
+    RGBA at 100 % and 200 %; every companion species, palette and accessory has its COPY.md name entry.
+  - e2e, `e2e/settings.spec.ts` (9 × 2 engines), the production bundle in a fake Tauri as either window:
+    - as the settings window: the rail, heading and Reset, words only from COPY.md; no player, no Spotify, no theme
+      listing, no user CSS, no menu; it listens, then says hello; the companion section shows the saved setting and
+      follows the player's reports; a picture or the switch asks the player and saves nothing itself; Reset asks
+      first (cancel and Escape do nothing); by keyboard (arrows, Home, End; the Tab order in Chromium, since WebKit
+      Tabs to buttons only when the system says so); a nonsense report taken field by field;
+    - as the player: the menu ends with the gear picture, which calls `open_settings` with COPY.md's title; it answers
+      hello, applies an asked-for companion (and a nonsense one only field by field), reports every change; Reset from
+      T2 back to T1, nothing customised, the companion kept, saved, the window sized.
+  - The three menu tests that list the menu's items (production.spec, companion-player.spec ×2) now expect the gear
+    after the companion's items.
+- **Same failure twice (diagnosed):** the keyboard test's Tab-order check failed twice in Chromium after `blur()`.
+  Chromium keeps its sequential-focus starting point at the element just blurred, so Tab carried on from there into
+  the section: the browser's behaviour, not the app's. The check now starts from a freshly loaded page.
+- **Real exe (ran),** `npm run tauri build -- --no-bundle` OK (0 warnings, check-fixtures-excluded OK). Spotify
+  read-only, nothing pressed, your cursor never moved; the native menu driven by keys through the persistent helper
+  (now also listing a process's windows with their titles and the DWM dark-mode flag).
+  - The menu ends with a separator and a picture with no words. Picking it opened a second window titled
+    `[NEEDS COPY]`, `DWMWA_USE_IMMERSIVE_DARK_MODE` = 1 (the dark title bar), page 900 × 640, ink background, two tabs,
+    no player, no user CSS. The gear again: still one settings window.
+  - The bookworm picked in settings: the player's companion on, as a bookworm, saved; settings showed the player's
+    report. Switched off in settings: the player's window back at exactly (2492, 583, 340 × 600).
+  - T2 picked in the player's menu, then Reset in settings: it asked, then T1, nothing customised, the companion as it
+    was; the window back to 340 × 600.
+  - No console or page errors in either window.
+  - Your saved appearance put back byte for byte, the player reloaded on it. Then **closing the player quit the app**,
+    settings window included.
+  - **Found:** the window-state plugin now also remembers the settings window's position (an entry `settings` in
+    `.window-state.json`), so it reopens where you left it. Your file was put back byte for byte after the run.
+  - Script fix on the way (not the app): Down skips separators in a native menu, so "press Down index + 1 times" now
+    overshoots items after a separator; the script steps until the item is highlighted.
+- **Not done here:** the theme previews, picking a theme in settings, broken themes, the themes-folder button (L4b);
+  every word (yours to write in COPY.md). macOS untested.
+- **Same failure twice (diagnosed, not this change):** the WebKit "real-size sprites are crisp" test at 150 % timed
+  out (30 s, in `scrollIntoViewIfNeeded`) in two full runs in a row, and passed alone both times. Timed alone: 18.0 s
+  on this code, 17.5 s on L3's (the work stashed), so nothing here slowed it; it's one screenshot per skin and
+  animation, over half its limit even alone, and the full run now has 18 more WebKit tests competing. Its sibling
+  ("dressed sprites") already had 120 s for the same reason; it gets 90 s.
+- **Then a clean full run:** **959 passed, 65 skipped** (Chromium + WebKit; the 18 new included, the skips unchanged). `tsc` clean, Vitest 622, `cargo test` 35.
+- **Next:** L4b, the themes section: live previews (your themes sandboxed), picking a theme there, broken themes with their codes, the themes-folder button.

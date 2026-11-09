@@ -150,7 +150,7 @@ Kept as written in v1 (history). Later surprises live in `docs/DECISIONS.md`.
 │  │     │ IPC events     │ JS events                            │ │
 │  │     │                SoundCloudAdapter (hidden iframe) ○    │ │
 │  └─────┼──────────────────────────────────────────────────────┘ │
-│  Settings window ○ M3                                           │
+│  Settings window ✓ M3 L4a (themes section: L4b)                 │
 │        │ invoke / events                                        │
 │  RUST CORE                                                      │
 │   ├─ SpotifyAdapter · Windows (GSMTC): spike ✓, main ○ M1       │
@@ -424,7 +424,7 @@ locally on `main` ("Slice N: …"), never pushed unless you ask. Hour ranges are
 - **Done:** Phase 0; spikes S1 (window), S2 (GSMTC), S4 (themes) — on their spike branches, learnings merged; Phase 2 core; Phase 3 design system + contract; Phase 4 themes T1–T5, the D16 effects layer, contract v5.
 - **Production slices on `main`:** 1 theme applied + remembered · 2 real frameless transparent window · 3 click-through · 4 right-click theme picker · 5 CSP + named Stanza · 6 player centred side to side.
 - **M1 Real music (done 2026-10-17, DECISIONS.md M1 R1–R3b):** the GSMTC adapter on `main` (20-track gate passed), position drift ≤ 0.2 s over 5 min, keyboard seek, a "Spotify not running" state with recovery, Spotify's own volume through Core Audio, the lyrics button (contract v6), and a CPU pass (every theme 0.1–0.7 s of CPU per 10 s while playing). The Slice 5/6 real-exe checks passed along the way.
-- **Tests at last full run (2026-11-08):** 619 unit (Vitest), 941 e2e + 65 skipped (Playwright, Chromium + WebKit), `cargo test` 33.
+- **Tests at last full run (2026-11-08):** 622 unit (Vitest), 959 e2e + 65 skipped (Playwright, Chromium + WebKit), `cargo test` 35.
 - **Open from M1:** R4 tray + hide (added 2026-10-22); the remaining `[NEEDS COPY]` labels (the first ones were filled 2026-10-22); the Store build of Spotify; 125%/150% scaling.
 
 ### v1 phases → milestones
@@ -480,7 +480,7 @@ locally on `main` ("Slice N: …"), never pushed unless you ask. Hour ranges are
   - **L1 Cascade layers** — **done 2026-11-08** (DECISIONS.md): one shell stylesheet, `@layer guard, base, theme, user;`; the guard beats `!important` from anywhere; `data-hide-<part>` now beats a theme's `display` (it never did for controls and volume); every shipped theme computes the same styles as before. No UI, no copy, contract still v12.
   - **L2 Runtime theme loader** — **done 2026-11-08** (DECISIONS.md): themes from `<app data dir>/themes/` through the asset protocol into the `theme` layer, `theme.json` checked in Rust and again in the frontend, a broken theme never offered and a saved one that fails falls back to the default. No settings UI yet: a folder put there by hand shows in the right-click menu at the next launch. Checked in the real exe.
   - **L3 Hot swap** — **done 2026-11-08** (DECISIONS.md): the file watcher; a theme you're editing updates on screen within about a second, swapped in one frame (no unstyled frame, no old-and-new mix); themes added, removed or broken while Stanza runs come and go in the menu; the gate's 20 swaps, every frame recorded, in both engines and in the real exe.
-  - **L4 Settings window** (needs copy): design round **done 2026-11-08**, direction A "Index" (DECISIONS.md, `docs/design/l4-settings-concepts.png`): Stanza's own look, a section rail, Windows' dark title bar, opened by a gear picture in the right-click menu. **L4a** the window, rail, companion section, Reset appearance (keeps the companion); **L4b** the themes section with live previews (your themes sandboxed), broken themes with their codes, open the themes folder.
+  - **L4 Settings window** (needs copy): design round **done 2026-11-08**, direction A "Index" (DECISIONS.md, `docs/design/l4-settings-concepts.png`): Stanza's own look, a section rail, Windows' dark title bar, opened by a gear picture in the right-click menu. **L4a** the window, rail, companion section, Reset appearance (keeps the companion) — **done 2026-11-08** (DECISIONS.md; checked in the real exe; every word still `[NEEDS COPY]`); **L4b** the themes section with live previews (your themes sandboxed), broken themes with their codes, open the themes folder.
   - **L5 Customizer** (needs copy): the theme's `controls`, live preview, the contrast warning, variants as files with export/import.
   - **L6 Snippets and theme `.zip` import** (needs copy).
   - **S7 genre fonts:** waits for your Spotify app Client ID/Secret.

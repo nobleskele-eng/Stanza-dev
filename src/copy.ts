@@ -35,6 +35,16 @@ export const COPY_LABELS = {
   lyrics: "Lyrics button label",
   linkOut: "Link-out label",
   companionToggle: "Companion menu — show/hide item",
+  // The settings window (M3 L4).
+  settingsTitle: "Settings window title",
+  settingsMenuItem: "Settings menu item",
+  settingsThemes: "Settings — themes section title",
+  settingsCompanion: "Companion settings — section title",
+  settingsReset: "Settings — reset appearance button",
+  settingsResetQuestion: "Settings — reset question",
+  settingsResetConfirm: "Settings — reset confirm button",
+  settingsResetCancel: "Settings — reset cancel button",
+  settingsCompanionToggle: "Settings — companion on/off (spoken)",
 } as const;
 
 export type CopyKey = keyof typeof COPY_LABELS;
@@ -47,3 +57,16 @@ export function lookupCopy(entries: Map<string, string>, key: CopyKey): string {
 const entries = parseCopy(copyMarkdown);
 
 export const copy = (key: CopyKey): string => lookupCopy(entries, key);
+
+/**
+ * The companion's names, one COPY.md entry per species, palette and accessory (spoken names for the settings window's
+ * pictures). The labels are built from ids; the words are only ever COPY.md's.
+ */
+export const COMPANION_LABELS = {
+  skin: (skin: string) => `Companion skin name — ${skin}`,
+  palette: (skin: string, palette: string) => `Companion palette name — ${skin} / ${palette}`,
+  accessory: (accessory: string | null) => `Companion accessory name — ${accessory ?? "none"}`,
+};
+export const skinName = (skin: string) => entries.get(COMPANION_LABELS.skin(skin)) ?? NEEDS_COPY;
+export const paletteName = (skin: string, palette: string) => entries.get(COMPANION_LABELS.palette(skin, palette)) ?? NEEDS_COPY;
+export const accessoryName = (accessory: string | null) => entries.get(COMPANION_LABELS.accessory(accessory)) ?? NEEDS_COPY;

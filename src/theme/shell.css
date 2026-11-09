@@ -20,6 +20,7 @@
 @import "./structure.css" layer(base);
 @import "../fx/fx.css" layer(base);
 @import "../companion/companion.css" layer(base);
+@import "../settings/settings.css" layer(base);
 
 @import "../../themes/t1-default/theme.css" layer(theme);
 @import "../../themes/t2-artwork/theme.css" layer(theme);
