@@ -3,7 +3,7 @@
 **Stanza** — a small pixel creature that lives on your music. The mini player is its room (*stanza* is Italian for "room").
 *Working description, yours to rewrite (COPY.md's tagline is still `[NEEDS COPY]`):* a desktop pet for Windows that lives on a Spotify mini player, built with Tauri.
 
-Version 3 · 2026-11-16 · Status: **pets first** (D20–D25; your call, 2026-11-16: "ditch themes").
+Version 3 · 2026-11-16, amended 2026-11-17 (D26–D28: artist pets, leaving the player, unlocks) · Status: **pets first** (D20–D25; your call, 2026-11-16: "ditch themes").
 - **Built and staying:** real Spotify music on Windows (M1); the pet, with three species, five palettes each and four accessories, travelling the card's outline, clickable, picked up and dropped (M2); the window (frameless, transparent, click-through); the settings window's shell (M3 L4a).
 - **Built and being retired:** the theme system (five themes, the picker, user themes, live reload, variants; theme contract v12) and the effects layer. The last commit with them is tagged `themes-final`.
 - **Next:** P1, clearing the ground (§5). Then the home (§4c) and what the pet does with your music (§4d).
@@ -52,7 +52,7 @@ Your words for the goal: "unique, fun, interesting, cool and NOT vibe code slop"
 | D14 | Customization = three layers: (a) in-app customizer editing theme tokens, saved as variants; (b) user CSS snippets layered on top of the active theme; (c) importable theme packages | **Superseded by D20 and D23 (2026-11-16)** | Customization is the core purpose of the project. It still is: it moves to the pet (D23). |
 | D15 | v1 ships Spotify-only on Windows; SoundCloud support and Windows any-app mode are grouped into a post-v1 expansion phase, order TBD | Confirmed | You want v1 launched with Spotify first rather than carrying SoundCloud's spike/API-terms risk (D6, D9, C13) into the critical path. |
 | D16 | Opt-in animated effects (shapes, waveform, typewriter/ripple/liquid/split-flap text, flow backdrop, track-change morph, physics debris) — the audio-looking ones driven by a **simulated** beat; icon click/idle motion on by default | **Superseded by D21 (2026-11-16)**; was new 2026-09-23 | Wanted for the design showcase. Built as an app-provided layer (`src/fx/`, anime.js MIT + SVG filters), switched on per user via variants, not baked into themes. The beat is a seeded fake — nothing analyses the audio (no clean audio source, §9) — so no UI or doc may claim it reacts to the music. Contract v4, extended in v5 by design round 2 (theme T5). See `docs/DECISIONS.md` 2026-09-23. |
-| D17 | **Companion:** an opt-in, app-provided pixel-art creature on and around the player. One window grown by a margin; pixel grids rendered as SVG; a seeded state machine; interactive (click, pick up and drop), but never over the artwork, controls or source badge, and never outside the window | **Built (M2).** On by default from P1b (D25) | You asked for a pet like the one on Claude's chat box that can walk, sit and hang inside and outside the frame, with skins and original designs. Pixel art, "watch + pick up", around the player only: your choices. Spec and architecture in §4b. |
+| D17 | **Companion:** an opt-in, app-provided pixel-art creature on and around the player. One window grown by a margin; pixel grids rendered as SVG; a seeded state machine; interactive (click, pick up and drop), but never over the artwork, controls or source badge, and never outside the window | **Built (M2).** On by default from P1b (D25). Leaving the window: D27 | You asked for a pet like the one on Claude's chat box that can walk, sit and hang inside and outside the frame, with skins and original designs. Pixel art, "watch + pick up", around the player only: your choices. Spec and architecture in §4b. |
 | D18 | Order: real Spotify data on `main` (M1) before the companion (M2) | **New 2026-10-17** | The GSMTC spike passed on 2026-09-16 but never reached `main`, so the app only shows idle. The companion reacts to play/pause/track change, which only means something with real data. Your choice. |
 | D19 | PLAN.md is the single plan again; `docs/PRIORITIZATION_PLAN.md` (spikes S5–S8) folded into §5 and deleted | **New 2026-10-17** | Two plans competed. S5 (per-app volume) and S6 (lyrics button → focus Spotify) → M1; S7 (genre fonts) → M3; S8 (window shapes): rectangles were answered by Slice 3's click-through, arbitrary silhouettes parked (§9). |
 | D20 | **Pets first; the theme system is retired.** No theme roster, picker, user themes, live reload, variants, customizer, snippets or theme packages. One player, designed as the pet's home (D22) | **New 2026-11-16, your call** ("ditch themes") | The five themes were built to prove the theme contract (v2 §4: each "stress-tests a different part of the contract"), so none of them is about anything; your words: "too claude generated, vibe coded looking plus they lack substance". The contract's generality also kept the pet to a box: four edges and one shelf. Supersedes D14. M3's L4b, L5, L6 and S7 are dropped. The last themed commit is tagged `themes-final`. See §4. |
@@ -61,6 +61,9 @@ Your words for the goal: "unique, fun, interesting, cool and NOT vibe code slop"
 | D23 | **Customization moves to the pet.** Species, palettes and accessories (built), then user-made pets: a folder, validated, live-reloaded, with an importer for sprites drawn in a pixel editor | **New 2026-11-16** | Customization is still the purpose (D14's reason). The validate-and-watch pattern built for user themes (M3 L2/L3) is reused. See §4e. |
 | D24 | **Listening memory, local only, and no chores.** A log of plays, skips and repeats on this PC, so the pet's reactions mean something. It is never hungry, guilty or in need of upkeep | **New 2026-11-16, default taken** (not explicitly answered); re-asked at P4 | Today every track change gets the same reaction. The log never leaves the machine. See §4d. |
 | D25 | **The pet is on by default** (it was opt-in, D17). The on/off switch stays | **New 2026-11-16, default taken** (not explicitly answered); re-asked at P1b | It is the product. |
+| D26 | **Artist pets are user-made pets.** A pet of an artist you listen to is made outside Stanza (by hand or with a sprite tool) and imported (§4e). It can name its artist and comes out when Spotify plays them. Stanza has no AI generation in it, and never bundles, demos or ships a real person's likeness; a user's pet is its author's | **New 2026-11-17, your call** | Your idea (a Playboi Carti pet walking round the player). The sprite tools make about 4 of the 11 required poses and run online with paid keys; Stanza is offline. The artist link is what ties it to real playback (§0). See §4e. |
+| D27 | **The pet may leave the player** and roam the desktop. Gated on a spike (P2c) | **New 2026-11-17, your call**; un-parks it from §9 | Your pick from Pocket Bird. It changes the M2 spec ("never leaves the player's window", §4b). It was parked because a separate pet window lags behind a dragged player, so P2c measures that first. Nothing is built until you decide on P2c's numbers. |
+| D28 | **Unlocks earned by listening.** New pets or accessories come from the local listening log (B1). Never lost, never on a timer, nothing to keep up; nothing you have today gets locked | **New 2026-11-17, your call** | Your pick from Pocket Bird. D24 (no chores) holds. See §4d B4. |
 
 **D10 amendment (2026-09-22):** relaxed from "unmodified artwork" to "cropped
 (`border-radius`/`clip-path`), overlaid, or filtered (blur/duotone) artwork —
@@ -289,10 +292,11 @@ Keep these in `docs/COPY.md`; code reads from there.
 
 The code calls it the companion (`src/companion/`, `.mp-companion`, `companions/`). You call it the pet, and so does this plan from v3. Renaming the code is not planned.
 
-**Everything in this section is built and stays.** It is the spec M2 was built to. The pivot changes three things:
+**Everything in this section is built and stays.** It is the spec M2 was built to. The pivot changes four things:
 - **On by default** (D25, with P1b). It was opt-in.
 - **Its surfaces come from the home** (§4c, P3), not from a theme's `theme.json`.
 - **What drives it grows** (§4d, P4). Today it is playback state only ("never to the audio" below was D16's rule). Then: the real loudness, your listening log and the layout.
+- **It may leave the player** (D27, 2026-11-17), if the P2c spike passes and you decide to build it. Until then the spec below holds: it never leaves the player's window.
 
 ### What it is (your request, as a spec)
 
@@ -312,7 +316,7 @@ The code calls it the companion (`src/companion/`, `.mp-companion`, `companions/
 - An app-provided layer, like the D16 effects — not theme art. Themes only declare where it may stand (below).
 - When the companion is on, the native window grows by a margin **M = the pet's box** on all four sides (`fitWindowToTheme`, `src/window/nativeWindow.ts`). `.app-stage` (`src/App.css`) pads by M, and the window moves by −M, so the card doesn't jump on screen.
 - The extra area is transparent and click-through already (Slice 3's hit region).
-- **Rejected:** a separate pet window. It lags behind while you drag the player, and desktop roaming is parked (§9).
+- **Rejected for life on the player:** a separate pet window. It lags behind while you drag the player. Leaving the player to roam the desktop is wanted since 2026-11-17 (D27), and the P2c spike measures that lag first (§5).
 
 ### Rendering: pixel grids → crisp SVG, no image files
 - Each frame is a list of strings, one character per pixel, each character a palette index (`.` = transparent).
@@ -399,6 +403,11 @@ The home declares where the pet can be, replacing `theme.json`'s `companion.shel
 
 ### Design round (H0)
 1. **Brief, from you:** 3–5 references you'd call cool (a game, a toy, a poster, an app, anything), and what to avoid. My reading of what you disliked in the old themes, for you to correct: a dark rounded card, one loud accent colour, a serif title over monospace details, decoration that isn't driven by anything real.
+   - **So far (2026-11-17), three references**, with what you take from each:
+     - **Magenta's Lo-Fi Player** (a pixel-art room in the browser): the cozy mood, and touching things changes the music (§4d B3).
+     - **Tamaweb** (a Tamagotchi-inspired web pet): the handheld LCD look, as a style. Not its care loop (D24), and not the egg-shaped device itself: the originality rule applies to the home as it does to the pet.
+     - **Pocket Bird** (a desktop pet bird): taken for the pet, not the home: leaving the player (D27) and unlocks (D28).
+   - **Still open:** what to avoid, and up to two more references (§10 #11).
 2. **Sheet:** three directions, each drawn in the lab at real size in every state above, with the pet in it and each of §4d's behaviours shown.
 3. **You pick, mix or reject.** Nothing is built from a first draft. If all three miss: another round, or start from a sketch of yours (the hanging pose came from one).
 
@@ -414,7 +423,7 @@ Not planned. If ever wanted: a second bundled home with its own manifest. No pub
 
 ## 4d. What the pet does with your music (D21, D24) — P2, P4
 
-Today the pet's only link to the music is awake while it plays, asleep when it doesn't, and the same reaction on every track change. The rest is weighted-random wandering (§4b). That is the "lacks substance" problem in the pet itself. Three additions, each caused by something real, each built in the lab first and then in the player (as C2–C5 were).
+Today the pet's only link to the music is awake while it plays, asleep when it doesn't, and the same reaction on every track change. The rest is weighted-random wandering (§4b). That is the "lacks substance" problem in the pet itself. Four additions, each caused by something real, each built in the lab first and then in the player (as C2–C5 were).
 
 ### It knows your music (B1)
 - **A local log** in the app data dir, written by Rust: per track (title + artist, the only identity GSMTC gives), its plays, skips and the last time. Capped in size. It never leaves the PC.
@@ -434,8 +443,15 @@ Today the pet's only link to the music is awake while it plays, asleep when it d
 - **Riding the progress bar:** a perch at the bar's front. Sitting there, where it is is where the song is. Its steps can land on the one-second position tick the player already redraws on.
 - **Drop to seek:** dropped on the bar, the song seeks to that point (`caps.seek`). Keyboard seek stays the accessible way.
 - **More perches** come out of the home's design round (§4c), which shows each one.
+- **Touch changes music** (your pick from the Lo-Fi Player, 2026-11-17): things in the home, or the pet, that you touch play, pause, skip or change volume. In addition to the real buttons, never instead (§4c). Which objects and which gestures is settled in H0 (§10 #16), so that a click meant for the pet (react) or a drag (carry) never skips a track by accident.
 
-### Gates (each of B1–B3)
+### It grows with your listening (B4, D28; needs B1)
+- **Unlocks:** new pets or accessories, earned from the listening log (B1). Your pick from Pocket Bird (2026-11-17).
+- **Never a chore (D24):** never lost, never on a timer, nothing to keep up. Nothing you have today gets locked.
+- **Local only,** like the log.
+- **Open (§10 #17):** what unlocks, and earned how.
+
+### Gates (each of B1–B4)
 - **Unit:** the brain simulated for hours, seeded, as today.
 - **e2e:** a fake-clock time-lapse in the home × the fixture matrix: in the window, over no part, within the change budget; reduced motion still.
 - **Real exe:** CPU with music playing (never measured in M2), with your OK to have Spotify playing.
@@ -452,6 +468,15 @@ Customization is still what the project is for. The pet is where it lives now.
 - **Guide:** how to draw one: the eleven required animations, the rig, the rules it must pass.
 - **Open for P5:** where a user pet's name comes from. A bundled one's is a COPY.md entry; a user's would be its author's own words in its own file, as a theme's `name` was.
 - **Gate:** a pet drawn outside the repo loads, hot-reloads and passes the placement rules in the home; a broken file changes nothing on screen.
+
+### Artist pets (D26, 2026-11-17)
+Your idea: a pet that is an artist you listen to (your example: Playboi Carti), walking round the player.
+- **Made outside Stanza, then imported.** Drawn by hand or with a sprite tool (SpriteBrew, sprite-sheet-creator, §11). Stanza has no AI generation in it: that would need the network, an API key, a cost per pet and sending your picture to a third party, and Stanza is offline under a strict CSP.
+- **The importer** (above) also reads Aseprite JSON, which SpriteBrew exports. It shrinks frames to the grid (8–32 art px, nearest-neighbour) and cuts colours to 8 (`docs/COMPANION.md`). SpriteBrew's frames are 64×64, so most of their detail goes.
+- **Simple pets (format 3, with P5's code).** The sprite tools make about 4 of the 11 required poses (walk, idle, jump, attack; no climb, hang, held, sit or sleep). A user pet may ship idle and walk plus any others it has. Without `climb` and `hang` it stays on the top edge, and a missing pose falls back to one it has. Today the brain refuses a skin that lacks any required pose (`src/companion/brain.ts`) and nothing lets a pet skip edges, so this is new brain work. `docs/COMPANION.md` bumps `format` in the same change.
+- **The artist link.** A pet can name an artist. When Spotify's current artist matches, it comes out or reacts (which, decided in P5). It's driven by real state (the artist GSMTC reports), so it passes "nothing pretends" (§0), and it's what makes the pet more than a costume. Matching is open (§10 #18).
+- **Likeness.** A user's pet is its author's. Stanza never bundles, demos (README, video) or ships a pet of a real person. Not legal advice.
+- **Gate:** a pet with only idle and walk, imported from a SpriteBrew export, loads, stays on the top edge, and comes out when its artist plays.
 
 ---
 
@@ -509,12 +534,20 @@ Remove what D20 and D21 retire, in three slices that each leave `main` working. 
   - COPY.md's theme, effect, customizer and snippet slots go (about 28 of the 68 empty ones).
 - **Gate (each slice):** `tsc`, Vitest, Playwright in both engines, `cargo test`, `npm run build` with the fixtures check. In the real exe: it starts, shows your music, the pet behaves as before, and (P1b) your saved pet survives the change of format. Each slice reports test counts and bundle size before and after.
 
-### P2 — Two spikes
+### P2 — Three spikes
 On throwaway branches; the learnings go to DECISIONS.md, not the code (§8).
 - **P2a Loudness.** Read Spotify's session peak meter from the volume thread and log it against real tracks. The questions are in §4d. It only reads, and it needs your OK to have Spotify playing.
   **Gate:** silent when paused; follows loud and quiet passages; the five questions answered in writing; a first attempt at a pulse scored on a handful of your tracks, logged as numbers, not titles.
 - **P2b The cost of a change in a small window.** C0's method, at a few candidate window sizes.
   **Gate:** ms per visible change at each size, and the change budget re-derived from it.
+- **P2c The pet leaves the player (D27).** A separate small pet window, Shimeji-style. The questions:
+  - how far it lags behind the player while you drag it (the reason it was parked, §4b);
+  - its CPU while it moves;
+  - click-through around it;
+  - what it can walk on: the taskbar, the screen edges, other windows;
+  - more than one monitor, and their scaling.
+
+  **Gate:** the numbers in DECISIONS.md. Then you decide whether it's built, and when.
 - P2 can run before, during or after P3's design round.
 
 ### P3 — The home (§4c)
@@ -526,6 +559,7 @@ On throwaway branches; the learnings go to DECISIONS.md, not the code (§8).
 - **B1** it knows your music (needs nothing else; can start any time after P1).
 - **B2** it hears the music (needs P2a).
 - **B3** it uses the player (needs P3).
+- **B4** it grows with your listening: unlocks (needs B1).
 - Each as `a` (lab) then `b` (player). **Gates:** in §4d.
 
 ### P5 — Make your own pet (§4e)
@@ -540,7 +574,7 @@ User pets from a folder, validation, live reload, the importer, the guide. **Gat
 - **macOS** (v2's M5: AppleScript adapter, Info.plist key + entitlement, a bundled-build test on a real Mac): post-launch. Until that gate passes the README says macOS is **untested**. Your Mac is school-managed (§10 #1), so it may not be possible.
 
 ### Which machine
-- **Windows only:** every Rust change (P1b, P2a, B1's log, B2, P5's watcher, P6) and every real-exe gate.
+- **Windows only:** every Rust change (P1b, P2a, P2c, B1's log, B2, P5's watcher, P6) and every real-exe gate.
 - **The school Mac** (Node only: `tsc`, Vitest, `npm run build`) can take lab, brain and art slices. That work arrives uncommitted and is run in Playwright and the real exe, then committed, on Windows.
 
 ### Post-v1 expansion (not yet phased)
@@ -575,7 +609,8 @@ Likelihoods are qualitative — there's no reliable base rate for any of these.
 | Removing ~8,500 lines breaks something that stays | Med | Med | Three slices; the full suites and the real exe after each; `themes-final` to go back to |
 | The pet hides controls or the source badge | Low (by design) | High (usability, attribution) | No-go zones in the planner; e2e time-lapse in every state |
 | The listening log grows without bound, or reads as tracking | Low | Med | Capped; local only; said plainly in the README; a way to clear it |
-| Scope creep (pet care, desktop roaming, more homes, more species) | High | Med | §9; one home and three species until P6 |
+| Scope creep (pet care, more homes, more species; since 2026-11-17 also desktop roaming, unlocks, artist pets) | High | Med | §9; one home and three species until P6; roaming only if P2c passes and you choose it; artist pets are user pets, not new bundled species |
+| A user's pet shows a real person (artist pets, D26) | Likely, by design | Med (likeness) | A user's pet is its author's; Stanza never bundles, demos or ships one; the README and demo video use original pets |
 | Creature art too close to someone else's | Low | High | Original designs only; per-design originality check, logged. A user's pet is its author's |
 | Spotify update changes GSMTC behaviour | Low–med | High | Adapter isolation, capability flags |
 | Pixel art looks uneven at 125%/150% scaling | Med | Med | Whole-device-pixel scale (§4b); checked in C0 and the lab |
@@ -615,11 +650,12 @@ The project rules live in `CLAUDE.md` at the repo root. (v1 of this plan carried
 - Lyrics inside Stanza (S6 only brings Spotify's own window forward)
 - A gallery for sharing pets
 - Notarised or store distribution
-- The pet: roaming the whole desktop (Shimeji-style, a second window: it lags behind a dragged player, §4b); more than one pet at once; moving along the bottom edge (`hang` has no step); hopping down to a ledge
+- The pet: more than one pet at once; moving along the bottom edge (`hang` has no step); hopping down to a ledge
 - A second home (§4c)
 - S8 arbitrary window silhouettes (rectangular click-through is done, Slice 3)
 - **Retired, not parked (D20):** themes, user themes, the customizer, CSS snippets, theme packages, an in-app CSS editor, genre fonts. Recoverable from `themes-final`.
 - **Rejected, not parked (D24):** pet-care stats (hunger, mood to keep up, growth).
+- **Un-parked (D27, 2026-11-17):** the pet roaming the whole desktop (Shimeji-style, a second window). Now the P2c spike (§5).
 
 ---
 
@@ -635,11 +671,14 @@ The project rules live in `CLAUDE.md` at the repo root. (v1 of this plan carried
 8. Which creature? **Answered (D1):** all three. **New:** are they keepers as drawn? Default taken: yes, they get new animations, not a redraw.
 9. S7 genre fonts. **Closed:** dropped with the theme system (D20).
 10. Split-flap in-between glyphs. **Closed:** removed with the effects layer (P1a).
-11. **Your references for the home** (§4c, H0). **Open:** the design round waits for them.
+11. **Your references for the home** (§4c, H0). **Partly answered (2026-11-17):** three references (Lo-Fi Player, Tamaweb, Pocket Bird) and what you take from each, in §4c. **Open:** what to avoid, and up to two more. The design round waits for them.
 12. **Reading Spotify's loudness** (D21). Default taken: acceptable. Re-asked at P2a.
 13. **A local listening log** (D24). Default taken: acceptable. Re-asked at P4.
 14. **The pet on by default** (D25). Default taken. Re-asked at P1b.
 15. **The name.** "Stanza" was chosen for a typography-first player; it also means "room". Default taken: keep it.
+16. **Touch changes music** (§4d B3). **Open:** which objects in the home, or which gestures on the pet, control playback, so that a click meant for the pet never skips a track. Settled in H0.
+17. **Unlocks** (D28, §4d B4). **Open:** what unlocks, and earned how.
+18. **The artist link** (D26, §4e). **Open:** how a pet's artist matches the artist GSMTC reports, which may name several artists in one string (unchecked); and what "comes out" means, in place of your usual pet or as a reaction.
 
 ---
 
@@ -681,3 +720,10 @@ The project rules live in `CLAUDE.md` at the repo root. (v1 of this plan carried
 - `IAudioMeterInformation` (endpointvolume.h), documented for an endpoint device — msdn.microsoft.com/en-us/library/vs/alm/dd368227
 - Per-app meters, community-documented: Matthew van Eerde, "Getting peak meters and volume settings for all apps and audio devices on the system" — blogs.msdn.microsoft.com/matthew_van_eerde/2013/09/26/getting-peak-meters-and-volume-settings-for-all-apps-and-audio-devices-on-the-system; Stack Overflow question 14313692, "Peak meters for individual programs on Windows 7"
 - `windows` crate binding — microsoft.github.io/windows-docs-rs/doc/windows/Win32/Media/Audio/Endpoints/struct.IAudioMeterInformation.html
+
+**References and sprite tools (2026-11-17).** The three reference pages couldn't be opened from the cloud session (its network blocks them), so what this plan says about them comes from web search summaries. The two tools' READMEs were read through a summarising fetch, not line by line.
+- Lo-Fi Player (Magenta, Vibert Thio) — magenta.withgoogle.com/lofi-player; magenta.tensorflow.org/lofi-player; source (archived) github.com/magenta/lofi-player
+- Tamaweb (SamanDev) — tamawebgame.github.io; samandev.itch.io/tamaweb
+- Pocket Bird (Idrees) — idreesinc.itch.io/pocket-bird
+- sprite-sheet-creator (fal.ai; licence not shown) — github.com/blendi-remade/sprite-sheet-creator
+- SpriteBrew (AGPL-3.0; Retro Diffusion) — github.com/GAlbanese09/spritebrew; spritebrew.com
