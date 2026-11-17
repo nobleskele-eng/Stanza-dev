@@ -4302,3 +4302,75 @@ one of the skin layers (PLAN.md §4b), so nothing structural changes.
   ("dressed sprites") already had 120 s for the same reason; it gets 90 s.
 - **Then a clean full run:** **959 passed, 65 skipped** (Chromium + WebKit; the 18 new included, the skips unchanged). `tsc` clean, Vitest 622, `cargo test` 35.
 - **Next:** L4b, the themes section: live previews (your themes sandboxed), picking a theme there, broken themes with their codes, the themes-folder button.
+
+## 2026-11-16 — Pivot: pets first; the theme system is retired (P0, docs only)
+
+- **What you asked:** to take the project "to target the pets area specifically". On the themes: "i am not satisfied
+  with them, they are too claude generated, vibe coded looking plus they lack substance". On the goal: "unique, fun,
+  interesting, cool and NOT vibe code slop". You named two options, completely revamp the themes or ditch them and
+  focus on the pets, and asked for a plan first with nothing changed.
+- **Your decision:** I recommended ditching, and you answered "Yes, ditch themes" (PLAN.md D20). That supersedes
+  the last entry's "Next": L4b isn't built.
+- **Why ditch rather than revamp** (my reasoning, as given to you):
+  - PLAN.md v2 §4 says each theme "stress-tests a different part of the contract". They were built to prove a theming
+    API, so none is about anything. Redrawing five keeps that premise.
+  - A theme may rearrange the card, so the pet can only treat the player as a box: four edges and one shelf.
+  - Everything left in M3 was theme work (L4b, L5, L6, S7).
+  - Size, counted today (lines, tests and docs included): about 8,500 tied to themes and effects (the five themes
+    1,536; `src/theme` minus the palette, contrast and guard files 2,238; `src/fx` 1,426; `themes.rs` +
+    `theme_watch.rs` 648; the theme and effect e2e specs 1,963; the contract 680), against about 6,800 for the pet
+    (`src/companion`, the lab and the menu icon 4,244; its e2e 1,796; the art scripts 723; the generated skin JSON
+    not counted).
+- **The catch I told you about:** dropping themes doesn't by itself make a good product. The pet's only link to the
+  music is asleep or awake, and the same reaction on every track change (`trackChanged` → `react`, `brain.ts`). The
+  rest is weighted-random wandering. Most of the new plan is about that (PLAN.md §4d).
+- **PLAN.md v3:**
+  - **New:** the header and §0 (with "the bar": five rules for what "not slop" means), D20–D25, §4c (the home), §4d
+    (what the pet does with your music), §4e (make your own pet), §5 (the status and steps P0–P6, with v2's
+    milestones as a history table).
+  - **Rewritten:** §3's diagram, §4 (now the retired theme system and what survives it), §6, §7, §9, §10.
+  - **Kept as they were:** §2 and §8; §4b apart from its title and a note on what the pivot changes; §3 from "State
+    model" on (two wordings: "the home" for "a theme"); §4's Fixtures. Spliced in by a script, so those stay
+    byte-identical. §11 gains the loudness sources.
+  - **§0–§11 keep their numbers:** code comments cite §0, §3, §4, §4b, §5 and §9 (checked: each still resolves to a
+    heading, and D11, C3, C8 and the M1/M2/M3 slice names they cite are still in the file).
+  - **No hour estimates in v3:** v2's were rough, and P3 and P4 depend on design rounds.
+- **Defaults taken.** I listed these with the plan and you didn't object. None is built yet, and each is re-asked at
+  the slice where it first matters (PLAN.md §10 #8, #12–#15):
+  - all three creatures stay as drawn and get new animations;
+  - one home now;
+  - reading Spotify's loudness (D21) and keeping a local listening log (D24) are acceptable;
+  - the pet on by default (D25);
+  - the name stays (below), and roaming the whole desktop stays parked.
+- **Checked before writing it down:**
+  - **The loudness source.** The `windows` crate in use (0.61.3) has `IAudioMeterInformation`
+    (`Win32::Media::Audio::Endpoints`, feature `Win32_Media_Audio_Endpoints`, not enabled yet). A web search:
+    Microsoft's reference documents that meter for an endpoint device; reading it per app, by asking an
+    `IAudioSessionControl` for it, is described in a Stack Overflow answer and an MSDN blog post, and a commenter
+    there notes it isn't guaranteed. I read the search's summary, not the pages. So PLAN.md calls it unverified,
+    and the P2a spike decides.
+  - **Why compact.** C0's numbers (this file, 2026-10-17): 5.9 ms per visible change at T1's 404×664, 3.1 ms at T3's
+    312×150.
+  - **What P1a touches.** `animejs`, `matter-js` and `@splitflap/core` are each imported by one file, all in
+    `src/fx`. A grep of T1's CSS for the effect parts and attributes found only its waveform rules.
+- **CLAUDE.md:**
+  - A new Direction block: pets first; no new work on themes or effects.
+  - Contracts: COMPANION.md is named as the source of truth for the skin format. **A rule of yours changed:**
+    THEME_CONTRACT.md's version is no longer bumped. While P1 dismantles it, a change that removes a part removes it
+    from the doc in the same change, nothing is added or renamed, and it stays v12 until P1c replaces it with
+    `docs/HOME.md`. Nothing outside this repo reads it. Say if you'd rather keep the bumps.
+  - A new Quality bar block (PLAN.md §0's five rules).
+  - Left for P1c, when the themes are actually gone: the artwork rule's wording ("theme-authorable").
+- **Tag:** `themes-final`, annotated, local only, on `339867c` (M3 L4a), the last commit with the theme system.
+- **Untouched:** all code and tests, THEME_CONTRACT.md, COMPANION.md, COPY.md.
+- **Surprises:**
+  - **The name.** "Stanza" was chosen for a typography-first player. It also means "room" in Italian, which fits a
+    pet's home, so the plan keeps it and asks you (§10 #15).
+  - **COPY.md's tagline draft** still describes "a themeable desktop mini player… built typography-first". It's a
+    draft in a `[NEEDS COPY]` slot, so I left it: the tagline is yours.
+- **Checks run (Windows):**
+  - `git diff --stat`: only `CLAUDE.md`, `docs/PLAN.md` and `docs/DECISIONS.md`.
+  - `npx vitest run`: 622 passed (27 files), the same count as the last full run.
+  - Not run: `tsc`, Playwright, `cargo test`, the real exe. No code, test, or doc that code reads (COPY.md,
+    THEME_CONTRACT.md) changed.
+- **Next:** P1a: remove the effects layer and themes T2–T5. T1 stays, hard-wired, until the home.

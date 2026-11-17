@@ -1,25 +1,34 @@
 # Stanza — Master Plan
 
-**Stanza** — a themeable desktop mini player for Spotify and SoundCloud, built typography-first: a stanza is a structural unit of text, not an image.
-*Repo description:* Themeable Spotify/SoundCloud mini player for Windows (and macOS) built with Tauri — the UI is carried by typography and motion, not album art.
+**Stanza** — a small pixel creature that lives on your music. The mini player is its room (*stanza* is Italian for "room").
+*Working description, yours to rewrite (COPY.md's tagline is still `[NEEDS COPY]`):* a desktop pet for Windows that lives on a Spotify mini player, built with Tauri.
 
-Version 2 · 2026-10-17 · Status: Phases 0–4 largely built (five themes, the effects layer) and **M1 Real music done**:
-real Spotify tracks, transport, keyboard seek, its own volume and the lyrics button, in the real exe (theme contract v6).
-**M2 Companion** (§5) under way: the C0 spike and C1 (renderer, skin format, lab) are done, D1 settled on three species (pilcrow, bookworm, cassette), C2a (the brain, on the lab's mock cards) and C2b (the companion in the production player, contract v7) are done, and C3a/C3b (the companion travelling the card's whole outline, in the lab and the real player, contract v8) are done, and C4a/C4b (click it, pick it up and drop it, in the lab and the real player, contract v9) are done, including a real-mouse drag in the exe, and C5a/C5b (a shelf inside the card, in the lab and in the four card themes, contract v10) are done, and C6a/C6b (the companion picker in the right-click menu, and a polish pass on the creatures' emotes) are done, C3c (corner art) is done, and D2a (two more palettes per species) is done, and D2b (accessories on a rig for all three species; all four kept) and D2c (wearing one in the player, contract v12) are done; the M2 milestone gate's automated checks passed 2026-11-07 (every theme × every player state, reduced motion, no errors, CSP clean, idle CPU in the real exe); open: your visual review, and a CPU run with music playing if you want one. The swing-while-dragged stretch is optional. Version 1 (2026-09-11, "planning, nothing built yet") is in git history.
+Version 3 · 2026-11-16 · Status: **pets first** (D20–D25; your call, 2026-11-16: "ditch themes").
+- **Built and staying:** real Spotify music on Windows (M1); the pet, with three species, five palettes each and four accessories, travelling the card's outline, clickable, picked up and dropped (M2); the window (frameless, transparent, click-through); the settings window's shell (M3 L4a).
+- **Built and being retired:** the theme system (five themes, the picker, user themes, live reload, variants; theme contract v12) and the effects layer. The last commit with them is tagged `themes-final`.
+- **Next:** P1, clearing the ground (§5). Then the home (§4c) and what the pet does with your music (§4d).
 
-Section numbers §0–§11 are the same as in v1, because code comments and older `docs/DECISIONS.md` entries cite them. The
-companion is the new §4b. §5 now holds the status and the roadmap; the v1 phases are summarised there as history.
-`docs/PRIORITIZATION_PLAN.md` was folded into §5 and deleted (D19).
+Version 2 (2026-10-17, "real music, then a companion") and version 1 (2026-09-11) are in git history.
+
+Section numbers §0–§11 are the same as in v1 and v2, because code comments and older `docs/DECISIONS.md` entries cite them. §4 now records the retired theme system and what survives it. The pet is §4b. The home, what the pet does with your music, and user-made pets are the new §4c–§4e. §5 holds the status and the steps P0–P6, with v2's milestones as history.
 
 ---
 
 ## 0. Scope interpretation
 
-- "Web-based design only" = every pixel of UI is HTML/CSS/SVG rendered in the Tauri webview. No raster assets from Nano Banana Pro. App icon, control icons, theme art and the companion's sprites are SVG/CSS. The companion's pixel art is data (palette grids) rendered as SVG, not image files (§4b).
-- Displayed information comes only from the music services (track metadata, artwork) or from copy you write. Nothing generated.
+- **The pet is the product (D20).** Stanza is a desktop pet whose home is a Spotify mini player. Every feature is judged by what it adds to the pet. The player's job is to be a good room and a correct remote control. There is no theme system.
+- "Web-based design only" = every pixel of UI is HTML/CSS/SVG rendered in the Tauri webview. No raster assets from Nano Banana Pro. App icon, control icons, the home's art and the pet's sprites are SVG/CSS. The pet's pixel art is data (palette grids) rendered as SVG, not image files (§4b); a sprite sheet imported for a user-made pet (§4e) is converted to that data.
+- Displayed information comes only from the music services (track metadata, artwork) or from copy you write. Nothing generated. The pet has no speech: its emotes are pixel icons.
 - Platforms: Windows first (your machine), macOS second and gated on real-Mac testing.
 - Sources: **v1 ships Spotify-only** (D15). SoundCloud remains the long-term second source but is deferred to a post-v1 expansion phase, grouped with Windows any-app mode — see §5 "Post-v1" and §10 open questions #5–6. Apple Music stays dropped.
-- **Companion (D17):** an opt-in, original pixel-art creature that lives on and around the player: it walks, sits, climbs and hangs on the card's edges and on a ledge inside it. Specified in §4b; built in M2 (§5).
+
+### The bar (what "not slop" means here)
+Your words for the goal: "unique, fun, interesting, cool and NOT vibe code slop". These rules are how a change is judged against it. `CLAUDE.md` carries them.
+1. **Nothing pretends.** Every movement on screen is caused by real state: playback, the measured loudness of the music, your listening log, your pointer. No simulated beat, no decoration that only looks reactive (D21).
+2. **One visual language.** Everything that isn't album art or text sits on the pet's pixel grid in a small palette. No gradients, glows, glass, blur or soft shadows (D22).
+3. **Depth over options.** One home, one idea, taken far. No menus of effects, no setting the pet doesn't need.
+4. **No first drafts ship.** A look goes from your references, to a sheet of options, to your pick.
+5. **No chores.** The pet is never hungry, guilty or in need of upkeep (D24).
 
 ---
 
@@ -40,12 +49,18 @@ companion is the new §4b. §5 now holds the status and the roadmap; the v1 phas
 | D11 | No native blur/Mica/Acrylic in default themes | **New** | Your Win10 machine: Mica is Win11-only, Acrylic lags while dragging (C9). A mini player gets dragged constantly. |
 | D12 | Frontend: React + TypeScript + Vite, plain CSS with custom properties, **no Tailwind** | **New** | User themes need stable semantic hooks. Utility-class soup makes a theme contract impossible. React chosen over Svelte for your and Claude Code's familiarity; bundle size is dominated by the native shell anyway. |
 | D13 | Windows-first; macOS merged only after testing on a real Mac | **New** | You can't meaningfully build or test macOS from Windows. CI can compile it, but AppleScript permissions and window transparency only verify on a Mac. |
-| D14 | Customization = three layers: (a) in-app customizer editing theme tokens, saved as variants; (b) user CSS snippets layered on top of the active theme; (c) importable theme packages | Confirmed | Customization is the core purpose of the project. |
+| D14 | Customization = three layers: (a) in-app customizer editing theme tokens, saved as variants; (b) user CSS snippets layered on top of the active theme; (c) importable theme packages | **Superseded by D20 and D23 (2026-11-16)** | Customization is the core purpose of the project. It still is: it moves to the pet (D23). |
 | D15 | v1 ships Spotify-only on Windows; SoundCloud support and Windows any-app mode are grouped into a post-v1 expansion phase, order TBD | Confirmed | You want v1 launched with Spotify first rather than carrying SoundCloud's spike/API-terms risk (D6, D9, C13) into the critical path. |
-| D16 | Opt-in animated effects (shapes, waveform, typewriter/ripple/liquid/split-flap text, flow backdrop, track-change morph, physics debris) — the audio-looking ones driven by a **simulated** beat; icon click/idle motion on by default | **New 2026-09-23** | Wanted for the design showcase. Built as an app-provided layer (`src/fx/`, anime.js MIT + SVG filters), switched on per user via variants, not baked into themes. The beat is a seeded fake — nothing analyses the audio (no clean audio source, §9) — so no UI or doc may claim it reacts to the music. Contract v4, extended in v5 by design round 2 (theme T5). See `docs/DECISIONS.md` 2026-09-23. |
-| D17 | **Companion:** an opt-in, app-provided pixel-art creature on and around the player. One window grown by a margin; pixel grids rendered as SVG; a seeded state machine; interactive (click, pick up and drop), but never over the artwork, controls or source badge, and never outside the window | **New 2026-10-17** | You asked for a pet like the one on Claude's chat box that can walk, sit and hang inside and outside the frame, with skins and original designs. Pixel art, "watch + pick up", around the player only: your choices. Spec and architecture in §4b. |
+| D16 | Opt-in animated effects (shapes, waveform, typewriter/ripple/liquid/split-flap text, flow backdrop, track-change morph, physics debris) — the audio-looking ones driven by a **simulated** beat; icon click/idle motion on by default | **Superseded by D21 (2026-11-16)**; was new 2026-09-23 | Wanted for the design showcase. Built as an app-provided layer (`src/fx/`, anime.js MIT + SVG filters), switched on per user via variants, not baked into themes. The beat is a seeded fake — nothing analyses the audio (no clean audio source, §9) — so no UI or doc may claim it reacts to the music. Contract v4, extended in v5 by design round 2 (theme T5). See `docs/DECISIONS.md` 2026-09-23. |
+| D17 | **Companion:** an opt-in, app-provided pixel-art creature on and around the player. One window grown by a margin; pixel grids rendered as SVG; a seeded state machine; interactive (click, pick up and drop), but never over the artwork, controls or source badge, and never outside the window | **Built (M2).** On by default from P1b (D25) | You asked for a pet like the one on Claude's chat box that can walk, sit and hang inside and outside the frame, with skins and original designs. Pixel art, "watch + pick up", around the player only: your choices. Spec and architecture in §4b. |
 | D18 | Order: real Spotify data on `main` (M1) before the companion (M2) | **New 2026-10-17** | The GSMTC spike passed on 2026-09-16 but never reached `main`, so the app only shows idle. The companion reacts to play/pause/track change, which only means something with real data. Your choice. |
 | D19 | PLAN.md is the single plan again; `docs/PRIORITIZATION_PLAN.md` (spikes S5–S8) folded into §5 and deleted | **New 2026-10-17** | Two plans competed. S5 (per-app volume) and S6 (lyrics button → focus Spotify) → M1; S7 (genre fonts) → M3; S8 (window shapes): rectangles were answered by Slice 3's click-through, arbitrary silhouettes parked (§9). |
+| D20 | **Pets first; the theme system is retired.** No theme roster, picker, user themes, live reload, variants, customizer, snippets or theme packages. One player, designed as the pet's home (D22) | **New 2026-11-16, your call** ("ditch themes") | The five themes were built to prove the theme contract (v2 §4: each "stress-tests a different part of the contract"), so none of them is about anything; your words: "too claude generated, vibe coded looking plus they lack substance". The contract's generality also kept the pet to a box: four edges and one shelf. Supersedes D14. M3's L4b, L5, L6 and S7 are dropped. The last themed commit is tagged `themes-final`. See §4. |
+| D21 | **Nothing pretends.** The effects layer (D16) and its simulated beat are removed. The pet reacts to real state only: playback, the measured loudness of Spotify's output, your listening log, your pointer | **New 2026-11-16.** The loudness reading is a default taken (not explicitly answered); re-asked at P2a | An effect that looks reactive but isn't is what the pivot is getting away from. Loudness comes from the peak meter of Spotify's own audio session, the one `volume.rs` already finds: a level, not audio; nothing is captured or stored. Unverified until the P2a spike (§4d). Supersedes D16. |
+| D22 | **One home.** Pixel art on the pet's own grid, compact, chosen in a design round that starts from references you bring. Internal: no public contract. D10 and the source-badge rule apply to it unchanged | **New 2026-11-16** | One visual language instead of five skins. Compact because a visible change costs less in a small window (C0: 3.1 ms at 312×150 against 5.9 ms at 404×664), and that cost is the pet's activity budget. A second home, if ever wanted, is another bundled home, not an API. See §4c. |
+| D23 | **Customization moves to the pet.** Species, palettes and accessories (built), then user-made pets: a folder, validated, live-reloaded, with an importer for sprites drawn in a pixel editor | **New 2026-11-16** | Customization is still the purpose (D14's reason). The validate-and-watch pattern built for user themes (M3 L2/L3) is reused. See §4e. |
+| D24 | **Listening memory, local only, and no chores.** A log of plays, skips and repeats on this PC, so the pet's reactions mean something. It is never hungry, guilty or in need of upkeep | **New 2026-11-16, default taken** (not explicitly answered); re-asked at P4 | Today every track change gets the same reaction. The log never leaves the machine. See §4d. |
+| D25 | **The pet is on by default** (it was opt-in, D17). The on/off switch stays | **New 2026-11-16, default taken** (not explicitly answered); re-asked at P1b | It is the product. |
 
 **D10 amendment (2026-09-22):** relaxed from "unmodified artwork" to "cropped
 (`border-radius`/`clip-path`), overlaid, or filtered (blur/duotone) artwork —
@@ -140,33 +155,35 @@ Kept as written in v1 (history). Later surprises live in `docs/DECISIONS.md`.
 ## 3. Architecture
 
 ```
-┌──────────────────────── Tauri app ─────────────────────────────┐
-│  WEBVIEW (React + TS)                                           │
-│  ┌─ Player window (frameless, transparent, on-top) ✓ ─────────┐ │
-│  │  Theme layer: tokens → layout → parts ✓ (contract v5)      │ │
-│  │  Effects layer (src/fx) ✓     Companion layer ○ M2 (§4b)   │ │
-│  │  PlayerStore ✓ (single source of truth for UI)             │ │
-│  │     ▲                ▲                                      │ │
-│  │     │ IPC events     │ JS events                            │ │
-│  │     │                SoundCloudAdapter (hidden iframe) ○    │ │
-│  └─────┼──────────────────────────────────────────────────────┘ │
-│  Settings window ✓ M3 L4a (themes section: L4b)                 │
-│        │ invoke / events                                        │
-│  RUST CORE                                                      │
-│   ├─ SpotifyAdapter · Windows (GSMTC): spike ✓, main ○ M1       │
-│   ├─ Per-app volume (Core Audio): ✓ (S5, M1 R3a)                │
-│   ├─ SpotifyAdapter · macOS (AppleScript): ○ M5                 │
-│   ├─ Hit region / click-through ✓ (Slice 3)                     │
-│   ├─ ThemeService (scan, validate, watch files): spike ✓, ○ M3  │
-│   └─ Shell: window state ✓ (position only), tray ○,             │
-│      autostart ○, single-instance ○ (M4)                        │
-└─────────────────────────────────────────────────────────────────┘
-✓ on main   ○ planned (milestone in §5)
+┌───────────────────────────── Tauri app ──────────────────────────────┐
+│ WEBVIEW (React + TS)                                                 │
+│   Player window (frameless, transparent, on top) ✓                   │
+│     The home: one DOM, one layout ○ P3 (§4c)                         │
+│       until then: theme T1, hard-wired by P1                         │
+│     The pet ✓ M2 (§4b): brain, renderer, skins, picker               │
+│       memory ○ P4 · hearing ○ P4 · perches ○ P4 (§4d)                │
+│     PlayerStore ✓ (single source of truth for the UI)                │
+│        ▲ IPC events                                                  │
+│   Settings window ✓ shell (M3 L4a): the pet's options                │
+│        │ invoke / events                                             │
+│ RUST CORE                                                            │
+│   ├─ SpotifyAdapter · Windows (GSMTC) ✓ M1                           │
+│   ├─ Per-app volume (Core Audio) ✓ M1 R3a                            │
+│   ├─ Loudness meter, same audio session: spike ○ P2a, then ○ P4      │
+│   ├─ Listening log (a file in the app data dir) ○ P4                 │
+│   ├─ User pets (scan, validate, watch files) ○ P5                    │
+│   ├─ Hit region / click-through ✓ (Slice 3)                          │
+│   ├─ SpotifyAdapter · macOS (AppleScript) ○ post-launch              │
+│   └─ Shell: window state ✓ (position only), tray ○,                  │
+│      autostart ○, single-instance ○ (P6)                             │
+│ ✗ REMOVED BY P1                                                      │
+│   theme layer and ThemeService (scan, validate, watch files),        │
+│   variants, the effects layer (src/fx)                               │
+└──────────────────────────────────────────────────────────────────────┘
+✓ on main   ○ planned (step in §5)   ✗ on main today, removed by P1
 ```
 
-Two adapters live in Rust, one lives in JS. The store normalises all three into one shape. Artwork palette extraction runs in
-TypeScript, not in a Rust `ArtworkService` (DECISIONS.md 2026-09-22): Windows artwork reaches the webview as a `data:` URL, so the
-canvas is never tainted. Revisit Rust only if the macOS adapter's remote artwork URLs taint it.
+One adapter is built: Spotify on Windows, in Rust. The macOS adapter (Rust) and the SoundCloud one (JS) are post-launch and post-v1. The store normalises every source into one shape. Artwork palette extraction runs in TypeScript, not in a Rust `ArtworkService` (DECISIONS.md 2026-09-22): Windows artwork reaches the webview as a `data:` URL, so the canvas is never tainted. Revisit Rust only if the macOS adapter's remote artwork URLs taint it.
 
 ### State model
 
@@ -210,7 +227,7 @@ interface NowPlaying {
 | Change events | ✓ | ? distributed notification, else polling | ✓ |
 | Like / save | ✗ | ✗ | ✗ |
 
-**Design consequence:** capabilities are exposed as `data-cap-*` attributes. Every theme must look complete when any control is absent — e.g. Spotify on Windows has no volume slider until Spotify has played since it started (no audio session to set yet, S5).
+**Design consequence:** capabilities are exposed as `data-cap-*` attributes. The home must look complete when any control is absent — e.g. Spotify on Windows has no volume slider until Spotify has played since it started (no audio session to set yet, S5).
 
 ### Source rules
 1. One active source. Switching pauses the other.
@@ -221,7 +238,7 @@ interface NowPlaying {
 
 ### Artwork and colour
 - Palette extraction (`src/theme/palette.ts`) yields 3 dominant colours as `--mp-art-1..3` plus a contrast-checked `--mp-art-fg` (always AA against `--mp-art-1`).
-- The artwork element itself (D10, relaxed 2026-09-22): a theme may crop it
+- The artwork element itself (D10, relaxed 2026-09-22): the home's CSS may crop it
   (`border-radius`/`clip-path`), overlay text/graphics on top of it, apply
   `filter` treatments (blur, duotone), and animate it. It must never sit under
   interactive controls (the companion counts as one, §4b); `opacity`/`transform`/`mask`/`mix-blend-mode` stay
@@ -229,94 +246,34 @@ interface NowPlaying {
 
 ---
 
-## 4. Theme system (the design showcase)
+## 4. Theme system — retired (D20)
 
-`docs/THEME_CONTRACT.md` is the source of truth for class names, data attributes, CSS variables and the `theme.json` fields
-(currently **contract v5**). This section keeps the design intent; where the two disagree, the contract wins.
+Until 2026-11-16 this section was "the design showcase": a theme contract, five first-party themes, user themes loaded and hot-swapped at run time, variants, and a planned customizer, snippets and theme packages. D20 retires all of it, and P1 (§5) removes it. The full text is PLAN.md v2 in git history; the last commit with the system working is tagged `themes-final`.
 
-### Package
-```
-themes/<theme-id>/
-  theme.json
-  theme.css
-  fonts/        optional, local files only
-  preview.svg   optional, for the picker
-```
-Locations: bundled (read-only, app resources) and user (`<app data dir>/themes`). Today the five first-party themes are bundled
-as static imports; the runtime loader and the user folder are M3 (§5).
+### What it was (for reading older code and DECISIONS.md entries)
+- **Contract:** `docs/THEME_CONTRACT.md`, v12 at retirement: one fixed DOM (`.mp-root`, `.mp-window`, the parts), data attributes, CSS variables and the `theme.json` fields. From P0 it only shrinks: a P1 slice that removes a part removes it from the doc in the same change, nothing is added, and the version stays 12. P1c replaces it with the home's own short parts list (`docs/HOME.md`, §4c).
+- **Themes:** T1 Default ("Ring + Depth"), T2 Glow Card, T3 Micro Pill, T4 Extreme, T5 Kinetic. Each stress-tested a different part of the contract, which is why none of them was about anything. T1 stays, hard-wired, as a temporary face until the home replaces it (P3).
+- **Runtime:** user themes from `<app data dir>/themes/` through the asset protocol (M3 L2), live reload (M3 L3), cascade layers `guard, base, theme, user` (M3 L1), variants in `localStorage` (Slice 1), the theme list in the right-click menu (Slice 4).
+- **Effects layer (D16):** shapes, a waveform, text effects, split-flap, flow, morph and debris, the audio-looking ones on a simulated beat. Removed with it (D21).
+- **Customization layers (D14):** the customizer, CSS snippets and theme packages were never built past the variant model. Dropped.
 
-### theme.json
-Fields and which are enforced: see the contract's field table (`id`, `name`, `author`, `version`, `contract`, `layout`, `window`,
-`colorMode`, `nativeEffect`, `fx`, …). M2 adds an optional `companion` field (§4b).
-
-### Contract (summary)
-- **Root:** `.mp-root` with layout, theme, source, status, capability, platform, hover, track-text and effect attributes.
-- **App-provided variables:** `--mp-progress`, `--mp-art-1..3`, `--mp-art-fg`, `--mp-beat` (simulated, D16).
-- **Theme tokens:** colours, radii, fonts, shadow, motion, split-flap tile colours.
-- **Parts:** the player parts (`.mp-window`, `.mp-artwork`, `.mp-title`, … `.mp-source-badge`, which is required and must stay visible) plus the effect parts.
-- **Rules:** CSS only, no JS. `url()` only relative to the theme folder. Must pass the fixture matrix. Must respect `prefers-reduced-motion`. Must survive the opaque-rectangle fallback (C6). Must follow D10.
-
-**Why fixed markup:** one shared DOM, three layouts (pill / card / strip). Themes pick a layout and style it. A stable contract means themes never break on app updates — the exact failure that made Spicetify-style theming wrong for this project. Any change to a part, attribute or variable name = contract version bump, with the doc updated in the same change.
-
-### Loading and hot swap
-- *Built (M3 L2, 2026-11-08) for user themes:* `theme.css` loads through Tauri's asset protocol, scoped to `<app data dir>/themes/` only, as one path segment per folder so relative `url()`s resolve inside the theme's folder (Tauri's `convertFileSrc` encodes the whole path as one segment, which sends them to the protocol's root, where the scope refuses them). The five bundled themes stay bundled.
-- Rust file watcher → event → swap the stylesheet → instant reload while you design. *Built (M3 L3, 2026-11-08):* `src-tauri/src/theme_watch.rs` sends `themes:changed` with the folders that changed; the theme on screen reloads in one frame (its new CSS loaded unapplied, `@import … not all`, then switched on as the old sheet goes), the menu follows the folder, and a theme that breaks mid-edit stays as it last loaded (DECISIONS.md M3 L3). S4 found that guard/theme/user layers must load as **one** shell stylesheet (`@layer guard, theme, user;` + three layered `@import`s) — separate layered `<link>`s flip order when added dynamically (DECISIONS.md 2026-09-17). *Built (M3 L1, 2026-11-08):* the shell, bundled: `src/theme/shell.css` declares `@layer guard, base, theme, user;` (`base` = the app's own CSS, below the themes) and imports every stylesheet into its layer.
-- `theme.json` validated in Rust. Broken theme → fall back to default, show the error in settings. *Built (M3 L2):* the checks and the fallback; the error codes are logged until the settings window can show them (L4).
-
-### Customization layers
-
-**Customizer (a)**
-- Overrides applied as inline custom properties on `.mp-root`; reset removes them. *Built:* the variant model and validation (`src/theme/variant.ts`), applied by the production player (Slice 1).
-- `theme.json` gains `"layouts": [...]` and `"controls": { "<token>": { "type": "color|length|number|font", "min"?, "max"? } }`. Only listed tokens are editable. App-provided variables (`--mp-progress`, `--mp-art-*`) are never editable.
-- Variant: `{ "theme", "contract", "layout", "overrides", "hidden", "effects" }`. Export/import as JSON. *Built:* persisted in webview `localStorage` (Slice 1), not yet as files in `<app data dir>/variants/` — files come with export/import in M3.
-- Values validated against control type; reject anything containing `url(`, `;`, `{`, `}` (and more, see the contract). Unknown keys dropped on import.
-- Hidden parts via `data-hide-<part>` on `.mp-root`. `.mp-source-badge` is never hideable. Artwork radius/appearance never exposed.
-- Warn when `--mp-fg` on `--mp-bg` is below WCAG AA 4.5:1.
-- Switching theme clears the previous theme's overrides.
-- Parts are direct children of the layout grid so themes can rearrange them with `grid-template-areas`.
-- *Not built:* the customizer UI (M3).
-
-**CSS snippets (b)** — M3
-- Import a single `.css` file via a settings button; copied to `<app data dir>/snippets/`. Each snippet can be toggled on/off. "Open in editor" launches the file in the system editor; file watcher hot-reloads on save.
-- Load order via cascade layers:
-  ```
-  @layer guard, base, theme, user;
-  ```
-  Theme CSS imported with `layer(theme)`, snippets with `layer(user)`. Guard layer holds `!important` rules keeping `.mp-source-badge` displayed, visible and opaque, and keeping the artwork's locked properties locked. Loaded as one shell stylesheet (S4). *Built (M3 L1):* the layers and the guard (it beats `!important` from any layer or unlayered CSS); snippets themselves not yet.
-
-**Theme packages (c)** — M3
-- Import a `.zip` containing `theme.json` + `theme.css` (+ `fonts/`, `preview.svg`). Validated in Rust before copying to `<app data dir>/themes/`. Invalid package → rejected with error.
-
-**Safety (all layers)**
-- Tauri CSP restricts style, font and image loading to the app (plus `data:` images). *Built:* the CSP is set (Slice 5); `blob:` (style only) and the asset origin (`http://asset.localhost` on Windows, `asset:` on macOS, untested) were added with the runtime loader (M3 L2). No remote `url()` or `@import`.
-- User CSS, snippets and variants apply to the player window only, never the settings window.
-- Tray menu item "Reset appearance" disables all snippets and variants and restores the default theme.
-- No in-app code editor in v1 (parking lot: CodeMirror panel).
-
-### First-party themes (each stress-tests a different part of the contract)
-
-Picker names are placeholders from COPY.md ("Default", "Glow Card", "Micro Pill", "Extreme", "Kinetic") until you replace them.
-
-**Design rationale for the ordering below (revised 2026-09-22):** the original argument was that artwork-forward is bounded by definition — "however good the layout, it reads as unmodified square image plus reformatted text," the same genre as every other now-playing view — while a type/motion-forward theme has no such ceiling. That argument depended on D10's old strict form and no longer holds now that cropping, overlay, filter and animation are theme-authorable (D10, relaxed) — an artwork-forward theme with heavy treatment isn't generic either. T1 stays the flagship for a different, still-valid reason: its identity — type, motion, layout — is generated entirely from data the app always has, so its impact doesn't depend on any given track's artwork being present, high-resolution, or good-looking, a condition genuinely outside this project's control (GSMTC/AppleScript artwork quality varies by source, and some tracks have none at all). T2/T4's artwork-forward impact is structurally capped by the source image's own quality in a way T1's isn't. T1 also keeps its own visual sign-off and is what this document already calls "what the project is judged on" — changing flagship status was never on the table here.
-
-- **T1 Default (flagship, "Ring + Depth"), redesigned 2026-09-22** — card layout. Circular artwork framed by its own progress ring (no separate bar); an animated `clip-path` iris wipe reveals the artwork on track change; an elevated, shadowed controls panel and staggered title/artist entrance carry the "depth" half of the direction; "Collage" puts the real title/artist behind the card as texture (contract v3). This is what ships first and what the project is judged on.
-- **T2 Artwork-forward (traditional variant)** — card, `colorMode: artwork`. Proves the contract also supports the conventional approach; positioned as "the expected version," not the centerpiece.
-- **T3 Pill (compact)** — minimal chrome, small footprint, hover-reveal; tests long titles and a no-image layout at minimum size.
-- **T4 Extreme** — deliberately maximal. Proves the contract doesn't cap expression.
-- **T5 Kinetic (added 2026-09-23, design round 2)** — a tape deck that is visibly alive: squircle body (`corner-shape`), reels whose packs follow real progress, live palette-driven artwork duotone, a split-flap title, a real-text flow backdrop wrapped around the reels, a cassette-swap track-change transition and a physics spill of the previous title. The showpiece for the opt-in effect layers.
-
-Per theme, before any code: 4–6 named hex values, type roles, one "memorable thing", then a check that it isn't a generic default (cream + terracotta serif, black + acid green, identical soft-shadow cards, all-caps eyebrow labels).
+### What survives it
+- **One DOM.** `src/player/Player.tsx` stays the single structure. The home styles it and may change its parts (§4c).
+- **The guard.** `src/theme/guard.css` and its e2e checks: the source badge always visible, the artwork's locked properties locked (D10), nothing interactive on or over the artwork.
+- **The artwork palette** (`src/theme/palette.ts`, `--mp-art-1..3`, `--mp-art-fg`) and the contrast check.
+- **Fixtures and the matrix** (below), run against one layout.
+- **The pattern** of validating a package in Rust and watching its folder, reused for user-made pets (§4e).
 
 ### Copy inventory — all yours to write
-- App name **Stanza** — a stanza is a structural, typographic unit of text, not an image; fits the flagship theme's type/motion-led identity. No Spotify/SoundCloud marks.
-- Tagline — draft in header above; refine as you like
-- Idle / nothing playing `[NEEDS COPY]`
+- App name **Stanza**. It was chosen for a typography-first player (a stanza is a unit of text). It also means "room", which is what the player now is. No Spotify/SoundCloud marks. Whether to keep it is §10 #15.
+- Tagline `[NEEDS COPY]` (v2's draft described the themed player)
+- Idle / nothing playing: written
 - Spotify not running `[NEEDS COPY]`
-- SoundCloud: no link set / invalid link / track unavailable `[NEEDS COPY]`
-- macOS automation permission denied + how to fix `[NEEDS COPY]`
-- Theme failed to load (system error detail appended) `[NEEDS COPY]`
-- Settings labels, tray menu items, source-badge wording (must meet each service's attribution rules) `[NEEDS COPY]`
-- Companion: creature name(s), skin and palette names, menu labels `[NEEDS COPY]` (§4b)
+- SoundCloud: no link set / invalid link / track unavailable `[NEEDS COPY]` (post-v1)
+- macOS automation permission denied + how to fix `[NEEDS COPY]` (post-launch)
+- Settings labels and tray menu items `[NEEDS COPY]`; source-badge wording: written, and it must meet each service's attribution rules
+- The pet: species, palette and accessory names, menu labels, its settings section `[NEEDS COPY]` (§4b)
+- Leaving with the theme system (P1c): theme names, the effect labels, the customizer, contrast, variant, snippet and theme-package strings, Reset appearance
 
 Keep these in `docs/COPY.md`; code reads from there.
 
@@ -328,7 +285,14 @@ Keep these in `docs/COPY.md`; code reads from there.
 
 ---
 
-## 4b. Companion (D17) — planned, M2
+## 4b. The pet (D17) — built in M2
+
+The code calls it the companion (`src/companion/`, `.mp-companion`, `companions/`). You call it the pet, and so does this plan from v3. Renaming the code is not planned.
+
+**Everything in this section is built and stays.** It is the spec M2 was built to. The pivot changes three things:
+- **On by default** (D25, with P1b). It was opt-in.
+- **Its surfaces come from the home** (§4c, P3), not from a theme's `theme.json`.
+- **What drives it grows** (§4d, P4). Today it is playback state only ("never to the audio" below was D16's rule). Then: the real loudness, your listening log and the layout.
 
 ### What it is (your request, as a spec)
 
@@ -415,100 +379,172 @@ Pixel tools, if you want to draw yourself: Piskel (free, in the browser), Pixelo
 
 ---
 
+## 4c. The home (D22) — P3
+
+The player is the pet's room: one layout, designed with the pet instead of around it.
+
+### Rules, fixed before the design round
+- **One visual language.** Everything that isn't album art or text sits on the pet's art-pixel grid (`round(2 × dpr) / dpr` CSS px per art pixel, §4b) in a small fixed palette. No gradients, glows, glass, blur or soft shadows.
+- **Compact.** The window's area sets what each visible change costs (C0), so the home's size is the pet's activity budget. P2b measures it.
+- **The artwork is left alone** beyond what D10 allows, and nothing interactive sits on or over it. The pet counts as interactive.
+- **The source badge stays visible** (`guard.css`).
+- **Real controls stay.** Previous, play/pause, next, volume and the lyrics button are real buttons with names from COPY.md, reachable by keyboard and screen reader. Anything the pet can do for you (§4d) is in addition, never instead: the pet is `aria-hidden`.
+- **Every state is designed:** playing, paused, nothing playing, Spotify not running, error, a long title, CJK and accented text, emoji, no artwork, each capability absent (the fixture matrix, §4).
+- **Text:** titles and artists are real data in any script, so a pixel font alone can't carry them. The round decides between a system font set plainly and a pixel face with a fallback.
+- **Reduced motion:** a still home and a still pet.
+- **Opaque-rectangle fallback** (C6): it must look intentional if transparency fails.
+
+### Perches
+The home declares where the pet can be, replacing `theme.json`'s `companion.shelf`: the outline (top, sides, bottom), any ledges, and the moving ones of §4d (the front of the progress bar). They are measured from the real parts, as today (`src/companion/measure.ts`), so a part that moves or disappears takes its perch with it.
+
+### Design round (H0)
+1. **Brief, from you:** 3–5 references you'd call cool (a game, a toy, a poster, an app, anything), and what to avoid. My reading of what you disliked in the old themes, for you to correct: a dark rounded card, one loud accent colour, a serif title over monospace details, decoration that isn't driven by anything real.
+2. **Sheet:** three directions, each drawn in the lab at real size in every state above, with the pet in it and each of §4d's behaviours shown.
+3. **You pick, mix or reject.** Nothing is built from a first draft. If all three miss: another round, or start from a sketch of yours (the hanging pose came from one).
+
+### Build
+- **H1:** in the lab and the dev harness, against the fixture matrix, in both engines.
+- **H2:** in the production player, replacing the hard-wired T1; the window sized to it; `docs/HOME.md` updated (parts, perches, tokens).
+- **Gate:** every state in Chromium and WebKit; the guard's rules; the pet inside the window and over no part in a time-lapse; reduced motion; your visual review; the real exe.
+
+### More than one home
+Not planned. If ever wanted: a second bundled home with its own manifest. No public contract, no user themes.
+
+---
+
+## 4d. What the pet does with your music (D21, D24) — P2, P4
+
+Today the pet's only link to the music is awake while it plays, asleep when it doesn't, and the same reaction on every track change. The rest is weighted-random wandering (§4b). That is the "lacks substance" problem in the pet itself. Three additions, each caused by something real, each built in the lab first and then in the player (as C2–C5 were).
+
+### It knows your music (B1)
+- **A local log** in the app data dir, written by Rust: per track (title + artist, the only identity GSMTC gives), its plays, skips and the last time. Capped in size. It never leaves the PC.
+- **Tiers:** new to it, known, a favourite. **Events:** a skip (changed early), a finish, a repeat.
+- **Reactions that mean something:** the heart only for a favourite; something curious for an artist it hasn't heard; dizzy after a run of skips. Emotes stay pixel icons, never text.
+- **No chores (D24).** It is never hungry, sad at you or in need of upkeep. Nothing to maintain, nothing to lose.
+- New animations are drawn for one species first, reviewed by you, then for the other two.
+
+### It hears the music (B2; spike P2a first)
+- **Source:** the peak meter of Spotify's own audio session. `src-tauri/src/spotify/volume.rs` already finds those sessions for the volume slider, and the same session object can be asked for `IAudioMeterInformation` (the `windows` crate version in use has it, behind the feature `Win32_Media_Audio_Endpoints`). It gives a level between 0 and 1, read a few dozen times a second in Rust. It is not audio: nothing is captured, recorded or stored.
+- **Unverified.** Microsoft's reference documents this meter for an output device. Reading it per app is described by community sources and an MSDN blog post (§11), and a commenter there warns it isn't guaranteed. **P2a decides:** does it work for Spotify, does it follow real tracks, is it independent of Stanza's own volume slider, what happens on another output device, what does it cost.
+- **Use:** a slow loudness level (quiet, medium, loud, with hysteresis) sets how lively the pet is. A pulse, if P2a finds one reliable enough, times its dance frames. **Fallback** if the pulse is too coarse: liveliness from loudness alone, which is still real.
+- **Budget:** one pose change per beat at 120 BPM is 120 changes a minute, over today's cap of 90, which was sized on T1's cost per change. P2b re-measures that cost in a compact window and re-derives the cap. The dance halves its rate before it breaks it.
+- **Claims:** once this lands, saying the pet reacts to the music is true, where D16 forbade it. Only for what it does: loudness and pulse, not pitch or genre.
+
+### It uses the player (B3; needs the home, P3)
+- **Riding the progress bar:** a perch at the bar's front. Sitting there, where it is is where the song is. Its steps can land on the one-second position tick the player already redraws on.
+- **Drop to seek:** dropped on the bar, the song seeks to that point (`caps.seek`). Keyboard seek stays the accessible way.
+- **More perches** come out of the home's design round (§4c), which shows each one.
+
+### Gates (each of B1–B3)
+- **Unit:** the brain simulated for hours, seeded, as today.
+- **e2e:** a fake-clock time-lapse in the home × the fixture matrix: in the window, over no part, within the change budget; reduced motion still.
+- **Real exe:** CPU with music playing (never measured in M2), with your OK to have Spotify playing.
+
+---
+
+## 4e. Make your own pet (D23) — P5
+
+Customization is still what the project is for. The pet is where it lives now.
+- **Built (M2):** three species, five palettes each, four accessories on a rig; the picker in the right-click menu and the settings window.
+- **User pets:** a folder per pet in `<app data dir>/companions/`, the same `companion.json` as the bundled ones (`docs/COMPANION.md`), validated in Rust and again in the frontend. A broken one is never offered. A good one shows in the picker beside the bundled ones.
+- **Live reload:** save the file and the pet on screen changes, as user themes did (M3 L3). The watcher and the validate-then-offer flow are restored from `themes-final` and pointed at pets.
+- **Importer:** a sprite sheet drawn in Aseprite, Piskel or Pixelorama becomes a `companion.json` (frames to grids, colours to a palette). The sheet's layout is decided in P5.
+- **Guide:** how to draw one: the eleven required animations, the rig, the rules it must pass.
+- **Open for P5:** where a user pet's name comes from. A bundled one's is a COPY.md entry; a user's would be its author's own words in its own file, as a theme's `name` was.
+- **Gate:** a pet drawn outside the repo loads, hot-reloads and passes the placement rules in the home; a broken file changes nothing on screen.
+
+---
+
 ## 5. Status and roadmap
 
-Every milestone ends in a gate. Nothing moves forward on "should work." Work runs as **one slice per "continue"**, committed
-locally on `main` ("Slice N: …"), never pushed unless you ask. Hour ranges are **rough estimates from scope**, not from any base rate.
+Every step ends in a gate. Nothing moves forward on "should work." Work runs as **one slice per "continue"**, committed locally on `main`, never pushed unless you ask. No hour estimates in v3: v2's were rough, and the two biggest steps (P3, P4) depend on design rounds.
 
-### Where we are (2026-10-17)
-- **Done:** Phase 0; spikes S1 (window), S2 (GSMTC), S4 (themes) — on their spike branches, learnings merged; Phase 2 core; Phase 3 design system + contract; Phase 4 themes T1–T5, the D16 effects layer, contract v5.
-- **Production slices on `main`:** 1 theme applied + remembered · 2 real frameless transparent window · 3 click-through · 4 right-click theme picker · 5 CSP + named Stanza · 6 player centred side to side.
-- **M1 Real music (done 2026-10-17, DECISIONS.md M1 R1–R3b):** the GSMTC adapter on `main` (20-track gate passed), position drift ≤ 0.2 s over 5 min, keyboard seek, a "Spotify not running" state with recovery, Spotify's own volume through Core Audio, the lyrics button (contract v6), and a CPU pass (every theme 0.1–0.7 s of CPU per 10 s while playing). The Slice 5/6 real-exe checks passed along the way.
-- **Tests at last full run (2026-11-08):** 622 unit (Vitest), 959 e2e + 65 skipped (Playwright, Chromium + WebKit), `cargo test` 35.
-- **Open from M1:** R4 tray + hide (added 2026-10-22); the remaining `[NEEDS COPY]` labels (the first ones were filled 2026-10-22); the Store build of Spotify; 125%/150% scaling.
+### Where we are (2026-11-16)
+- **Built and staying:**
+  - **M1 Real music** (done 2026-10-17): the GSMTC adapter, transport, position within 0.2 s over 5 minutes, keyboard seek, "Spotify not running" with recovery, Spotify's own volume, the lyrics button.
+  - **M2 The pet** (automated gate passed 2026-11-07): renderer, skin format v2, the brain, the whole outline, click / pick up / drop, a shelf, the picker, three species × five palettes × four accessories, the lab.
+  - **The window** (Slices 2, 3, 5, 6): frameless, transparent, always on top, click-through, drag, position remembered, a real CSP.
+  - **M3 L4a:** the settings window's shell and its companion section.
+- **Built and being retired (D20, D21):** the five themes and the theme list in the menu (Slice 4), the remembered theme and variant (Slice 1), user themes and live reload (M3 L2/L3), the `theme` and `user` cascade layers (M3 L1), the effects layer. Tag `themes-final`.
+- **Dropped unbuilt:** M3 L4b (theme previews), L5 (customizer), L6 (snippets, theme `.zip`), S7 (genre fonts).
+- **Tests at the last full run (2026-11-08):** 622 unit (Vitest), 959 e2e + 65 skipped (Playwright, Chromium + WebKit), `cargo test` 35. P1 removes the theme and effect tests with their features, so the counts drop; each P1 slice reports the new ones.
+- **Open from before, still open:** your visual review of the pet (the M2 gate); CPU with music playing; the Store build of Spotify; real 125%/150% displays.
 
-### v1 phases → milestones
+### History: v2's milestones
+The slice names (M1 R1, M2 C2b, M3 L3, …) are cited by code comments and DECISIONS.md, which has the detail. v1's phases 0–8 and how they mapped onto these are in PLAN.md v2 (git history).
 
-| v1 phase | Status | Where the rest went |
+| Milestone | What | Outcome |
 |---|---|---|
-| 0 Setup | ✓ | — |
-| 1 Spikes S1–S4 | ✓ S1, S2, S4; S3 deferred (D15) | S3 → Post-v1 |
-| 2 Core | ✓ (manual "switch sources 10×" deferred — one source exists) | Re-run when a second source lands |
-| 3 Design system + default theme | ✓ gate passed (matrix in both engines, sign-off, focus, AA incl. `--mp-art-fg`) | — |
-| 4 Themes + switching | Themes ✓, picker ✓ (menu, no previews), memory flat ✓ (Slice 4) | Customizer, snippets, zip, previews → M3 (hot swap ✓ M3 L3) |
-| 5 App shell | Window ✓ (Slices 2–3, 6) | Tray, settings, autostart, single-instance, DPI → M3/M4 |
-| 6 Windows release | ○ | → M4 |
-| 7 macOS | ○ | → M5 |
-| 8 Portfolio | ○ | → M6 |
-| PRIORITIZATION_PLAN S5–S8 | ○ | S5/S6 → M1, S7 → M3, S8 → §9 (rectangles done by Slice 3) |
+| M0 | Plan v2 | Done |
+| M1 R1–R3b | Real music: adapter, position and seek, volume, lyrics button | Done 2026-10-17 |
+| M1 R4 | Tray, and hiding while Spotify is closed | Not built → P6 |
+| M2 C0–C6, D1–D2c | The pet: spike, renderer, brain, all edges, pick up, shelf, picker, palettes, accessories | Done; automated gate passed 2026-11-07, your visual review open |
+| M3 L1–L3 | Cascade layers, runtime theme loader, hot swap | Built 2026-11-08; retired by D20 (the guard layer stays) |
+| M3 L4a | Settings window | Built 2026-11-08; stays, without its themes section and Reset appearance |
+| M3 L4b, L5, L6, S7 | Theme previews, customizer, snippets and `.zip` import, genre fonts | Dropped by D20 |
+| M4 | Shell and Windows release | → P6 |
+| M5 | macOS | Post-launch, untested |
+| M6 | Portfolio packaging | → P6 |
 
-### M0 — Housekeeping (now)
-1. This plan (v2). Docs only.
-2. The pending Slice 5/6 real-exe check; folded into M1's first real-exe run.
+### P0 — Docs · done 2026-11-16
+This plan, the decision logged (DECISIONS.md), `CLAUDE.md`'s direction, contract and quality-bar rules, the tag `themes-final`. No code.
+**Gate:** you approve the wording.
 
-### M1 — Real music · ~8–14 h
-- **R1 Production Spotify adapter.** Port `spike/s2-gsmtc` to `main`: a Rust GSMTC module and events, a TS `PlayerAdapter` wired into `PlayerStore` in the production app, working transport buttons, artwork as a `data:` URL (the CSP already allows it).
-  **Gate:** in the real exe, 20 consecutive track changes with correct metadata; the CSP e2e re-run with real artwork, palette extraction and the effects. Driving your Spotify needs your OK at the time.
-- **R2 Position, seek, error states.** Interpolation in production (C10), seek, "Spotify not running" and error states (copy slots exist).
-  **Gate:** the progress bar tracks Spotify for 5 minutes without drift beyond a second; closing and reopening Spotify recovers without restarting Stanza.
-- **R3 Per-app volume (S5) + lyrics button (S6).**
-  - S5: Core Audio `IAudioSessionManager2` / `ISimpleAudioVolume` on Spotify's process makes `.mp-volume` real. Gate: moving the slider moves Spotify's level in the Windows volume mixer and not the master; a change made in the mixer reads back.
-  - S6: a button brings Spotify's own window (and its lyrics view) to the foreground. Gate: works reliably while Spotify is minimised or behind other windows, not just the first time. Needs a contract part and a copy slot.
-- **R4 Tray + hide while Spotify is closed** (added 2026-10-22, your choice, pulled forward from M4; DECISIONS.md). Windows only: it needs `cargo`, which the school Mac doesn't have.
-  - A tray icon (the `tray-icon` feature on the `tauri` crate, with the permission in `src-tauri/capabilities/`) with a minimal menu: show/hide and quit. Theme, companion and Reset appearance join it in M4.
-  - When the Spotify feed goes `unavailable`, the window hides. When Spotify comes back, it reappears where it was (the saved position, companion margin included). Show/hide in the tray overrides this until Spotify's state next changes.
-  - **Blocked on:** copy for the tray menu items (COPY.md "Tray menu items") and a tray icon image (the M4 app icon, or a temporary one you approve).
-  - **Gate (real exe):** close Spotify → Stanza's window disappears and the tray icon stays; reopen Spotify → the window comes back in the same place, playing; tray quit exits cleanly; idle CPU while hidden is no worse than while shown.
+### P1 — Clear the ground
+Remove what D20 and D21 retire, in three slices that each leave `main` working. T1 stays, hard-wired, as a temporary face until the home (P3).
+- **P1a Effects, and the other four themes.**
+  - `src/fx/` (shapes, waveform, the simulated beat, text effects, split-flap, flow, morph, debris), the `fx` field and the variant's `effects`, and their tests.
+  - The libraries only they use: `animejs`, `matter-js`, `@splitflap/core`.
+  - Themes T2–T5, and the theme list in the right-click menu. The pet's items and the gear stay.
+  - `hashString` and `mulberry32` move from `src/fx/beat.ts` to the pet, which uses them.
+- **P1b User themes, variants, the saved appearance.**
+  - `src/theme/userThemes.ts`, `liveThemes.ts` and the variant model.
+  - Rust: `themes.rs`, `theme_watch.rs`, the `notify` crate, the asset protocol and its CSP entries.
+  - The settings window's themes section and Reset appearance; the fixtures in `dev/fixtures/user-themes` and `user-theme-edits`.
+  - The saved setting shrinks to the pet's, with your current choice carried over.
+  - The pet on by default (D25).
+- **P1c The contract.**
+  - `docs/THEME_CONTRACT.md` and its doc tests retire. `docs/HOME.md` starts as the short list of the parts that remain and the guard's rules, and `CLAUDE.md` points at it.
+  - The cascade layers shrink to what's left.
+  - COPY.md's theme, effect, customizer and snippet slots go (about 28 of the 68 empty ones).
+- **Gate (each slice):** `tsc`, Vitest, Playwright in both engines, `cargo test`, `npm run build` with the fixtures check. In the real exe: it starts, shows your music, the pet behaves as before, and (P1b) your saved pet survives the change of format. Each slice reports test counts and bundle size before and after.
 
-### M2 — Companion · ~32–52 h (§4b)
-- **C0 spike** (`spike/c0-companion`) — **done 2026-10-17** (DECISIONS.md): margin window, crisp pixels at 100/125/150/200%, click-through around the pet, pick up and drop, no flicker all passed. The CPU gate failed for a *continuously* walking pet (+2.5–8% of a core); the measurements set the frame-timer architecture and the change budget above.
-- **C1 Renderer + skin format + lab** — **done 2026-10-18** (DECISIONS.md): SVG sprite renderer with JS-timer frames, skin format v1, now v2 (`docs/COMPANION.md`), validator and registry, the "test dummy" skin with all 11 animations and two palettes, and the dev-only Companion lab (`?lab=companion`). Crisp at 100/125/150/200% in Chromium and WebKit after moving the layout onto a 4 px grid.
-- **D1 design round** (with you): three original concepts in the lab; you pick or mix. **Concepts drawn 2026-10-18** (DECISIONS.md, `docs/design/d1-concepts.png`): `pilcrow` (¶ with legs), `bookworm` (a ruled-paper inchworm whose poses are letters), `cassette` (reels for eyes). **You chose all three** as species to pick from; `pilcrow` is the default (DECISIONS.md).
-- **C2 Brain + top edge + contract v7:** idle, walk, sit, sleep, wake, reacting to playback, in the production player. Split in two like R3:
-  - **C2a The brain** — **done 2026-10-18** (DECISIONS.md): `src/companion/brain.ts` (pure, seeded; a hard cap of 90 visible changes a minute; asleep and still while the music is off; reduced motion = still poses), `Companion.tsx` (one timer), edge placement (`place.ts`), skin format v2 (`steps`, per-animation `anchor`), and live cards in the lab. Checked by hour-long simulations and a fake-clock e2e.
-  - **C2b In the player** — **done 2026-10-29** (DECISIONS.md; code written 2026-10-22 on the school Mac, run and checked on Windows): the window's top margin and position shift, `.mp-companion` on `.mp-window`'s top edge riding its height changes, no-sit stretches measured from the parts, the on/off switch (the cassette icon), **contract v7**, the e2e over all themes, and CPU in the real exe. Known: toggling shows the card one frame off by the margin (accepted for now; DECISIONS.md). Open: the menu icon at 125/150/200% and in a light menu.
-- **C3 All edges:** climbing the sides, hanging under the bottom, corner transitions, riding a moving edge; the production window margin and position shift. Split (DECISIONS.md 2026-10-29): **C3a** the brain travels the outline (lab only) — **done 2026-10-29** (DECISIONS.md: climb and hang contacts, corners, legs, hanging, holding still off the top; production unchanged, checked change-for-change); **C3b** production margins on all sides + contract v8 + climb tuning — **done 2026-10-29** (DECISIONS.md: real-exe checked, card fixed on screen in both axes); **C3c** corner art with you — **done 2026-11-01** (DECISIONS.md: your calls, each creature bent round the corner in new art at the top and bottom corners and the shelf doors; optional `over` / `under` poses in the skin format, played once by the brain when the budget allows; contract v11).
-- **C4 Pick up and react:** drag, drop, fall, land, click reactions; the hit region includes the pet. Real-exe drag check. Split like C2 and C3 (DECISIONS.md 2026-11-01): **C4a** the brain and the component take the pointer, in the lab only — **done 2026-11-01** (DECISIONS.md: carried over the card and the margin around it but never over the artwork, your call; let go, it falls onto the top from above, down the card's face to catch the bottom, sliding off the artwork, or grabs a side or the bottom at once; production unchanged, checked change-for-change against the C3b brain); **C4b** the production player — **done 2026-11-01** (DECISIONS.md: `interactive` on, avoiding `.mp-artwork`, `.mp-companion` in the hit region, contract v9 with `data-pet-state` `held | fall | land` and `data-pet-surface` `air`, the e2e in every theme, the real exe driven over CDP without moving your cursor, then with a real mouse with your OK: the drag carries on while the window lets clicks through, and a release out in the margin still reaches the pet).
-- **C5 Inner ledges:** `theme.json` `companion.shelf` for each theme that has room (some may have none). Split like C3 and C4 (DECISIONS.md 2026-11-01): **C5a** the brain, placement and measuring, in the lab only — **done 2026-11-01** (DECISIONS.md: a fifth surface, `shelf`, a floor inside the card reached by a door where it touches a side; drops land on it; trimmed so no floor pose covers a part; production unchanged, checked change for change against the C4b brain); **C5b** shelves in the themes + contract v10 — **done 2026-11-01** (DECISIONS.md, your calls: the bottom-left corner of the four card themes, level with the badge's base, not drawn, a regular spot; `theme.json` `companion.shelf` validated, the layer measures it from the badge, `data-pet-surface` `shelf`; room checked in every theme × fixture; T3 unchanged).
-- **C6 Skins, picker, persistence:** species and palettes in the Companion submenu, the app-wide saved setting; a polish pass on each of the three creatures, which replace the dummy. Split (your call, DECISIONS.md 2026-11-01): **C6a** the picker — **done 2026-11-01** (DECISIONS.md: pictures with no text, your call; the three species and the current one's palettes, the chosen ones awake; picking turns it on and is saved app-wide, as the on/off setting already was since C2b; the test dummy out of the menu); **C6b** a polish pass on each creature, with you — **done 2026-11-01** (DECISIONS.md: your picks from a zoomed review, a legible sleep z on all three and a 5×4 heart on the pilcrow and the bookworm; nothing else needed changing).
-- **D2 design round:** more palettes, accessories for all three species. Stretch: the pet swings while you drag the player. Split (your calls, DECISIONS.md 2026-11-01): **D2a** two more palettes per species — **done 2026-11-01** (violet and highlighter, legal and blueprint, pink and mint; all six kept); **D2b** accessories — **done 2026-11-07** (DECISIONS.md: headphones, a knitted beanie, a scarf and a little bow for all three species on a rig, still skin format 2; lab only, `?lab=companion&wardrobe`; every placement rule checked in every outfit; your pick: all four kept for every species); **D2c** wearing one in the player — **done 2026-11-07** (DECISIONS.md: a third row in the picker, saved app-wide, contract v12, the real exe driven through its native menu).
-- **Milestone gate** — **automated checks passed 2026-11-07** (DECISIONS.md; your visual review open): a fake-clock e2e time-lapse over all five themes × the fixture matrix — the pet stays in the window and never overlaps the artwork, controls or badge; reduced-motion still pose; no console errors; CSP clean; idle CPU budget met in the real exe; visual review by you.
+### P2 — Two spikes
+On throwaway branches; the learnings go to DECISIONS.md, not the code (§8).
+- **P2a Loudness.** Read Spotify's session peak meter from the volume thread and log it against real tracks. The questions are in §4d. It only reads, and it needs your OK to have Spotify playing.
+  **Gate:** silent when paused; follows loud and quiet passages; the five questions answered in writing; a first attempt at a pulse scored on a handful of your tracks, logged as numbers, not titles.
+- **P2b The cost of a change in a small window.** C0's method, at a few candidate window sizes.
+  **Gate:** ms per visible change at each size, and the change budget re-derived from it.
+- P2 can run before, during or after P3's design round.
 
-### M3 — Make it yours (Phase 4 leftovers) · ~15–30 h
-- Settings window and customizer UI with live preview (both need copy for their chrome), variant export/import as files, snippets, theme `.zip` import, the runtime theme loader + hot swap (S4), theme previews, contrast warning, Reset appearance. Companion options in settings.
-- **Split** (proposed 2026-11-08, DECISIONS.md M3 L1; the order after L1 is yours to change):
-  - **L1 Cascade layers** — **done 2026-11-08** (DECISIONS.md): one shell stylesheet, `@layer guard, base, theme, user;`; the guard beats `!important` from anywhere; `data-hide-<part>` now beats a theme's `display` (it never did for controls and volume); every shipped theme computes the same styles as before. No UI, no copy, contract still v12.
-  - **L2 Runtime theme loader** — **done 2026-11-08** (DECISIONS.md): themes from `<app data dir>/themes/` through the asset protocol into the `theme` layer, `theme.json` checked in Rust and again in the frontend, a broken theme never offered and a saved one that fails falls back to the default. No settings UI yet: a folder put there by hand shows in the right-click menu at the next launch. Checked in the real exe.
-  - **L3 Hot swap** — **done 2026-11-08** (DECISIONS.md): the file watcher; a theme you're editing updates on screen within about a second, swapped in one frame (no unstyled frame, no old-and-new mix); themes added, removed or broken while Stanza runs come and go in the menu; the gate's 20 swaps, every frame recorded, in both engines and in the real exe.
-  - **L4 Settings window** (needs copy): design round **done 2026-11-08**, direction A "Index" (DECISIONS.md, `docs/design/l4-settings-concepts.png`): Stanza's own look, a section rail, Windows' dark title bar, opened by a gear picture in the right-click menu. **L4a** the window, rail, companion section, Reset appearance (keeps the companion) — **done 2026-11-08** (DECISIONS.md; checked in the real exe; every word still `[NEEDS COPY]`); **L4b** the themes section with live previews (your themes sandboxed), broken themes with their codes, open the themes folder.
-  - **L5 Customizer** (needs copy): the theme's `controls`, live preview, the contrast warning, variants as files with export/import.
-  - **L6 Snippets and theme `.zip` import** (needs copy).
-  - **S7 genre fonts:** waits for your Spotify app Client ID/Secret.
-- **S7 genre-based fonts:** a scoped Spotify Web API call for artist genres (narrow D7 exception). Needs your own Spotify app Client ID/Secret first. A genre → font mapping becomes a contract question (`data-genre` / `--mp-font-genre` are candidates only).
-- **Gate:** every theme still passes the matrix; swap themes 20× with no flicker (frame-captured this time); memory roughly flat.
+### P3 — The home (§4c)
+- **H0** the design round: your brief, a sheet of three directions, your pick.
+- **H1** in the lab. **H2** in the player, replacing T1.
+- **Gate:** in §4c.
 
-### M4 — Shell and Windows release (v1 Phases 5–6) · ~9–16 h
-- Tray: the rest of the menu (theme, companion, Reset appearance) on top of R4's show/hide and quit; autostart, single-instance, multi-monitor and DPI handling.
-- SVG app icon → `npx tauri icon`; NSIS installer; GitHub Actions Windows build; README note that unsigned builds trigger SmartScreen.
-- **Gate:** reboot with autostart on; position and scale correct at 100 / 125 / 150% display scaling; uninstall the dev build, install the CI artifact, full smoke test.
-- **Stop point:** after this you have a complete, shippable Windows project even if macOS never happens.
+### P4 — What the pet does with your music (§4d)
+- **B1** it knows your music (needs nothing else; can start any time after P1).
+- **B2** it hears the music (needs P2a).
+- **B3** it uses the player (needs P3).
+- Each as `a` (lab) then `b` (player). **Gates:** in §4d.
 
-### M5 — macOS (v1 Phase 7) · ~8–12 h + access to a Mac
-- AppleScript adapter (state, track, artwork URL, position, volume, shuffle, controls). Change detection: Spotify's distributed notification (community-documented, not official) with polling fallback.
-- Info.plist key + automation entitlement (C5), `macOSPrivateApi` for transparency, optional vibrancy. Click-through's non-Windows path uses Tauri getters (CPU cost unmeasured there).
-- CI build on macOS runners (Apple Silicon + Intel targets).
-- **Gate (real Mac, bundled .app — not dev):** automation prompt appears once and persists; S1-equivalent window test; 20 track changes. Until this passes the README says macOS is **untested**. Your Mac is school-managed (§10 #1), so this milestone may not be possible.
-- Distribution: unsigned builds hit Gatekeeper warnings; notarisation needs the Apple Developer Program (US$99/yr). Not required for a portfolio piece.
+### P5 — Make your own pet (§4e)
+User pets from a folder, validation, live reload, the importer, the guide. **Gate:** in §4e.
 
-### M6 — Portfolio packaging (v1 Phase 8) · ~5–8 h
-- README: capability matrix, architecture diagram, theme contract, decision log (the documentation-conflict work in §2 is itself a strong engineering-application story).
-- Theme and companion authoring guides, per-theme screenshots, demo video cut in After Effects (featuring the companion).
-- **Gate:** someone else installs, switches themes and turns on the companion from the README alone.
+### P6 — Ship (v2's M1 R4, M4 and M6)
+- **Tray:** an icon with show/hide and quit, and hiding while Spotify is closed (R4: needs copy and an icon image). Then the pet's options and quit in the tray menu.
+- Autostart, single-instance, multi-monitor and DPI handling.
+- The app icon (the pet) → `npx tauri icon`; NSIS installer; GitHub Actions Windows build; a README note that unsigned builds trigger SmartScreen.
+- README, the pet authoring guide, a demo video.
+- **Gate:** reboot with autostart on; position and scale correct at 100 / 125 / 150% display scaling; uninstall the dev build, install the CI artifact, full smoke test; someone else installs it, picks a pet and adds one of their own from the README alone.
+- **macOS** (v2's M5: AppleScript adapter, Info.plist key + entitlement, a bundled-build test on a real Mac): post-launch. Until that gate passes the README says macOS is **untested**. Your Mac is school-managed (§10 #1), so it may not be possible.
 
-**Remaining total: ~77–132 h (rough estimate, 2026-10-17); re-estimated 2026-11-07: ~47–83 h** (M2 ~7–12, R4 ~3–5, M3 ~15–30, M4 ~9–16, M5 ~8–12, M6 ~5–8). Natural stop points after M1 (a real, working mini player), M2 (the companion) and M4 (shipped on Windows).
+### Which machine
+- **Windows only:** every Rust change (P1b, P2a, B1's log, B2, P5's watcher, P6) and every real-exe gate.
+- **The school Mac** (Node only: `tsc`, Vitest, `npm run build`) can take lab, brain and art slices. That work arrives uncommitted and is run in Playwright and the real exe, then committed, on Windows.
 
 ### Post-v1 expansion (not yet phased)
-Per D15, grouped together as the next body of work after M4, no order decided yet:
+Per D15, grouped together as the next body of work after P6, no order decided yet:
 - **SoundCloud support** — run the deferred S3 spike, build `SoundCloudAdapter`, source-switching UI (D9), attribution/link-out (C13).
 - **Windows any-app mode** — broaden the GSMTC adapter beyond the Spotify-only AUMID filter to show any active media session.
 
@@ -516,11 +552,12 @@ Per D15, grouped together as the next body of work after M4, no order decided ye
 
 ## 6. Definition of done (before any promotion)
 
-- T1–T5 pass the fixture matrix ✓ (keep it green)
-- All three customization layers complete per §4
-- Companion: at least one original creature with every required state, at least two palettes, the in-window / no-overlap suite green on every theme, idle CPU budget met (§4b, M2 gate)
-- M1 and M4 gates passed
-- README + authoring guides (themes, snippets, variants, companion skins)
+- **The home** passes the fixture matrix in both engines and the guard's rules, with your visual sign-off.
+- **The pet:** every required state in all three species; inside the window and over no part in every state; the change budget met; a still pose under reduced motion.
+- **Substance (§4d):** it reacts to the real loudness (or P2a's fallback), its reactions follow your listening log, and it uses at least one perch tied to the song.
+- **Make your own (§4e):** a pet drawn outside the repo installs from a folder and hot-reloads; the guide exists.
+- **The bar (§0):** no theme system, no effect toggles, nothing simulated, no `[NEEDS COPY]` visible in the shipped app.
+- M1's gates still pass; P6's gate passed.
 - Private beta: 3–5 testers (Win10/Win11, different display scaling, Spotify installer vs Store build)
 - macOS: post-launch, marked untested in README
 
@@ -531,19 +568,22 @@ Likelihoods are qualitative — there's no reliable base rate for any of these.
 
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
-| Spotify update changes GSMTC/AppleScript behaviour | Low–med | High | Adapter isolation, capability flags |
-| Transparency fails in bundled mac build | Med (open issue exists) | Med | Opaque-rectangle design rule |
-| Widget stops or throttles when window hidden | Unknown → S3 | High for SoundCloud mode | Keep window alive minimised/off-screen instead of hidden |
+| The home still looks generated | Med | High (it is the reason for the pivot) | Your references first; the grid and a small palette as constraints; three directions; your pick; never a first draft; another round or your sketch if all three miss |
+| The session peak meter doesn't work for Spotify, or is too coarse to find a pulse | Unknown → P2a | High for "it hears the music" | Fallback: liveliness from loudness alone. A heavier option only if you want it: capturing Spotify's output, as its own spike |
+| Art multiplies: every new animation × three species × four accessories | Certain | Med | One species first, reviewed, then the others; movement from offsets before new frames |
+| A livelier pet costs CPU on an always-on-top window | **Measured (C0):** 3–6 ms per visible change; any running CSS animation ~2% of a core by itself | Med | JS-timer frames (no CSS animations); a change budget re-derived for the home's size (P2b) and enforced by the brain; still when paused; the dance halves before it breaks the budget |
+| Removing ~8,500 lines breaks something that stays | Med | Med | Three slices; the full suites and the real exe after each; `themes-final` to go back to |
+| The pet hides controls or the source badge | Low (by design) | High (usability, attribution) | No-go zones in the planner; e2e time-lapse in every state |
+| The listening log grows without bound, or reads as tracking | Low | Med | Capped; local only; said plainly in the README; a way to clear it |
+| Scope creep (pet care, desktop roaming, more homes, more species) | High | Med | §9; one home and three species until P6 |
+| Creature art too close to someone else's | Low | High | Original designs only; per-design originality check, logged. A user's pet is its author's |
+| Spotify update changes GSMTC behaviour | Low–med | High | Adapter isolation, capability flags |
+| Pixel art looks uneven at 125%/150% scaling | Med | Med | Whole-device-pixel scale (§4b); checked in C0 and the lab |
+| School workload stalls a half-built step | — | Med | One slice per turn; every slice leaves `main` working |
+| No Mac access | Likely limited (school-managed MacBook) | High for a cross-platform claim | Windows-first; label macOS untested |
+| Transparency fails in a bundled mac build | Med (open issue exists) | Med | Opaque-rectangle design rule (§4c) |
+| Widget stops or throttles when window hidden | Unknown → S3 (post-v1) | High for SoundCloud mode | Keep window alive minimised/off-screen instead of hidden |
 | SoundCloud terms ambiguity | — | Med | D9, attribution, non-commercial |
-| No Mac access | Likely limited (school-managed MacBook) | High for the cross-platform claim | Windows-first; label macOS untested |
-| Scope creep (lyrics, visualiser, likes, pet care) | High | Med | §9 parking lot; companion scope fixed by §4b |
-| School workload stalls a half-built milestone | — | Med | One slice per turn; every slice leaves `main` working |
-| Companion pixel art looks uneven at 125%/150% scaling | Med | Med | Whole-device-pixel scale (§4b); checked in C0 |
-| An always-animating pet costs CPU/battery on an always-on-top window | **Measured (C0):** a continuously walking pet = +2.5–8% of a core; any running CSS animation ~2% by itself; ~3–6 ms per visible change | Med | JS-timer frames (no CSS animations), still by default, short activity bursts, a change budget of ≤ ~2/s on average enforced by the brain, sleep (no changes) when paused/idle |
-| T4's marquee and T5's reels are still stepped CSS animations, so each pays the ~2% "animation running" cost | Measured indirectly (C0) | Low–Med | Possible follow-up: drive them from JS timers like the companion |
-| Endless or per-tick animation in themes and effects costs CPU the same way | **Measured and fixed for T1–T5 (2026-10-17):** the paused pulse is 3 runs then still; marquee/reels are stepped; flap paging is finite; a 1 s position tick. Playing now costs 79–704 ms of CPU per 10 s (T5 was up to 7,391) | Med (an always-on app) | e2e guards: every endless theme animation must be `steps()`, no width transitions on the progress fill, ~1 render/s. Opt-in effects (shapes/waveform beat, ripple/liquid) not yet measured |
-| The pet hides controls or the source badge | Low (by design) | High (usability, attribution) | No-go zones in the planner; e2e time-lapse over every theme |
-| Creature art too close to someone else's | Low | High | Original designs only; per-design originality check, logged |
 
 ---
 
@@ -571,28 +611,35 @@ The project rules live in `CLAUDE.md` at the repo root. (v1 of this plan carried
 - Apple Music, YouTube Music, local files, Linux
 - Spotify Web API features (like/save, queue, search) — only with Premium and the 5-user dev cap
 - SoundCloud API features (search, logged-in likes) — needs Artist Pro
-- Audio visualiser (real audio reaction) — no clean audio source: Spotify's stream isn't accessible, the SoundCloud iframe is cross-origin. Windows system-audio loopback is possible but a separate project. **Partly superseded by D16 (2026-09-23):** decorative shapes/waveform now exist but run on a *simulated* beat, not the music; real audio reaction is still parked.
+- Audio analysis beyond loudness (pitch, spectrum, a visualiser). D21 reads a level from Spotify's audio session and nothing more. Capturing Spotify's stream is possible on Windows but a separate project; the SoundCloud iframe is cross-origin.
 - Lyrics inside Stanza (S6 only brings Spotify's own window forward)
-- Theme sharing / marketplace (and a companion-skin gallery)
+- A gallery for sharing pets
 - Notarised or store distribution
-- In-app CSS editor (CodeMirror panel)
-- Companion: roaming the whole desktop (Shimeji-style, a second window); pet-care stats (mood, feeding, growth); moving to the simulated beat (would need D16 wording care); a PNG-strip importer for skins drawn in Piskel/Pixelorama
+- The pet: roaming the whole desktop (Shimeji-style, a second window: it lags behind a dragged player, §4b); more than one pet at once; moving along the bottom edge (`hang` has no step); hopping down to a ledge
+- A second home (§4c)
 - S8 arbitrary window silhouettes (rectangular click-through is done, Slice 3)
+- **Retired, not parked (D20):** themes, user themes, the customizer, CSS snippets, theme packages, an in-app CSS editor, genre fonts. Recoverable from `themes-final`.
+- **Rejected, not parked (D24):** pet-care stats (hunger, mood to keep up, growth).
 
 ---
 
 ## 10. Open questions
 
-1. Do you have regular access to a Mac? Determines whether M5 exists. **Answered:** it's a school-regulated MacBook — take M5 as uncertain/lower-confidence until actually tested; school device management may restrict signing, dev tools, or permissions.
+1. Do you have regular access to a Mac? **Answered:** it's a school-regulated MacBook — take macOS as uncertain until actually tested; school device management may restrict signing, dev tools, or permissions.
 2. Fixture policy: synthetic strings (recommended) or real metadata you supply? **Never formally answered**; fixtures have been synthetic since Phase 2. Say if you want otherwise.
-3. Tagline — draft above, yours to finalize. **Still open.**
+3. Tagline. **Open.** v2's draft described the themed player and no longer fits.
 4. Spotify Premium — only matters if Web API features ever come back. **Answered:** confirmed, you have Premium.
 5. Windows any-app mode (show any media session, not only Spotify)? **Answered:** confirmed desired — Post-v1 (§5), order relative to SoundCloud TBD (D15).
 6. SoundCloud in the finished scope? **Answered:** deferred — v1 ships Spotify-only (D15); the S3 spike waits until Post-v1.
-7. Companion copy: the creature's name, skin and palette names, menu labels. **Open** — `[NEEDS COPY]` until you write them.
-8. Which creature? **Open** — decided in the D1 design round (M2).
-9. S7 genre fonts: your Spotify app Client ID/Secret. **Open** — needed before M3's S7 starts.
-10. Split-flap in-between glyphs (DECISIONS.md 2026-09-23): does a flap passing through letters of the old/new title break "never generate displayed text"? **Open** — the conservative reading is built.
+7. The pet's copy: species, palette and accessory names, menu labels. **Open** — `[NEEDS COPY]` until you write them.
+8. Which creature? **Answered (D1):** all three. **New:** are they keepers as drawn? Default taken: yes, they get new animations, not a redraw.
+9. S7 genre fonts. **Closed:** dropped with the theme system (D20).
+10. Split-flap in-between glyphs. **Closed:** removed with the effects layer (P1a).
+11. **Your references for the home** (§4c, H0). **Open:** the design round waits for them.
+12. **Reading Spotify's loudness** (D21). Default taken: acceptable. Re-asked at P2a.
+13. **A local listening log** (D24). Default taken: acceptable. Re-asked at P4.
+14. **The pet on by default** (D25). Default taken. Re-asked at P1b.
+15. **The name.** "Stanza" was chosen for a typography-first player; it also means "room". Default taken: keep it.
 
 ---
 
@@ -628,3 +675,9 @@ The project rules live in `CLAUDE.md` at the repo root. (v1 of this plan carried
 - BongoCat (MIT, Tauri) — hellogithub.com/en/repository/ayangweb/BongoCat
 - VPet — store.steampowered.com/app/1920960/VPet_Simulator/
 - Pixelorama (MIT) — github.com/orama-interactive/pixelorama; Piskel — best-of-web.builder.io/library/piskelapp/piskel
+
+**Loudness (2026-11-16).** Found by a web search; none of these pages has been read yet. P2a reads them before relying on anything.
+- Peak meters (Core Audio) — learn.microsoft.com/windows/win32/coreaudio/peak-meters
+- `IAudioMeterInformation` (endpointvolume.h), documented for an endpoint device — msdn.microsoft.com/en-us/library/vs/alm/dd368227
+- Per-app meters, community-documented: Matthew van Eerde, "Getting peak meters and volume settings for all apps and audio devices on the system" — blogs.msdn.microsoft.com/matthew_van_eerde/2013/09/26/getting-peak-meters-and-volume-settings-for-all-apps-and-audio-devices-on-the-system; Stack Overflow question 14313692, "Peak meters for individual programs on Windows 7"
+- `windows` crate binding — microsoft.github.io/windows-docs-rs/doc/windows/Win32/Media/Audio/Endpoints/struct.IAudioMeterInformation.html
